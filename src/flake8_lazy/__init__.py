@@ -147,8 +147,7 @@ def collect_top_level_imported_names(tree: ast.AST) -> list[str]:
     for node in collect_top_level_imports(tree):
         if isinstance(node, ast.Import):
             names.extend(
-                _bound_name_for_import(alias, from_import=False)
-                for alias in node.names
+                _bound_name_for_import(alias, from_import=False) for alias in node.names
             )
         else:
             names.extend(
@@ -239,9 +238,10 @@ class _TopLevelRuntimeNameCollector(_TopLevelScopeVisitor):
             self.visit(decorator)
         for default in node.args.defaults:
             self.visit(default)
-        for default in node.args.kw_defaults:
-            if default is not None:
-                self.visit(default)
+        for kw_default in node.args.kw_defaults:
+            if kw_default is None:
+                continue
+            self.visit(kw_default)
         self._visit_annotation(node.returns)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -253,9 +253,10 @@ class _TopLevelRuntimeNameCollector(_TopLevelScopeVisitor):
     def visit_Lambda(self, node: ast.Lambda) -> None:
         for default in node.args.defaults:
             self.visit(default)
-        for default in node.args.kw_defaults:
-            if default is not None:
-                self.visit(default)
+        for kw_default in node.args.kw_defaults:
+            if kw_default is None:
+                continue
+            self.visit(kw_default)
         self._scope_depth += 1
         self.visit(node.body)
         self._scope_depth -= 1
@@ -307,21 +308,19 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
                 isinstance(target, ast.Name) and target.id == "__lazy_modules__"
                 for target in node.targets
             ):
-                parsed = _parse_lazy_package_list(node.value)
-                if parsed is not None:
-                    lazy_modules = parsed
+                parsed_assign = _parse_lazy_package_list(node.value)
+                if parsed_assign is not None:
+                    lazy_modules = parsed_assign
         elif (
             isinstance(node, ast.AnnAssign)
             and isinstance(node.target, ast.Name)
             and node.target.id == "__lazy_modules__"
         ):
-            parsed = (
-                _parse_lazy_package_list(node.value)
-                if node.value is not None
-                else None
+            parsed_annassign = (
+                _parse_lazy_package_list(node.value) if node.value is not None else None
             )
-            if parsed is not None:
-                lazy_modules = parsed
+            if parsed_annassign is not None:
+                lazy_modules = parsed_annassign
 
     return lazy_modules
 

@@ -108,10 +108,7 @@ __lazy_modules__ = ["pandas"]
     errors = list(checker.run())
 
     assert len(errors) == 1
-    assert (
-        errors[0][2]
-        == "LZY002 module 'numpy' should be listed in __lazy_modules__"
-    )
+    assert errors[0][2] == "LZY002 module 'numpy' should be listed in __lazy_modules__"
 
 
 def test_checker_ignores_future_import() -> None:
@@ -141,10 +138,7 @@ if typing.TYPE_CHECKING:
     errors = list(checker.run())
 
     assert len(errors) == 1
-    assert (
-        errors[0][2]
-        == "LZY002 module 'numpy' should be listed in __lazy_modules__"
-    )
+    assert errors[0][2] == "LZY002 module 'numpy' should be listed in __lazy_modules__"
 
 
 def test_checker_ignores_name_type_checking_block() -> None:
@@ -162,10 +156,7 @@ if TYPE_CHECKING:
     errors = list(checker.run())
 
     assert len(errors) == 1
-    assert (
-        errors[0][2]
-        == "LZY002 module 'numpy' should be listed in __lazy_modules__"
-    )
+    assert errors[0][2] == "LZY002 module 'numpy' should be listed in __lazy_modules__"
 
 
 def test_checker_requires_explicit_nested_import_package() -> None:
@@ -198,8 +189,7 @@ import zoneinfo
 
     assert len(errors) == 1
     assert (
-        errors[0][2]
-        == "LZY001 module 'zoneinfo' should be listed in __lazy_modules__"
+        errors[0][2] == "LZY001 module 'zoneinfo' should be listed in __lazy_modules__"
     )
 
 
@@ -214,10 +204,7 @@ import numpy
     errors = list(checker.run())
 
     assert len(errors) == 1
-    assert (
-        errors[0][2]
-        == "LZY002 module 'numpy' should be listed in __lazy_modules__"
-    )
+    assert errors[0][2] == "LZY002 module 'numpy' should be listed in __lazy_modules__"
 
 
 def test_checker_does_not_flag_typing_when_used_for_guard_and_annotations() -> None:

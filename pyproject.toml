@@ -100,9 +100,11 @@ show-fixes = true
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
+  "COM812",  # Trailing commas teach the formatter
   "D",       # Too many doc requests
   "PLR09",   # Too many <...>
   "PLR2004", # Magic value used in comparison
+  "PT013",   # It's correct to import classes for typing!
   "S101",    # Assert is used by mypy and pytest
 ]
 
