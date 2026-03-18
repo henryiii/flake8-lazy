@@ -184,3 +184,22 @@ __lazy_modules__ = ["email"]
         errors[0][2]
         == "LZY001 package 'email.header' should be listed in __lazy_modules__"
     )
+
+
+def test_checker_does_not_flag_typing_when_used_for_guard_and_annotations() -> None:
+    tree = ast.parse(
+        """
+from typing import Any
+import typing
+
+if typing.TYPE_CHECKING:
+    import numpy
+
+def fn(x: Any) -> Any:
+    return x
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+
+    assert list(checker.run()) == []

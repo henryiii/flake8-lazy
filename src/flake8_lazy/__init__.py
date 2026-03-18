@@ -331,6 +331,11 @@ def collect_missing_lazy_packages(tree: ast.AST) -> list[tuple[str, int, int]]:
     non_lazy_names = set(collect_non_lazy_imports(tree))
     guard_names = collect_type_checking_guard_names(tree)
     lazy_packages = collect_lazy_packages(tree)
+    guard_packages = {
+        binding.package
+        for binding in collect_top_level_import_bindings(tree)
+        if binding.package is not None and binding.bound_name in guard_names
+    }
 
     missing: list[tuple[str, int, int]] = []
     seen_packages: set[str] = set()
@@ -338,6 +343,8 @@ def collect_missing_lazy_packages(tree: ast.AST) -> list[tuple[str, int, int]]:
         if binding.package is None:
             continue
         if binding.package == "__future__":
+            continue
+        if binding.package in guard_packages:
             continue
         if binding.bound_name in non_lazy_names:
             continue
