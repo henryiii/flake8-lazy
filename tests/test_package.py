@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import ast
+import sys
+
+import pytest
 
 import flake8_lazy as m
 
@@ -28,6 +31,26 @@ class Example:
     assert isinstance(imports[0], ast.Import)
     assert isinstance(imports[1], ast.ImportFrom)
     assert isinstance(imports[2], ast.Import)
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_collect_top_level_imports_ignores_lazy_imports() -> None:
+    tree = ast.parse(
+        """
+import os
+lazy import json
+lazy from pathlib import Path
+""",
+    )
+
+    imports = m.collect_top_level_imports(tree)
+
+    assert len(imports) == 1
+    assert isinstance(imports[0], ast.Import)
+    assert imports[0].names[0].name == "os"
 
 
 def test_checker_collects_top_level_imports_without_errors() -> None:

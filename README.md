@@ -35,8 +35,8 @@ declared as lazy in `__lazy_modules__`. For this package itself,
 `flake8-lazy --help` runs roughly twice as fast when using Python 3.15's new
 lazy import system.
 
-Currently, the `lazy import` syntax is not supported, only the backward-compat
-mode with `__lazy_modules__`. This will be added in the future.
+Error messages will mention `__lazy_modules__`, but the `lazy` keyword is
+supported too.
 
 ## Install
 
