@@ -125,3 +125,10 @@ path/to/file.py:1:0: LZY002 module 'numpy' should be listed in __lazy_modules__
 ```
 
 The command exits with status `1` if any diagnostics are produced.
+
+## Acknowledgements
+
+[GitHub Copilot](https://github.com/features/copilot) in VS Code was used to
+help develop this package. The
+[Scientific Python Development Guide](https://learn.scientific-python.org/development/)
+template was used as a starting point.

@@ -161,3 +161,10 @@ Serve docs locally:
 ```bash
 nox -s docs
 ```
+
+## Acknowledgements
+
+[GitHub Copilot](https://github.com/features/copilot) in VS Code was used to
+help develop this package. The
+[Scientific Python Development Guide](https://learn.scientific-python.org/development/)
+template was used as a starting point.
