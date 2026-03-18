@@ -166,3 +166,21 @@ if TYPE_CHECKING:
         errors[0][2]
         == "LZY001 package 'numpy' should be listed in __lazy_packages__"
     )
+
+
+def test_checker_requires_explicit_nested_import_package() -> None:
+    tree = ast.parse(
+        """
+import email.header
+__lazy_packages__ = ["email"]
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2]
+        == "LZY001 package 'email.header' should be listed in __lazy_packages__"
+    )

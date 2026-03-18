@@ -158,7 +158,7 @@ def collect_top_level_import_bindings(tree: ast.AST) -> list[_ImportBinding]:
         if isinstance(node, ast.Import):
             bindings.extend(
                 _ImportBinding(
-                    package=alias.name.split(".", maxsplit=1)[0],
+                    package=alias.name,
                     bound_name=_bound_name_for_import(alias, from_import=False),
                     lineno=node.lineno,
                     col_offset=node.col_offset,
