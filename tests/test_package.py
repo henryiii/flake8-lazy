@@ -225,3 +225,17 @@ def fn(x: Any) -> Any:
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
 
     assert list(checker.run()) == []
+
+
+def test_checker_preserves_relative_import_prefix_in_message() -> None:
+    tree = ast.parse(
+        """
+from .local import helper
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert errors[0][2] == "LZY002 module '.local' should be listed in __lazy_modules__"

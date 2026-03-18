@@ -141,6 +141,18 @@ def _bound_name_for_import(alias: ast.alias, *, from_import: bool) -> str:
     return alias.name.split(".", maxsplit=1)[0]
 
 
+def _package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | None:
+    if alias.name == "*":
+        return None
+
+    prefix = "." * node.level
+    if node.module is None:
+        return f"{prefix}{alias.name}"
+
+    root_module = node.module.split(".", maxsplit=1)[0]
+    return f"{prefix}{root_module}"
+
+
 def collect_top_level_imported_names(tree: ast.AST) -> list[str]:
     """Return imported names as bound in module scope."""
     names: list[str] = []
@@ -173,14 +185,9 @@ def collect_top_level_import_bindings(tree: ast.AST) -> list[_ImportBinding]:
                 for alias in node.names
             )
         else:
-            package = (
-                node.module.split(".", maxsplit=1)[0]
-                if node.module is not None
-                else None
-            )
             bindings.extend(
                 _ImportBinding(
-                    package=package,
+                    package=_package_for_import_from(node, alias),
                     bound_name=_bound_name_for_import(alias, from_import=True),
                     lineno=node.lineno,
                     col_offset=node.col_offset,
@@ -384,7 +391,10 @@ class LazyImportChecker:
                 (
                     lineno,
                     col_offset,
-                    f"{code}{stdlib} module '{package}' should be listed in __lazy_modules__",
+                    (
+                        f"{code}{stdlib} module '{package}' should be listed in "
+                        "__lazy_modules__"
+                    ),
                     type(self),
                 ),
             )
