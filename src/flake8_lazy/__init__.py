@@ -13,6 +13,17 @@ from pathlib import Path
 
 __version__ = "0.1.0"
 
+__all__ = [
+    "LazyImportChecker",
+    "__version__",
+    "main",
+]
+
+
+def __dir__() -> list[str]:
+    return __all__
+
+
 _STDLIB_MODULES = sys.stdlib_module_names
 
 
@@ -418,19 +429,3 @@ def main(argv: list[str] | None = None) -> None:
 
     if found_errors:
         raise SystemExit(1)
-
-
-__all__ = [
-    "LazyImportChecker",
-    "__version__",
-    "collect_errors_for_file",
-    "collect_lazy_packages",
-    "collect_missing_lazy_modules",
-    "collect_non_lazy_imports",
-    "collect_top_level_import_bindings",
-    "collect_top_level_imported_names",
-    "collect_top_level_imports",
-    "collect_top_level_runtime_names",
-    "collect_type_checking_guard_names",
-    "main",
-]
