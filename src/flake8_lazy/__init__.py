@@ -315,7 +315,7 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
     return lazy_modules
 
 
-def collect_missing_lazy_packages(tree: ast.AST) -> list[tuple[str, int, int]]:
+def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_modules__``."""
     bindings = collect_top_level_import_bindings(tree)
     non_lazy_names = set(collect_non_lazy_imports(tree))
@@ -367,7 +367,7 @@ class LazyImportChecker:
 
     def run(self) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
-        for package, lineno, col_offset in collect_missing_lazy_packages(self.tree):
+        for package, lineno, col_offset in collect_missing_lazy_modules(self.tree):
             code = _lazy_module_error_code(package)
             errors.append(
                 (
@@ -425,7 +425,7 @@ __all__ = [
     "__version__",
     "collect_errors_for_file",
     "collect_lazy_packages",
-    "collect_missing_lazy_packages",
+    "collect_missing_lazy_modules",
     "collect_non_lazy_imports",
     "collect_top_level_import_bindings",
     "collect_top_level_imported_names",
