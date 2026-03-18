@@ -112,3 +112,57 @@ __lazy_packages__ = ["pandas"]
         errors[0][2]
         == "LZY001 package 'numpy' should be listed in __lazy_packages__"
     )
+
+
+def test_checker_ignores_future_import() -> None:
+    tree = ast.parse(
+        """
+from __future__ import annotations
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+
+    assert list(checker.run()) == []
+
+
+def test_checker_ignores_typing_type_checking_block() -> None:
+    tree = ast.parse(
+        """
+import typing
+import numpy
+
+if typing.TYPE_CHECKING:
+    reveal = numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2]
+        == "LZY001 package 'numpy' should be listed in __lazy_packages__"
+    )
+
+
+def test_checker_ignores_name_type_checking_block() -> None:
+    tree = ast.parse(
+        """
+from typing import TYPE_CHECKING
+import numpy
+
+if TYPE_CHECKING:
+    reveal = numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2]
+        == "LZY001 package 'numpy' should be listed in __lazy_packages__"
+    )

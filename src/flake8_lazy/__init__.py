@@ -52,6 +52,71 @@ class _TopLevelImportCollector(ast.NodeVisitor):
         if self._scope_depth == 0:
             self.imports.append(node)
 
+    def visit_If(self, node: ast.If) -> None:
+        if _is_type_checking_guard(node.test):
+            for item in node.orelse:
+                self.visit(item)
+            return
+        self.generic_visit(node)
+
+
+def _is_type_checking_guard(node: ast.AST) -> bool:
+    if isinstance(node, ast.Name):
+        return node.id == "TYPE_CHECKING"
+    if isinstance(node, ast.Attribute):
+        return (
+            isinstance(node.value, ast.Name)
+            and node.value.id == "typing"
+            and node.attr == "TYPE_CHECKING"
+        )
+    return False
+
+
+def _collect_loaded_names(node: ast.AST) -> set[str]:
+    names: set[str] = set()
+    for item in ast.walk(node):
+        if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load):
+            names.add(item.id)
+    return names
+
+
+class _TypeCheckingGuardNameCollector(ast.NodeVisitor):
+    """Collect names used in top-level TYPE_CHECKING guard expressions."""
+
+    def __init__(self) -> None:
+        self.names: set[str] = set()
+        self._scope_depth = 0
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._scope_depth += 1
+        self.generic_visit(node)
+        self._scope_depth -= 1
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._scope_depth += 1
+        self.generic_visit(node)
+        self._scope_depth -= 1
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._scope_depth += 1
+        self.generic_visit(node)
+        self._scope_depth -= 1
+
+    def visit_If(self, node: ast.If) -> None:
+        if self._scope_depth == 0 and _is_type_checking_guard(node.test):
+            self.names.update(_collect_loaded_names(node.test))
+            for item in node.orelse:
+                self.visit(item)
+            return
+        self.generic_visit(node)
+
+
+def collect_type_checking_guard_names(tree: ast.AST) -> set[str]:
+    """Return names used in module-scope TYPE_CHECKING guards."""
+    collector = _TypeCheckingGuardNameCollector()
+    collector.visit(tree)
+    return collector.names
+
 
 def collect_top_level_imports(tree: ast.AST) -> list[ast.Import | ast.ImportFrom]:
     """Return all imports that execute at module scope in ``tree``."""
@@ -191,6 +256,13 @@ class _TopLevelRuntimeNameCollector(ast.NodeVisitor):
     def visit_ClassDef(self, _node: ast.ClassDef) -> None:
         return
 
+    def visit_If(self, node: ast.If) -> None:
+        if _is_type_checking_guard(node.test):
+            for item in node.orelse:
+                self.visit(item)
+            return
+        self.generic_visit(node)
+
 
 def collect_top_level_runtime_names(tree: ast.AST) -> set[str]:
     """Return names loaded at top-level module runtime."""
@@ -257,6 +329,7 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
 def collect_missing_lazy_packages(tree: ast.AST) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_packages__``."""
     non_lazy_names = set(collect_non_lazy_imports(tree))
+    guard_names = collect_type_checking_guard_names(tree)
     lazy_packages = collect_lazy_packages(tree)
 
     missing: list[tuple[str, int, int]] = []
@@ -264,7 +337,11 @@ def collect_missing_lazy_packages(tree: ast.AST) -> list[tuple[str, int, int]]:
     for binding in collect_top_level_import_bindings(tree):
         if binding.package is None:
             continue
+        if binding.package == "__future__":
+            continue
         if binding.bound_name in non_lazy_names:
+            continue
+        if binding.bound_name in guard_names:
             continue
         if binding.package in lazy_packages or binding.package in seen_packages:
             continue
@@ -350,5 +427,6 @@ __all__ = [
     "collect_top_level_imported_names",
     "collect_top_level_imports",
     "collect_top_level_runtime_names",
+    "collect_type_checking_guard_names",
     "main",
 ]
