@@ -5,5 +5,5 @@ import importlib.metadata
 import flake8_lazy as m
 
 
-def test_version():
+def test_version() -> None:
     assert importlib.metadata.version("flake8_lazy") == m.__version__

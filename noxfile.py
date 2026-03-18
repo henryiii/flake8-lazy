@@ -22,20 +22,20 @@ nox.options.default_venv_backend = "uv|virtualenv"
 
 @nox.session
 def lint(session: nox.Session) -> None:
-    """
-    Run the linter.
-    """
+    """Run the linter."""
     session.install("prek")
     session.run(
-        "prek", "run", "--all-files", "--show-diff-on-failure", *session.posargs
+        "prek",
+        "run",
+        "--all-files",
+        "--show-diff-on-failure",
+        *session.posargs,
     )
 
 
 @nox.session
 def pylint(session: nox.Session) -> None:
-    """
-    Run Pylint.
-    """
+    """Run Pylint."""
     # This needs to be installed into the package environment, and is slower
     # than a pre-commit check
     session.install("-e.", "pylint>=3.2")
@@ -44,9 +44,7 @@ def pylint(session: nox.Session) -> None:
 
 @nox.session
 def tests(session: nox.Session) -> None:
-    """
-    Run the unit and regular tests.
-    """
+    """Run the unit and regular tests."""
     test_deps = nox.project.dependency_groups(PROJECT, "test")
     session.install("-e.", *test_deps)
     session.run("pytest", *session.posargs)
@@ -54,10 +52,7 @@ def tests(session: nox.Session) -> None:
 
 @nox.session(reuse_venv=True, default=False)
 def docs(session: nox.Session) -> None:
-    """
-    Make or serve the docs. Pass --non-interactive to avoid serving.
-    """
-
+    """Make or serve the docs. Pass --non-interactive to avoid serving."""
     doc_deps = nox.project.dependency_groups(PROJECT, "docs")
     session.install("-e.", *doc_deps)
 
@@ -69,10 +64,7 @@ def docs(session: nox.Session) -> None:
 
 @nox.session(default=False)
 def build(session: nox.Session) -> None:
-    """
-    Build an SDist and wheel.
-    """
-
+    """Build an SDist and wheel."""
     build_path = DIR.joinpath("build")
     if build_path.exists():
         shutil.rmtree(build_path)

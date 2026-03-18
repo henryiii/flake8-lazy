@@ -1,5 +1,4 @@
-"""
-Copyright (c) 2026 Henry Schreiner. All rights reserved.
+"""Copyright (c) 2026 Henry Schreiner. All rights reserved.
 
 flake8-lazy: Detect imports that can be lazy
 """
