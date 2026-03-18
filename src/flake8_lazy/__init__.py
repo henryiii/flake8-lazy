@@ -379,11 +379,12 @@ class LazyImportChecker:
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         for package, lineno, col_offset in collect_missing_lazy_modules(self.tree):
             code = _lazy_module_error_code(package)
+            stdlib = " stdlib" if code == "LZY001" else ""
             errors.append(
                 (
                     lineno,
                     col_offset,
-                    f"{code} module '{package}' should be listed in __lazy_modules__",
+                    f"{code}{stdlib} module '{package}' should be listed in __lazy_modules__",
                     type(self),
                 ),
             )

@@ -173,7 +173,7 @@ __lazy_modules__ = ["email"]
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY001 module 'email.header' should be listed in __lazy_modules__"
+        == "LZY001 stdlib module 'email.header' should be listed in __lazy_modules__"
     )
 
 
@@ -189,7 +189,8 @@ import zoneinfo
 
     assert len(errors) == 1
     assert (
-        errors[0][2] == "LZY001 module 'zoneinfo' should be listed in __lazy_modules__"
+        errors[0][2]
+        == "LZY001 stdlib module 'zoneinfo' should be listed in __lazy_modules__"
     )
 
 
