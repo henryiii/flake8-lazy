@@ -5,6 +5,8 @@ flake8-lazy: Detect imports that can be lazy
 
 from __future__ import annotations
 
+__lazy_modules__ = ["argparse", "ast", "dataclasses", "pathlib", "sys"]
+
 import argparse
 import ast
 import sys
@@ -22,9 +24,6 @@ __all__ = [
 
 def __dir__() -> list[str]:
     return __all__
-
-
-_STDLIB_MODULES = sys.stdlib_module_names
 
 
 @dataclass(frozen=True)
@@ -367,7 +366,7 @@ def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
 
 def _lazy_module_error_code(module: str) -> str:
     root_module = module.split(".", maxsplit=1)[0]
-    if root_module in _STDLIB_MODULES:
+    if root_module in sys.stdlib_module_names:
         return "LZY001"
     return "LZY002"
 
