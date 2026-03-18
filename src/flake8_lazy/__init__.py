@@ -296,7 +296,7 @@ def _parse_lazy_package_list(node: ast.AST) -> set[str] | None:
 
 
 def collect_lazy_packages(tree: ast.AST) -> set[str]:
-    """Return statically-declared values of ``__lazy_packages__``."""
+    """Return statically-declared values of ``__lazy_modules__``."""
     if not isinstance(tree, ast.Module):
         return set()
 
@@ -304,7 +304,7 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
     for node in tree.body:
         if isinstance(node, ast.Assign):
             if any(
-                isinstance(target, ast.Name) and target.id == "__lazy_packages__"
+                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
                 for target in node.targets
             ):
                 parsed = _parse_lazy_package_list(node.value)
@@ -313,7 +313,7 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
         elif (
             isinstance(node, ast.AnnAssign)
             and isinstance(node.target, ast.Name)
-            and node.target.id == "__lazy_packages__"
+            and node.target.id == "__lazy_modules__"
         ):
             parsed = (
                 _parse_lazy_package_list(node.value)
@@ -327,7 +327,7 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
 
 
 def collect_missing_lazy_packages(tree: ast.AST) -> list[tuple[str, int, int]]:
-    """Return lazy-capable packages missing from ``__lazy_packages__``."""
+    """Return lazy-capable packages missing from ``__lazy_modules__``."""
     non_lazy_names = set(collect_non_lazy_imports(tree))
     guard_names = collect_type_checking_guard_names(tree)
     lazy_packages = collect_lazy_packages(tree)
@@ -368,7 +368,7 @@ class LazyImportChecker:
                 (
                     lineno,
                     col_offset,
-                    f"LZY001 package '{package}' should be listed in __lazy_packages__",
+                    f"LZY001 package '{package}' should be listed in __lazy_modules__",
                     type(self),
                 ),
             )

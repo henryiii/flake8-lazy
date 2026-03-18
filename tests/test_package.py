@@ -34,7 +34,7 @@ def test_checker_collects_top_level_imports_without_errors() -> None:
     tree = ast.parse(
         """
 import os
-__lazy_packages__ = ["os"]
+__lazy_modules__ = ["os"]
 
 def func() -> None:
     import json
@@ -85,7 +85,7 @@ def fn() -> None:
 def test_collect_lazy_packages() -> None:
     tree = ast.parse(
         """
-__lazy_packages__ = ["numpy", "pandas"]
+__lazy_modules__ = ["numpy", "pandas"]
 """,
     )
 
@@ -100,7 +100,7 @@ import pandas as pd
 from sklearn import metrics
 
 value = metrics
-__lazy_packages__ = ["pandas"]
+__lazy_modules__ = ["pandas"]
 """,
     )
 
@@ -110,7 +110,7 @@ __lazy_packages__ = ["pandas"]
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY001 package 'numpy' should be listed in __lazy_packages__"
+        == "LZY001 package 'numpy' should be listed in __lazy_modules__"
     )
 
 
@@ -143,7 +143,7 @@ if typing.TYPE_CHECKING:
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY001 package 'numpy' should be listed in __lazy_packages__"
+        == "LZY001 package 'numpy' should be listed in __lazy_modules__"
     )
 
 
@@ -164,7 +164,7 @@ if TYPE_CHECKING:
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY001 package 'numpy' should be listed in __lazy_packages__"
+        == "LZY001 package 'numpy' should be listed in __lazy_modules__"
     )
 
 
@@ -172,7 +172,7 @@ def test_checker_requires_explicit_nested_import_package() -> None:
     tree = ast.parse(
         """
 import email.header
-__lazy_packages__ = ["email"]
+__lazy_modules__ = ["email"]
 """,
     )
 
@@ -182,5 +182,5 @@ __lazy_packages__ = ["email"]
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY001 package 'email.header' should be listed in __lazy_packages__"
+        == "LZY001 package 'email.header' should be listed in __lazy_modules__"
     )
