@@ -6,7 +6,6 @@
 [![PyPI version][pypi-version]][pypi-link]
 [![PyPI platforms][pypi-platforms]][pypi-link]
 
-
 <!-- prettier-ignore-start -->
 [actions-badge]:            https://github.com/henryiii/flake8-lazy/workflows/CI/badge.svg
 [actions-link]:             https://github.com/henryiii/flake8-lazy/actions
