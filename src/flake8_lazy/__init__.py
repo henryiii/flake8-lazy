@@ -74,12 +74,16 @@ class _TopLevelImportCollector(_TopLevelScopeVisitor):
         self.imports: list[ast.Import | ast.ImportFrom] = []
 
     def visit_Import(self, node: ast.Import) -> None:
-        if self.in_top_level_scope:
+        if self.in_top_level_scope and not _is_lazy_import_node(node):
             self.imports.append(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if self.in_top_level_scope:
+        if self.in_top_level_scope and not _is_lazy_import_node(node):
             self.imports.append(node)
+
+
+def _is_lazy_import_node(node: ast.Import | ast.ImportFrom) -> bool:
+    return False if sys.version_info < (3, 15) else bool(node.is_lazy)  # type: ignore[union-attr]
 
 
 def _is_type_checking_guard(node: ast.AST) -> bool:
