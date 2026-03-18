@@ -27,3 +27,137 @@
 [coverage-link]:            https://codecov.io/github/henryiii/flake8-lazy
 
 <!-- prettier-ignore-end -->
+
+flake8-lazy is a flake8 plugin that finds imports which can be made lazy.
+
+flake8-lazy helps keep import-time overhead low by detecting imports that can be
+declared as lazy in `__lazy_modules__`. For this package itself,
+`flake8-lazy --help` runs roughly twice as fast when using Python 3.15's new
+lazy import system.
+
+Currently, the `lazy import` syntax is not supported, only the backward-compat
+mode with `__lazy_modules__`. This will be added in the future.
+
+## Install
+
+```bash
+python -m pip install flake8-lazy
+```
+
+Usually you would include this in some sort of dependency-group in your project,
+e.g. `dev` or `lint`.
+
+## Use with flake8
+
+flake8 discovers the plugin via the `flake8.extension` entry point.
+
+```bash
+flake8 your_package
+```
+
+## Rule codes
+
+- `LZY001`: Missing lazy stdlib module in `__lazy_modules__`
+- `LZY002`: Missing lazy third-party or local module in `__lazy_modules__`
+- `LZY101`: `__lazy_modules__` list is not sorted
+
+## Basic example
+
+```python
+__lazy_modules__ = ["argparse", "pathlib"]
+
+import argparse
+import pathlib
+import numpy
+
+
+def run() -> None:
+    print(argparse.ArgumentParser)
+```
+
+In this example, `numpy` is never used at module runtime, so the checker expects
+it in `__lazy_modules__` and emits `LZY002`.
+
+## How detection works
+
+flake8-lazy inspects module-scope imports and module runtime usage.
+
+- Counts top-level `import` and `from ... import ...` statements.
+- Ignores imports inside functions and classes.
+- Treats annotation-only usage as lazy-capable.
+- Treats usage inside `if TYPE_CHECKING:` as type-only.
+- Skips `from __future__ import ...`.
+- Requires exact module entries for nested imports.
+
+Nested import note:
+
+```python
+import email.header
+
+__lazy_modules__ = ["email"]  # Not enough
+```
+
+This emits `LZY001`; the required entry is `"email.header"`. PEP 810 requires
+full module names.
+
+## CLI
+
+The project also provides a direct CLI runner:
+
+```bash
+flake8-lazy path/to/file.py another_file.py
+# or
+uvx flake8-lazy path/to/file.py another_file.py
+```
+
+Output format matches flake8-style diagnostics:
+
+```text
+path/to/file.py:12:0: LZY002 module 'numpy' should be listed in __lazy_modules__
+```
+
+The command exits with status code `1` if any error is found.
+
+## Authoring `__lazy_modules__`
+
+Use a static, sorted list of strings:
+
+```python
+__lazy_modules__ = [
+    "argparse",
+    "numpy",
+    "pathlib",
+]
+```
+
+Dynamic values are intentionally ignored for now.
+
+## Local development
+
+Run tests:
+
+```bash
+nox -s tests
+# or
+uv run pytest
+```
+
+Run linting:
+
+```bash
+nox -s lint
+# or
+prek -a
+```
+
+Build docs:
+
+```bash
+nox -s docs --non-interactive
+```
+
+Serve docs locally:
+
+```bash
+nox -s docs
+```
