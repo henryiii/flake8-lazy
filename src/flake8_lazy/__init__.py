@@ -291,15 +291,22 @@ def collect_non_lazy_imports(tree: ast.AST) -> list[str]:
     return non_lazy
 
 
-def _parse_lazy_package_list(node: ast.AST) -> set[str] | None:
+def _parse_lazy_module_list(node: ast.AST) -> list[str] | None:
     if not isinstance(node, ast.List):
         return None
-    packages: set[str] = set()
+    modules: list[str] = []
     for element in node.elts:
         if not isinstance(element, ast.Constant) or not isinstance(element.value, str):
             return None
-        packages.add(element.value)
-    return packages
+        modules.append(element.value)
+    return modules
+
+
+def _parse_lazy_module_set(node: ast.AST) -> set[str] | None:
+    parsed = _parse_lazy_module_list(node)
+    if parsed is None:
+        return None
+    return set(parsed)
 
 
 def collect_lazy_packages(tree: ast.AST) -> set[str]:
@@ -314,7 +321,7 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
                 isinstance(target, ast.Name) and target.id == "__lazy_modules__"
                 for target in node.targets
             ):
-                parsed_assign = _parse_lazy_package_list(node.value)
+                parsed_assign = _parse_lazy_module_set(node.value)
                 if parsed_assign is not None:
                     lazy_modules = parsed_assign
         elif (
@@ -323,12 +330,41 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
             and node.target.id == "__lazy_modules__"
         ):
             parsed_annassign = (
-                _parse_lazy_package_list(node.value) if node.value is not None else None
+                _parse_lazy_module_set(node.value) if node.value is not None else None
             )
             if parsed_annassign is not None:
                 lazy_modules = parsed_annassign
 
     return lazy_modules
+
+
+def collect_unsorted_lazy_modules(tree: ast.AST) -> list[tuple[int, int]]:
+    """Return locations of static ``__lazy_modules__`` assignments that are unsorted."""
+    if not isinstance(tree, ast.Module):
+        return []
+
+    unsorted: list[tuple[int, int]] = []
+    for node in tree.body:
+        value_node: ast.AST | None = None
+        match node:
+            case ast.Assign(targets=targets, value=value) if any(
+                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
+                for target in targets
+            ):
+                value_node = value
+            case ast.AnnAssign(target=ast.Name(id="__lazy_modules__"), value=value):
+                value_node = value
+
+        if value_node is None:
+            continue
+
+        values = _parse_lazy_module_list(value_node)
+        if values is None:
+            continue
+        if values != sorted(values):
+            unsorted.append((node.lineno, node.col_offset))
+
+    return unsorted
 
 
 def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
@@ -397,6 +433,17 @@ class LazyImportChecker:
                     type(self),
                 ),
             )
+
+        for lineno, col_offset in collect_unsorted_lazy_modules(self.tree):
+            errors.append(
+                (
+                    lineno,
+                    col_offset,
+                    "LZY101 __lazy_modules__ should be sorted",
+                    type(self),
+                ),
+            )
+
         return errors
 
 

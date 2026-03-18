@@ -239,3 +239,34 @@ from .local import helper
 
     assert len(errors) == 1
     assert errors[0][2] == "LZY002 module '.local' should be listed in __lazy_modules__"
+
+
+def test_checker_emits_lzy101_for_unsorted_lazy_modules() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["zlib", "abc"]
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+
+    assert list(checker.run()) == [
+        (
+            2,
+            0,
+            "LZY101 __lazy_modules__ should be sorted",
+            m.LazyImportChecker,
+        ),
+    ]
+
+
+def test_checker_does_not_emit_lzy101_for_sorted_lazy_modules() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["abc", "zlib"]
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+
+    assert list(checker.run()) == []
