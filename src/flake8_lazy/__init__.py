@@ -22,35 +22,29 @@ class _ImportBinding:
     col_offset: int
 
 
-class _TopLevelImportCollector(ast.NodeVisitor):
-    """Collect imports that are executed in module scope."""
+class _TopLevelScopeVisitor(ast.NodeVisitor):
+    """Visit nodes while tracking module-level vs nested scope."""
 
     def __init__(self) -> None:
-        self.imports: list[ast.Import | ast.ImportFrom] = []
         self._scope_depth = 0
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+    @property
+    def in_top_level_scope(self) -> bool:
+        return self._scope_depth == 0
+
+    def _visit_nested_scope(self, node: ast.AST) -> None:
         self._scope_depth += 1
         self.generic_visit(node)
         self._scope_depth -= 1
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_nested_scope(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        self._scope_depth += 1
-        self.generic_visit(node)
-        self._scope_depth -= 1
+        self._visit_nested_scope(node)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        self._scope_depth += 1
-        self.generic_visit(node)
-        self._scope_depth -= 1
-
-    def visit_Import(self, node: ast.Import) -> None:
-        if self._scope_depth == 0:
-            self.imports.append(node)
-
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if self._scope_depth == 0:
-            self.imports.append(node)
+        self._visit_nested_scope(node)
 
     def visit_If(self, node: ast.If) -> None:
         if _is_type_checking_guard(node.test):
@@ -58,6 +52,22 @@ class _TopLevelImportCollector(ast.NodeVisitor):
                 self.visit(item)
             return
         self.generic_visit(node)
+
+
+class _TopLevelImportCollector(_TopLevelScopeVisitor):
+    """Collect imports that are executed in module scope."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.imports: list[ast.Import | ast.ImportFrom] = []
+
+    def visit_Import(self, node: ast.Import) -> None:
+        if self.in_top_level_scope:
+            self.imports.append(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if self.in_top_level_scope:
+            self.imports.append(node)
 
 
 def _is_type_checking_guard(node: ast.AST) -> bool:
@@ -80,30 +90,15 @@ def _collect_loaded_names(node: ast.AST) -> set[str]:
     return names
 
 
-class _TypeCheckingGuardNameCollector(ast.NodeVisitor):
+class _TypeCheckingGuardNameCollector(_TopLevelScopeVisitor):
     """Collect names used in top-level TYPE_CHECKING guard expressions."""
 
     def __init__(self) -> None:
+        super().__init__()
         self.names: set[str] = set()
-        self._scope_depth = 0
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        self._scope_depth += 1
-        self.generic_visit(node)
-        self._scope_depth -= 1
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        self._scope_depth += 1
-        self.generic_visit(node)
-        self._scope_depth -= 1
-
-    def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        self._scope_depth += 1
-        self.generic_visit(node)
-        self._scope_depth -= 1
 
     def visit_If(self, node: ast.If) -> None:
-        if self._scope_depth == 0 and _is_type_checking_guard(node.test):
+        if self.in_top_level_scope and _is_type_checking_guard(node.test):
             self.names.update(_collect_loaded_names(node.test))
             for item in node.orelse:
                 self.visit(item)
@@ -184,16 +179,16 @@ def collect_top_level_import_bindings(tree: ast.AST) -> list[_ImportBinding]:
     return bindings
 
 
-class _TopLevelRuntimeNameCollector(ast.NodeVisitor):
+class _TopLevelRuntimeNameCollector(_TopLevelScopeVisitor):
     """Collect names loaded at module runtime.
 
     Names in class scopes and annotation contexts are ignored.
     """
 
     def __init__(self) -> None:
+        super().__init__()
         self.names: set[str] = set()
         self._annotation_depth = 0
-        self._scope_depth = 0
 
     def _visit_annotation(self, node: ast.AST | None) -> None:
         if node is None:
@@ -205,7 +200,7 @@ class _TopLevelRuntimeNameCollector(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name) -> None:
         if (
             self._annotation_depth == 0
-            and self._scope_depth == 0
+            and self.in_top_level_scope
             and isinstance(node.ctx, ast.Load)
         ):
             self.names.add(node.id)
@@ -254,13 +249,6 @@ class _TopLevelRuntimeNameCollector(ast.NodeVisitor):
 
     def visit_ClassDef(self, _node: ast.ClassDef) -> None:
         return
-
-    def visit_If(self, node: ast.If) -> None:
-        if _is_type_checking_guard(node.test):
-            for item in node.orelse:
-                self.visit(item)
-            return
-        self.generic_visit(node)
 
 
 def collect_top_level_runtime_names(tree: ast.AST) -> set[str]:
