@@ -110,7 +110,7 @@ __lazy_modules__ = ["pandas"]
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY001 package 'numpy' should be listed in __lazy_modules__"
+        == "LZY002 module 'numpy' should be listed in __lazy_modules__"
     )
 
 
@@ -143,7 +143,7 @@ if typing.TYPE_CHECKING:
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY001 package 'numpy' should be listed in __lazy_modules__"
+        == "LZY002 module 'numpy' should be listed in __lazy_modules__"
     )
 
 
@@ -164,7 +164,7 @@ if TYPE_CHECKING:
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY001 package 'numpy' should be listed in __lazy_modules__"
+        == "LZY002 module 'numpy' should be listed in __lazy_modules__"
     )
 
 
@@ -182,7 +182,41 @@ __lazy_modules__ = ["email"]
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY001 package 'email.header' should be listed in __lazy_modules__"
+        == "LZY001 module 'email.header' should be listed in __lazy_modules__"
+    )
+
+
+def test_checker_emits_lzy001_for_missing_stdlib_module() -> None:
+    tree = ast.parse(
+        """
+import zoneinfo
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2]
+        == "LZY001 module 'zoneinfo' should be listed in __lazy_modules__"
+    )
+
+
+def test_checker_emits_lzy002_for_missing_third_party_module() -> None:
+    tree = ast.parse(
+        """
+import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2]
+        == "LZY002 module 'numpy' should be listed in __lazy_modules__"
     )
 
 

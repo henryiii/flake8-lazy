@@ -13,6 +13,8 @@ from pathlib import Path
 
 __version__ = "0.1.0"
 
+_STDLIB_MODULES = sys.stdlib_module_names
+
 
 @dataclass(frozen=True)
 class _ImportBinding:
@@ -346,6 +348,13 @@ def collect_missing_lazy_packages(tree: ast.AST) -> list[tuple[str, int, int]]:
     return missing
 
 
+def _lazy_module_error_code(module: str) -> str:
+    root_module = module.split(".", maxsplit=1)[0]
+    if root_module in _STDLIB_MODULES:
+        return "LZY001"
+    return "LZY002"
+
+
 class LazyImportChecker:
     """flake8 checker for imports that can be made lazy."""
 
@@ -359,11 +368,12 @@ class LazyImportChecker:
     def run(self) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         for package, lineno, col_offset in collect_missing_lazy_packages(self.tree):
+            code = _lazy_module_error_code(package)
             errors.append(
                 (
                     lineno,
                     col_offset,
-                    f"LZY001 package '{package}' should be listed in __lazy_modules__",
+                    f"{code} module '{package}' should be listed in __lazy_modules__",
                     type(self),
                 ),
             )
