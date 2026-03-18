@@ -32,6 +32,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.entry-points."flake8.extension"]
+LZY = "flake8_lazy:LazyImportChecker"
+
 [project.urls]
 Homepage = "https://github.com/henryiii/flake8-lazy"
 "Bug Tracker" = "https://github.com/henryiii/flake8-lazy/issues"
