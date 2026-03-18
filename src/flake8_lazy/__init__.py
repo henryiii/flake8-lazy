@@ -223,7 +223,10 @@ class _TopLevelRuntimeNameCollector(ast.NodeVisitor):
             self.visit(target)
         self.visit(node.value)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+    def _visit_function_signature(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> None:
         for decorator in node.decorator_list:
             self.visit(decorator)
         for default in node.args.defaults:
@@ -233,15 +236,11 @@ class _TopLevelRuntimeNameCollector(ast.NodeVisitor):
                 self.visit(default)
         self._visit_annotation(node.returns)
 
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function_signature(node)
+
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        for decorator in node.decorator_list:
-            self.visit(decorator)
-        for default in node.args.defaults:
-            self.visit(default)
-        for default in node.args.kw_defaults:
-            if default is not None:
-                self.visit(default)
-        self._visit_annotation(node.returns)
+        self._visit_function_signature(node)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         for default in node.args.defaults:
@@ -300,7 +299,7 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
     if not isinstance(tree, ast.Module):
         return set()
 
-    lazy_packages: set[str] = set()
+    lazy_modules: set[str] = set()
     for node in tree.body:
         if isinstance(node, ast.Assign):
             if any(
@@ -309,7 +308,7 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
             ):
                 parsed = _parse_lazy_package_list(node.value)
                 if parsed is not None:
-                    lazy_packages = parsed
+                    lazy_modules = parsed
         elif (
             isinstance(node, ast.AnnAssign)
             and isinstance(node.target, ast.Name)
@@ -321,25 +320,26 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
                 else None
             )
             if parsed is not None:
-                lazy_packages = parsed
+                lazy_modules = parsed
 
-    return lazy_packages
+    return lazy_modules
 
 
 def collect_missing_lazy_packages(tree: ast.AST) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_modules__``."""
+    bindings = collect_top_level_import_bindings(tree)
     non_lazy_names = set(collect_non_lazy_imports(tree))
     guard_names = collect_type_checking_guard_names(tree)
-    lazy_packages = collect_lazy_packages(tree)
+    lazy_modules = collect_lazy_packages(tree)
     guard_packages = {
         binding.package
-        for binding in collect_top_level_import_bindings(tree)
+        for binding in bindings
         if binding.package is not None and binding.bound_name in guard_names
     }
 
     missing: list[tuple[str, int, int]] = []
     seen_packages: set[str] = set()
-    for binding in collect_top_level_import_bindings(tree):
+    for binding in bindings:
         if binding.package is None:
             continue
         if binding.package == "__future__":
@@ -350,7 +350,7 @@ def collect_missing_lazy_packages(tree: ast.AST) -> list[tuple[str, int, int]]:
             continue
         if binding.bound_name in guard_names:
             continue
-        if binding.package in lazy_packages or binding.package in seen_packages:
+        if binding.package in lazy_modules or binding.package in seen_packages:
             continue
         missing.append((binding.package, binding.lineno, binding.col_offset))
         seen_packages.add(binding.package)
@@ -394,12 +394,11 @@ def collect_errors_for_file(path: str | Path) -> list[tuple[int, int, str]]:
 def main(argv: list[str] | None = None) -> None:
     """Run flake8-lazy checks directly from the command line."""
     parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument("files", nargs="+")
+    parser.add_argument("files", nargs="+", type=Path)
     namespace = parser.parse_args(list(argv) if argv is not None else None)
 
     found_errors = False
-    for item in namespace.files:
-        path = Path(item)
+    for path in namespace.files:
         try:
             errors = collect_errors_for_file(path)
         except OSError as exc:
