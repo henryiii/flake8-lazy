@@ -37,6 +37,7 @@ The plugin is auto-discovered by flake8 via entry points.
 | `LZY002` | third-party or local module should be listed in `__lazy_modules__` |
 | `LZY101` | `__lazy_modules__` is not sorted                                   |
 | `LZY102` | module listed in `__lazy_modules__` is never imported              |
+| `LZY103` | module is declared lazy but accessed at the top level              |
 
 ## Expected pattern
 
@@ -120,6 +121,21 @@ Diagnostic:
 
 ```text
 LZY102 module 'pandas' is listed in __lazy_modules__ but never imported
+```
+
+### Module accessed at module scope
+
+```python
+__lazy_modules__ = ["pathlib"]
+import pathlib
+
+BASE = pathlib.Path("/tmp")
+```
+
+Diagnostic:
+
+```text
+LZY103 module 'pathlib' is declared lazy but accessed at the top level
 ```
 
 ## CLI mode
