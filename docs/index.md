@@ -84,7 +84,7 @@ module import.
 The checker intentionally treats these as lazy-capable:
 
 - Imports only referenced in annotations.
-- Imports only referenced in `if TYPE_CHECKING:` guards.
+- Imports only referenced in `if typing.TYPE_CHECKING:` guards.
 - Imports only used inside functions.
 
 It intentionally ignores:
@@ -97,13 +97,25 @@ It intentionally ignores:
 ### Missing lazy module
 
 ```python
-import numpy
+__lazy_modules__ = ["argparse"]
+
+import argparse
+import requests
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("url")
+    args = parser.parse_args()
+
+    response = requests.get(args.url, timeout=5)
+    print(response.status_code)
 ```
 
 Diagnostic:
 
 ```text
-LZY102 module 'numpy' should be listed in __lazy_modules__
+LZY102 module 'requests' should be listed in __lazy_modules__
 ```
 
 ### Unsorted list

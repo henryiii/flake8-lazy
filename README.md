@@ -6,15 +6,16 @@
 [![PyPI version][pypi-version]][pypi-link]
 [![PyPI platforms][pypi-platforms]][pypi-link]
 
-flake8-lazy is a flake8 plugin that finds imports which can be made lazy.
+flake8-lazy is a flake8 plugin that finds imports which can be made lazy in
+Python 3.15.
 
 flake8-lazy helps keep import-time overhead low by detecting imports that can be
 declared as lazy in `__lazy_modules__`. For this package itself,
 `flake8-lazy --help` runs roughly twice as fast when using Python 3.15's new
 lazy import system.
 
-Error messages will mention `__lazy_modules__`, but the `lazy` keyword is
-supported too.
+Error messages will mention `__lazy_modules__` since that is backward compatible
+with older Python versions, but the `lazy` keyword is supported too.
 
 ## Install
 
@@ -56,28 +57,33 @@ flake8 will automatically discover the plugin. There's also a standalone
 ## Basic example
 
 ```python
-__lazy_modules__ = ["argparse", "pathlib"]
+__lazy_modules__ = ["argparse"]
 
 import argparse
-import pathlib
-import numpy
+import requests
 
 
-def run() -> None:
-    print(argparse.ArgumentParser)
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("url")
+    args = parser.parse_args()
+
+    response = requests.get(args.url, timeout=5)
+    print(response.status_code)
 ```
 
-In this example, `numpy` is never used at module runtime, so the checker expects
-it in `__lazy_modules__` and emits `LZY102`.
+In this example, `requests` is only used inside `main`, so it can be lazy. The
+checker expects it in `__lazy_modules__` and emits `LZY102` until you add it.
+Running `--help` will not import requests, resulting in a more responsive app!
 
 ## How detection works
 
 flake8-lazy inspects module-scope imports and module runtime usage.
 
 - Counts top-level `import` and `from ... import ...` statements.
-- Ignores imports inside functions and classes.
-- Treats annotation-only usage as lazy-capable.
-- Treats usage inside `if TYPE_CHECKING:` as type-only.
+- Currently treats annotation-only usage as lazy-capable
+  (`from __future__ import annotations` if not using 3.14+).
+- Treats usage inside `if typing.TYPE_CHECKING:` as type-only.
 - Skips `from __future__ import ...`.
 - Requires exact module entries for nested imports.
 
@@ -93,7 +99,7 @@ This emits `LZY101`; the required entry is `"email.header"`. PEP 810 requires
 full module names.
 
 Missing relative imports are mentioned as `.name`, but you need to list the full
-name, or generate the full name dynamically if you support embedding.
+name, or generate the full name dynamically if you support embedding (rare).
 
 ## CLI
 
