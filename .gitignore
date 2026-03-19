@@ -186,3 +186,7 @@ Thumbs.db
 # Common editor files
 *~
 *.swp
+
+# Lockfiles
+*.lock
+*.pylock
