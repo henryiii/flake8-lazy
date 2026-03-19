@@ -193,10 +193,14 @@ __lazy_modules__ = ["email"]
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    assert len(errors) == 1
+    assert len(errors) == 2
     assert (
         errors[0][2]
         == "LZY001 stdlib module 'email.header' should be listed in __lazy_modules__"
+    )
+    assert (
+        errors[1][2]
+        == "LZY102 module 'email' is listed in __lazy_modules__ but never imported"
     )
 
 
@@ -272,8 +276,10 @@ __lazy_modules__ = ["zlib", "abc"]
     )
 
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
 
-    assert list(checker.run()) == [
+    lzy101_errors = [e for e in errors if e[2].startswith("LZY101")]
+    assert lzy101_errors == [
         (
             2,
             0,
@@ -291,5 +297,58 @@ __lazy_modules__ = ["abc", "zlib"]
     )
 
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy101_errors = [e for e in errors if e[2].startswith("LZY101")]
+    assert lzy101_errors == []
+
+
+def test_checker_emits_lzy102_for_unused_lazy_module() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["numpy", "pandas"]
+import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2]
+        == "LZY102 module 'pandas' is listed in __lazy_modules__ but never imported"
+    )
+
+
+def test_checker_does_not_emit_lzy102_when_all_lazy_modules_are_imported() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["numpy", "pandas"]
+import numpy
+import pandas
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
 
     assert list(checker.run()) == []
+
+
+def test_checker_emits_lzy102_for_annotated_assignment() -> None:
+    tree = ast.parse(
+        """
+from typing import List
+__lazy_modules__: List[str] = ["numpy"]
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy102_errors = [e for e in errors if e[2].startswith("LZY102")]
+    assert len(lzy102_errors) == 1
+    assert (
+        lzy102_errors[0][2]
+        == "LZY102 module 'numpy' is listed in __lazy_modules__ but never imported"
+    )
