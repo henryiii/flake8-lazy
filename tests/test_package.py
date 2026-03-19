@@ -134,6 +134,119 @@ __lazy_modules__ = ["pandas"]
     assert errors[0][2] == "LZY102 module 'numpy' should be listed in __lazy_modules__"
 
 
+def test_collect_side_effect_only_import_packages_basic() -> None:
+    tree = ast.parse(
+        """
+import logging.config
+import os
+""",
+    )
+
+    # logging.config is a dotted unaliased import and logging is never loaded;
+    # os is a plain import so it is not side-effect-only.
+    result = m.collect_side_effect_only_import_packages(tree)
+
+    assert result == {"logging.config"}
+
+
+def test_collect_side_effect_only_import_ignored_when_bound_name_used() -> None:
+    tree = ast.parse(
+        """
+import logging.config
+
+logging.basicConfig()
+""",
+    )
+
+    # `logging` is loaded via attribute access, so the import is NOT side-effect-only.
+    result = m.collect_side_effect_only_import_packages(tree)
+
+    assert result == set()
+
+
+def test_collect_side_effect_only_import_ignored_when_aliased() -> None:
+    tree = ast.parse(
+        """
+import logging.config as lc
+""",
+    )
+
+    # `as lc` means the caller intends to use the binding explicitly.
+    result = m.collect_side_effect_only_import_packages(tree)
+
+    assert result == set()
+
+
+def test_checker_ignores_side_effect_only_import_for_lzy101() -> None:
+    tree = ast.parse(
+        """
+import email.header
+""",
+    )
+
+    # email.header is a stdlib dotted import and email is never used
+    # — treat it as a side-effect import and emit no LZY101 error.
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+
+    assert list(checker.run()) == []
+
+
+def test_checker_ignores_side_effect_only_import_for_lzy102() -> None:
+    tree = ast.parse(
+        """
+import pkg.plugin
+""",
+    )
+
+    # pkg.plugin is a dotted import whose bound name pkg is never used.
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+
+    lzy10x_errors = [e for e in checker.run() if e[2].startswith(("LZY101", "LZY102"))]
+    assert lzy10x_errors == []
+
+
+def test_checker_still_flags_dotted_import_when_bound_name_is_used() -> None:
+    tree = ast.parse(
+        """
+import email.header
+
+def process() -> None:
+    msg = email.header.decode_header("=?utf-8?b?dGVzdA==?=")
+""",
+    )
+
+    # `email` is used inside a function, so it is not side-effect-only
+    # (it IS in all loaded names) and should still be flagged as LZY101.
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy10x_errors = [e for e in errors if e[2].startswith(("LZY101", "LZY102"))]
+    assert len(lzy10x_errors) == 1
+    assert (
+        lzy10x_errors[0][2]
+        == "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
+    )
+
+
+def test_checker_still_flags_aliased_dotted_import_when_unused() -> None:
+    tree = ast.parse(
+        """
+import email.header as eh
+""",
+    )
+
+    # The `as` alias signals intentional use of the binding; not side-effect-only.
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy10x_errors = [e for e in errors if e[2].startswith(("LZY101", "LZY102"))]
+    assert len(lzy10x_errors) == 1
+    assert (
+        lzy10x_errors[0][2]
+        == "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
+    )
+
+
 def test_checker_ignores_future_import() -> None:
     tree = ast.parse(
         """
@@ -187,9 +300,14 @@ def test_checker_requires_explicit_nested_import_package() -> None:
         """
 import email.header
 __lazy_modules__ = ["email"]
+
+def process() -> None:
+    msg = email.header.decode_header("=?utf-8?b?dGVzdA==?=")
 """,
     )
 
+    # email IS used (in a function), so the import is not side-effect-only;
+    # both LZY101 and LZY202 fire.
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 

@@ -376,6 +376,34 @@ def collect_non_lazy_imports(tree: ast.AST) -> list[str]:
     return non_lazy
 
 
+def collect_side_effect_only_import_packages(tree: ast.AST) -> set[str]:
+    """Return packages imported purely for side effects.
+
+    These are unaliased dotted imports (e.g. ``import a.b``) whose top-level
+    bound name is never loaded anywhere in the module.  Such imports are used
+    only for the side effects of loading the submodule (e.g. registering
+    plugins or handlers) and cannot be made lazy without defeating that
+    purpose.  Imports with an ``as`` alias are *not* considered side-effect
+    only, because the alias shows deliberate intent to use the binding.
+    """
+    all_loaded = _collect_loaded_names(tree)
+    packages: set[str] = set()
+    for node in collect_top_level_imports(tree):
+        if not isinstance(node, ast.Import):
+            continue
+        for alias in node.names:
+            if alias.asname is not None:
+                # `import a.b as ab` — the alias is intentionally used
+                continue
+            if "." not in alias.name:
+                # plain `import a` — not a dotted side-effect import
+                continue
+            bound_name = alias.name.split(".", maxsplit=1)[0]
+            if bound_name not in all_loaded:
+                packages.add(alias.name)
+    return packages
+
+
 def _parse_lazy_module_list(node: ast.AST) -> list[str] | None:
     if not isinstance(node, ast.List):
         return None
@@ -548,6 +576,7 @@ def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     non_lazy_names = set(collect_non_lazy_imports(tree))
     guard_names = collect_type_checking_guard_names(tree)
     lazy_modules = collect_lazy_packages(tree)
+    side_effect_packages = collect_side_effect_only_import_packages(tree)
     guard_packages = {
         binding.package
         for binding in bindings
@@ -560,6 +589,8 @@ def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
         if binding.package is None:
             continue
         if binding.package == "__future__":
+            continue
+        if binding.package in side_effect_packages:
             continue
         if binding.package in guard_packages:
             continue
