@@ -98,3 +98,8 @@ repos:
       - id: check-sdist
         args: [--inject-junk]
         additional_dependencies: [uv_build<0.11]
+
+  - repo: https://github.com/scientific-python/cookie
+    rev: 2026.03.02
+    hooks:
+      - id: sp-repo-review
