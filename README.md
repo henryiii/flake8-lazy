@@ -6,17 +6,6 @@
 [![PyPI version][pypi-version]][pypi-link]
 [![PyPI platforms][pypi-platforms]][pypi-link]
 
-<!-- prettier-ignore-start -->
-[actions-badge]:            https://github.com/henryiii/flake8-lazy/actions/workflows/ci.yml/badge.svg
-[actions-link]:             https://github.com/henryiii/flake8-lazy/actions
-[pypi-link]:                https://pypi.org/project/flake8-lazy/
-[pypi-platforms]:           https://img.shields.io/pypi/pyversions/flake8-lazy
-[pypi-version]:             https://img.shields.io/pypi/v/flake8-lazy
-[rtd-badge]:                https://readthedocs.org/projects/flake8-lazy/badge/?version=latest
-[rtd-link]:                 https://flake8-lazy.readthedocs.io/en/latest/?badge=latest
-
-<!-- prettier-ignore-end -->
-
 flake8-lazy is a flake8 plugin that finds imports which can be made lazy.
 
 flake8-lazy helps keep import-time overhead low by detecting imports that can be
@@ -36,13 +25,8 @@ python -m pip install flake8-lazy
 Usually you would include this in some sort of dependency-group in your project,
 e.g. `dev` or `lint`.
 
-## Use with flake8
-
-flake8 discovers the plugin via the `flake8.extension` entry point.
-
-```bash
-flake8 your_package
-```
+flake8 will automatically discover the plugin. There's also a standalone
+`flake8-lazy` runner.
 
 ## Rule codes
 
@@ -90,6 +74,9 @@ __lazy_modules__ = ["email"]  # Not enough
 
 This emits `LZY001`; the required entry is `"email.header"`. PEP 810 requires
 full module names.
+
+Missing relative imports are mentioned as `.name`, but you need to list the full
+name, or generate the full name dynamically if you support embedding.
 
 ## CLI
 
@@ -159,3 +146,13 @@ nox -s docs
 help develop this package. The
 [Scientific Python Development Guide](https://learn.scientific-python.org/development/)
 template was used as a starting point.
+
+<!-- prettier-ignore-start -->
+[actions-badge]:            https://github.com/henryiii/flake8-lazy/actions/workflows/ci.yml/badge.svg
+[actions-link]:             https://github.com/henryiii/flake8-lazy/actions
+[pypi-link]:                https://pypi.org/project/flake8-lazy/
+[pypi-platforms]:           https://img.shields.io/pypi/pyversions/flake8-lazy
+[pypi-version]:             https://img.shields.io/pypi/v/flake8-lazy
+[rtd-badge]:                https://readthedocs.org/projects/flake8-lazy/badge/?version=latest
+[rtd-link]:                 https://flake8-lazy.readthedocs.io/en/latest/?badge=latest
+<!-- prettier-ignore-end -->
