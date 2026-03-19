@@ -115,7 +115,7 @@ __lazy_modules__ = ["numpy", "pandas"]
     assert m.collect_lazy_packages(tree) == {"numpy", "pandas"}
 
 
-def test_checker_emits_lzy001_for_missing_lazy_packages() -> None:
+def test_checker_emits_lzy102_for_missing_lazy_packages() -> None:
     tree = ast.parse(
         """
 import numpy
@@ -131,7 +131,7 @@ __lazy_modules__ = ["pandas"]
     errors = list(checker.run())
 
     assert len(errors) == 1
-    assert errors[0][2] == "LZY002 module 'numpy' should be listed in __lazy_modules__"
+    assert errors[0][2] == "LZY102 module 'numpy' should be listed in __lazy_modules__"
 
 
 def test_checker_ignores_future_import() -> None:
@@ -161,7 +161,7 @@ if typing.TYPE_CHECKING:
     errors = list(checker.run())
 
     assert len(errors) == 1
-    assert errors[0][2] == "LZY002 module 'numpy' should be listed in __lazy_modules__"
+    assert errors[0][2] == "LZY102 module 'numpy' should be listed in __lazy_modules__"
 
 
 def test_checker_ignores_name_type_checking_block() -> None:
@@ -179,7 +179,7 @@ if TYPE_CHECKING:
     errors = list(checker.run())
 
     assert len(errors) == 1
-    assert errors[0][2] == "LZY002 module 'numpy' should be listed in __lazy_modules__"
+    assert errors[0][2] == "LZY102 module 'numpy' should be listed in __lazy_modules__"
 
 
 def test_checker_requires_explicit_nested_import_package() -> None:
@@ -196,15 +196,15 @@ __lazy_modules__ = ["email"]
     assert len(errors) == 2
     assert (
         errors[0][2]
-        == "LZY001 stdlib module 'email.header' should be listed in __lazy_modules__"
+        == "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
     )
     assert (
         errors[1][2]
-        == "LZY102 module 'email' is listed in __lazy_modules__ but never imported"
+        == "LZY202 module 'email' is listed in __lazy_modules__ but never imported"
     )
 
 
-def test_checker_emits_lzy001_for_missing_stdlib_module() -> None:
+def test_checker_emits_lzy101_for_missing_stdlib_module() -> None:
     tree = ast.parse(
         """
 import zoneinfo
@@ -217,11 +217,11 @@ import zoneinfo
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY001 stdlib module 'zoneinfo' should be listed in __lazy_modules__"
+        == "LZY101 stdlib module 'zoneinfo' should be listed in __lazy_modules__"
     )
 
 
-def test_checker_emits_lzy002_for_missing_third_party_module() -> None:
+def test_checker_emits_lzy102_for_missing_third_party_module() -> None:
     tree = ast.parse(
         """
 import numpy
@@ -232,7 +232,7 @@ import numpy
     errors = list(checker.run())
 
     assert len(errors) == 1
-    assert errors[0][2] == "LZY002 module 'numpy' should be listed in __lazy_modules__"
+    assert errors[0][2] == "LZY102 module 'numpy' should be listed in __lazy_modules__"
 
 
 def test_checker_does_not_flag_typing_when_used_for_guard_and_annotations() -> None:
@@ -265,7 +265,7 @@ from .local import helper
     errors = list(checker.run())
 
     assert len(errors) == 1
-    assert errors[0][2] == "LZY002 module '.local' should be listed in __lazy_modules__"
+    assert errors[0][2] == "LZY102 module '.local' should be listed in __lazy_modules__"
 
 
 def test_checker_ignores_relative_package_only_import() -> None:
@@ -280,7 +280,7 @@ from . import helper
     assert list(checker.run()) == []
 
 
-def test_checker_emits_lzy101_for_unsorted_lazy_modules() -> None:
+def test_checker_emits_lzy201_for_unsorted_lazy_modules() -> None:
     tree = ast.parse(
         """
 __lazy_modules__ = ["zlib", "abc"]
@@ -290,18 +290,18 @@ __lazy_modules__ = ["zlib", "abc"]
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    lzy101_errors = [e for e in errors if e[2].startswith("LZY101")]
-    assert lzy101_errors == [
+    lzy201_errors = [e for e in errors if e[2].startswith("LZY201")]
+    assert lzy201_errors == [
         (
             2,
             0,
-            "LZY101 __lazy_modules__ should be sorted",
+            "LZY201 __lazy_modules__ should be sorted",
             m.LazyImportChecker,
         ),
     ]
 
 
-def test_checker_does_not_emit_lzy101_for_sorted_lazy_modules() -> None:
+def test_checker_does_not_emit_lzy201_for_sorted_lazy_modules() -> None:
     tree = ast.parse(
         """
 __lazy_modules__ = ["abc", "zlib"]
@@ -311,11 +311,11 @@ __lazy_modules__ = ["abc", "zlib"]
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    lzy101_errors = [e for e in errors if e[2].startswith("LZY101")]
-    assert lzy101_errors == []
+    lzy201_errors = [e for e in errors if e[2].startswith("LZY201")]
+    assert lzy201_errors == []
 
 
-def test_checker_emits_lzy102_for_unused_lazy_module() -> None:
+def test_checker_emits_lzy202_for_unused_lazy_module() -> None:
     tree = ast.parse(
         """
 __lazy_modules__ = ["numpy", "pandas"]
@@ -329,11 +329,11 @@ import numpy
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == "LZY102 module 'pandas' is listed in __lazy_modules__ but never imported"
+        == "LZY202 module 'pandas' is listed in __lazy_modules__ but never imported"
     )
 
 
-def test_checker_does_not_emit_lzy102_when_all_lazy_modules_are_imported() -> None:
+def test_checker_does_not_emit_lzy202_when_all_lazy_modules_are_imported() -> None:
     tree = ast.parse(
         """
 __lazy_modules__ = ["numpy", "pandas"]
@@ -347,7 +347,7 @@ import pandas
     assert list(checker.run()) == []
 
 
-def test_checker_emits_lzy102_for_annotated_assignment() -> None:
+def test_checker_emits_lzy202_for_annotated_assignment() -> None:
     tree = ast.parse(
         """
 from typing import List
@@ -358,11 +358,11 @@ __lazy_modules__: List[str] = ["numpy"]
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    lzy102_errors = [e for e in errors if e[2].startswith("LZY102")]
-    assert len(lzy102_errors) == 1
+    lzy202_errors = [e for e in errors if e[2].startswith("LZY202")]
+    assert len(lzy202_errors) == 1
     assert (
-        lzy102_errors[0][2]
-        == "LZY102 module 'numpy' is listed in __lazy_modules__ but never imported"
+        lzy202_errors[0][2]
+        == "LZY202 module 'numpy' is listed in __lazy_modules__ but never imported"
     )
 
 
@@ -449,7 +449,7 @@ if __name__ == "__main__":
     assert result == []
 
 
-def test_checker_emits_lzy103_for_lazy_module_accessed_at_top_level() -> None:
+def test_checker_emits_lzy401_for_lazy_module_accessed_at_top_level() -> None:
     tree = ast.parse(
         """
 __lazy_modules__ = ["re"]
@@ -462,15 +462,15 @@ REGEX = re.compile(".")
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
     assert len(lzy103_errors) == 1
     assert (
         lzy103_errors[0][2]
-        == "LZY103 module 're' is declared lazy but accessed at the top level"
+        == "LZY401 module 're' is declared lazy but accessed at the top level"
     )
 
 
-def test_checker_does_not_emit_lzy103_for_lazy_module_used_only_in_if_block() -> None:
+def test_checker_does_not_emit_lzy401_for_lazy_module_used_only_in_if_block() -> None:
     tree = ast.parse(
         """
 __lazy_modules__ = ["re"]
@@ -484,11 +484,11 @@ if __name__ == "__main__":
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
     assert lzy103_errors == []
 
 
-def test_checker_does_not_emit_lzy103_for_lazy_module_used_only_in_function() -> None:
+def test_checker_does_not_emit_lzy401_for_lazy_module_used_only_in_function() -> None:
     tree = ast.parse(
         """
 __lazy_modules__ = ["re"]
@@ -502,11 +502,11 @@ def func() -> None:
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
     assert lzy103_errors == []
 
 
-def test_checker_emits_lzy103_for_aliased_lazy_import_accessed_at_top_level() -> None:
+def test_checker_emits_lzy401_for_aliased_lazy_import_accessed_at_top_level() -> None:
     tree = ast.parse(
         """
 __lazy_modules__ = ["re"]
@@ -519,15 +519,15 @@ REGEX = regex.compile(".")
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
     assert len(lzy103_errors) == 1
     assert (
         lzy103_errors[0][2]
-        == "LZY103 module 're' is declared lazy but accessed at the top level"
+        == "LZY401 module 're' is declared lazy but accessed at the top level"
     )
 
 
-def test_checker_emits_lzy103_for_lazy_from_import_accessed_at_top_level() -> None:
+def test_checker_emits_lzy401_for_lazy_from_import_accessed_at_top_level() -> None:
     tree = ast.parse(
         """
 __lazy_modules__ = ["re"]
@@ -540,11 +540,11 @@ REGEX = compile(".")
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
     assert len(lzy103_errors) == 1
     assert (
         lzy103_errors[0][2]
-        == "LZY103 module 're' is declared lazy but accessed at the top level"
+        == "LZY401 module 're' is declared lazy but accessed at the top level"
     )
 
 
@@ -552,7 +552,7 @@ REGEX = compile(".")
     sys.version_info < (3, 15),
     reason="Python 3.15 lazy import AST is required",
 )
-def test_checker_emits_lzy103_for_native_lazy_import_accessed_at_top_level() -> None:
+def test_checker_emits_lzy401_for_native_lazy_import_accessed_at_top_level() -> None:
     tree = ast.parse(
         """
 lazy import re
@@ -564,9 +564,9 @@ REGEX = re.compile(".")
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
     assert len(lzy103_errors) == 1
     assert (
         lzy103_errors[0][2]
-        == "LZY103 module 're' is declared lazy but accessed at the top level"
+        == "LZY401 module 're' is declared lazy but accessed at the top level"
     )
