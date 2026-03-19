@@ -392,9 +392,9 @@ def collect_unused_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
                 for target in targets
             ):
                 value_node = value
-            case ast.AnnAssign(
-                target=ast.Name(id="__lazy_modules__"), value=value
-            ) if value is not None:
+            case ast.AnnAssign(target=ast.Name(id="__lazy_modules__"), value=value) if (
+                value is not None
+            ):
                 value_node = value
 
         if value_node is None:
@@ -404,9 +404,11 @@ def collect_unused_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
         if modules is None:
             continue
 
-        for module in modules:
-            if module not in imported_packages:
-                unused.append((module, node.lineno, node.col_offset))
+        unused.extend(
+            (module, node.lineno, node.col_offset)
+            for module in modules
+            if module not in imported_packages
+        )
 
     return unused
 
