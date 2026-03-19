@@ -58,6 +58,11 @@ docs = [
     "zensical>=0.0.20",
 ]
 
+[tool.uv.build-backend]
+source-include = [
+  "tests/*.py",
+]
+
 
 [tool.pytest]
 minversion = "9.0"
@@ -127,4 +132,13 @@ messages_control.disable = [
   "missing-function-docstring",
   "wrong-import-position",
   "invalid-name",
+]
+
+[tool.check-sdist]
+git-only = [
+  ".gitignore",
+  ".readthedocs.yaml",
+  "AGENTS.md",
+  "docs/*",
+  "zensical.toml",
 ]

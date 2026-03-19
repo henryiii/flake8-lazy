@@ -91,3 +91,10 @@ repos:
       - id: check-dependabot
       - id: check-github-workflows
       - id: check-readthedocs
+
+  - repo: https://github.com/henryiii/check-sdist
+    rev: v1.4.0
+    hooks:
+      - id: check-sdist
+        args: [--inject-junk]
+        additional_dependencies: [uv_build<0.11]
