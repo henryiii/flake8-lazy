@@ -5,11 +5,12 @@ flake8-lazy: Detect imports that can be lazy
 
 from __future__ import annotations
 
-__lazy_modules__ = ["argparse", "ast", "dataclasses", "pathlib", "sys"]
+__lazy_modules__ = ["argparse", "ast", "dataclasses", "pathlib", "sys", "tokenize"]
 
 import argparse
 import ast
 import sys
+import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -455,7 +456,8 @@ def collect_errors_for_file(path: str | Path) -> list[tuple[int, int, str]]:
     """Return checker errors for a single Python file."""
     item = Path(path)
     try:
-        source = item.read_text(encoding="utf-8")
+        with tokenize.open(item) as f:
+            source = f.read()
     except UnicodeDecodeError as exc:
         if sys.version_info >= (3, 11):
             exc.add_note(f"while reading {item}")
