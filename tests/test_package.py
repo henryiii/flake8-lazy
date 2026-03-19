@@ -366,6 +366,47 @@ __lazy_modules__: List[str] = ["numpy"]
     )
 
 
+def test_checker_emits_lzy203_for_duplicate_lazy_module() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["numpy", "numpy"]
+import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy203_errors = [e for e in errors if e[2].startswith("LZY203")]
+    assert lzy203_errors == [
+        (
+            2,
+            0,
+            "LZY203 module 'numpy' is duplicated in __lazy_modules__",
+            m.LazyImportChecker,
+        ),
+    ]
+
+
+def test_checker_emits_lzy203_once_per_duplicated_module() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["numpy", "numpy", "numpy", "pandas", "pandas"]
+import numpy
+import pandas
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy203_messages = [e[2] for e in errors if e[2].startswith("LZY203")]
+    assert lzy203_messages == [
+        "LZY203 module 'numpy' is duplicated in __lazy_modules__",
+        "LZY203 module 'pandas' is duplicated in __lazy_modules__",
+    ]
+
+
 def test_collect_strictly_top_level_names_excludes_conditional_blocks() -> None:
     tree = ast.parse(
         """

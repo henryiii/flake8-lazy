@@ -493,6 +493,55 @@ def collect_unused_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     return unused
 
 
+def _collect_duplicate_modules(modules: list[str]) -> list[str]:
+    """Return duplicate module names preserving first duplicate appearance order."""
+    duplicates: list[str] = []
+    seen: set[str] = set()
+    seen_duplicates: set[str] = set()
+    for module in modules:
+        if module in seen:
+            if module not in seen_duplicates:
+                duplicates.append(module)
+                seen_duplicates.add(module)
+            continue
+        seen.add(module)
+    return duplicates
+
+
+def collect_duplicate_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
+    """Return duplicated modules listed in ``__lazy_modules__``."""
+    if not isinstance(tree, ast.Module):
+        return []
+
+    duplicated: list[tuple[str, int, int]] = []
+    for node in tree.body:
+        value_node: ast.AST | None = None
+        match node:
+            case ast.Assign(targets=targets, value=value) if any(
+                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
+                for target in targets
+            ):
+                value_node = value
+            case ast.AnnAssign(target=ast.Name(id="__lazy_modules__"), value=value) if (
+                value is not None
+            ):
+                value_node = value
+
+        if value_node is None:
+            continue
+
+        modules = _parse_lazy_module_list(value_node)
+        if modules is None:
+            continue
+
+        duplicated.extend(
+            (module, node.lineno, node.col_offset)
+            for module in _collect_duplicate_modules(modules)
+        )
+
+    return duplicated
+
+
 def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_modules__``."""
     bindings = collect_top_level_import_bindings(tree)
@@ -631,6 +680,16 @@ class LazyImportChecker:
                         f"LZY202 module '{module}' is listed in __lazy_modules__"
                         " but never imported"
                     ),
+                    type(self),
+                ),
+            )
+
+        for module, lineno, col_offset in collect_duplicate_lazy_modules(self.tree):
+            errors.append(
+                (
+                    lineno,
+                    col_offset,
+                    f"LZY203 module '{module}' is duplicated in __lazy_modules__",
                     type(self),
                 ),
             )
