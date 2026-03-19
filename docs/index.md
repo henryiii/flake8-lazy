@@ -44,6 +44,7 @@ The plugin is auto-discovered by flake8 via entry points.
 | -------- | ----------------------------------------------------- |
 | `LZY201` | `__lazy_modules__` is not sorted                      |
 | `LZY202` | module listed in `__lazy_modules__` is never imported |
+| `LZY203` | module listed in `__lazy_modules__` is duplicated     |
 
 ### 4xx: Lazy import safety and semantics
 
@@ -133,6 +134,19 @@ Diagnostic:
 
 ```text
 LZY202 module 'pandas' is listed in __lazy_modules__ but never imported
+```
+
+### Duplicate entry in `__lazy_modules__`
+
+```python
+__lazy_modules__ = ["numpy", "numpy"]
+import numpy
+```
+
+Diagnostic:
+
+```text
+LZY203 module 'numpy' is duplicated in __lazy_modules__
 ```
 
 ### Module accessed at module scope
