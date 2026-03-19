@@ -729,3 +729,271 @@ REGEX = re.compile(".")
         lzy103_errors[0][2]
         == "LZY401 module 're' is declared lazy but accessed at the top level"
     )
+
+
+# ---------------------------------------------------------------------------
+# LZY301: lazy import inside suppress(ImportError) is misleading
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_emits_lzy301_for_lazy_import_in_suppress_block() -> None:
+    tree = ast.parse(
+        """
+from contextlib import suppress
+
+with suppress(ImportError):
+    lazy import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy301_errors = [e for e in errors if e[2].startswith("LZY301")]
+    assert len(lzy301_errors) == 1
+    assert (
+        lzy301_errors[0][2]
+        == "LZY301 lazy import 'numpy' inside suppress(ImportError) is misleading"
+    )
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_emits_lzy301_for_contextlib_suppress_qualified() -> None:
+    tree = ast.parse(
+        """
+import contextlib
+
+with contextlib.suppress(ImportError):
+    lazy import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy301_errors = [e for e in errors if e[2].startswith("LZY301")]
+    assert len(lzy301_errors) == 1
+    assert (
+        lzy301_errors[0][2]
+        == "LZY301 lazy import 'numpy' inside suppress(ImportError) is misleading"
+    )
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_emits_lzy301_for_module_not_found_error() -> None:
+    tree = ast.parse(
+        """
+from contextlib import suppress
+
+with suppress(ModuleNotFoundError):
+    lazy import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy301_errors = [e for e in errors if e[2].startswith("LZY301")]
+    assert len(lzy301_errors) == 1
+    assert (
+        lzy301_errors[0][2]
+        == "LZY301 lazy import 'numpy' inside suppress(ImportError) is misleading"
+    )
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_does_not_emit_lzy301_for_eager_import_in_suppress_block() -> None:
+    tree = ast.parse(
+        """
+from contextlib import suppress
+
+with suppress(ImportError):
+    import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy301_errors = [e for e in errors if e[2].startswith("LZY301")]
+    assert lzy301_errors == []
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_emits_lzy301_for_lazy_from_import_in_suppress_block() -> None:
+    tree = ast.parse(
+        """
+from contextlib import suppress
+
+with suppress(ImportError):
+    lazy from numpy import linalg
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy301_errors = [e for e in errors if e[2].startswith("LZY301")]
+    assert len(lzy301_errors) == 1
+    assert (
+        lzy301_errors[0][2]
+        == "LZY301 lazy import 'numpy' inside suppress(ImportError) is misleading"
+    )
+
+
+# ---------------------------------------------------------------------------
+# LZY302: module declared lazy by both 'lazy' keyword and __lazy_modules__
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_emits_lzy302_for_redundant_lazy_declaration() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["numpy"]
+
+lazy import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy302_errors = [e for e in errors if e[2].startswith("LZY302")]
+    assert len(lzy302_errors) == 1
+    assert (
+        lzy302_errors[0][2] == "LZY302 module 'numpy' is declared lazy"
+        " by both 'lazy' keyword and __lazy_modules__"
+    )
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_does_not_emit_lzy302_when_no_overlap() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["pandas"]
+
+lazy import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy302_errors = [e for e in errors if e[2].startswith("LZY302")]
+    assert lzy302_errors == []
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_emits_lzy302_for_redundant_lazy_from_import() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["numpy"]
+
+lazy from numpy import linalg
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy302_errors = [e for e in errors if e[2].startswith("LZY302")]
+    assert len(lzy302_errors) == 1
+    assert (
+        lzy302_errors[0][2] == "LZY302 module 'numpy' is declared lazy"
+        " by both 'lazy' keyword and __lazy_modules__"
+    )
+
+
+# ---------------------------------------------------------------------------
+# LZY303: module imported both eagerly and lazily
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_emits_lzy303_for_mixed_eager_and_lazy_import() -> None:
+    tree = ast.parse(
+        """
+import numpy
+lazy import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy303_errors = [e for e in errors if e[2].startswith("LZY303")]
+    assert len(lzy303_errors) == 1
+    assert (
+        lzy303_errors[0][2]
+        == "LZY303 module 'numpy' is imported both eagerly and lazily"
+    )
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_does_not_emit_lzy303_for_lazy_only_import() -> None:
+    tree = ast.parse(
+        """
+lazy import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy303_errors = [e for e in errors if e[2].startswith("LZY303")]
+    assert lzy303_errors == []
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_emits_lzy303_for_mixed_from_imports() -> None:
+    tree = ast.parse(
+        """
+from numpy import linalg
+lazy from numpy import random
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy303_errors = [e for e in errors if e[2].startswith("LZY303")]
+    assert len(lzy303_errors) == 1
+    assert (
+        lzy303_errors[0][2]
+        == "LZY303 module 'numpy' is imported both eagerly and lazily"
+    )

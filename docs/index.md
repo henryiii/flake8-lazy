@@ -46,6 +46,14 @@ The plugin is auto-discovered by flake8 via entry points.
 | `LZY202` | module listed in `__lazy_modules__` is never imported |
 | `LZY203` | module listed in `__lazy_modules__` is duplicated     |
 
+### 3xx: Native `lazy` keyword (Python 3.15+)
+
+| Code     | Meaning                                                            |
+| -------- | ------------------------------------------------------------------ |
+| `LZY301` | lazy import inside `suppress(ImportError)` is misleading           |
+| `LZY302` | module declared lazy by both `lazy` keyword and `__lazy_modules__` |
+| `LZY303` | module imported both eagerly and lazily                            |
+
 ### 4xx: Lazy import safety and semantics
 
 | Code     | Meaning                                               |
@@ -162,6 +170,54 @@ Diagnostic:
 
 ```text
 LZY401 module 'pathlib' is declared lazy but accessed at the top level
+```
+
+### Lazy import inside `suppress(ImportError)` (Python 3.15+)
+
+```python3.15
+from contextlib import suppress
+
+with suppress(ImportError):
+    lazy import numpy
+```
+
+Diagnostic:
+
+```text
+LZY301 lazy import 'numpy' inside suppress(ImportError) is misleading
+```
+
+With a lazy import, the actual import happens at first use of the module, which
+occurs _outside_ the `with suppress(ImportError):` block. The suppression
+therefore has no effect.
+
+### Redundant `lazy` and `__lazy_modules__` declaration (Python 3.15+)
+
+```python3.15
+__lazy_modules__ = ["numpy"]
+lazy import numpy
+```
+
+Diagnostic:
+
+```text
+LZY302 module 'numpy' is declared lazy by both 'lazy' keyword and __lazy_modules__
+```
+
+The `lazy import` keyword already makes the import lazy; listing the module in
+`__lazy_modules__` as well is redundant.
+
+### Module imported both eagerly and lazily (Python 3.15+)
+
+```python3.15
+import numpy
+lazy import numpy
+```
+
+Diagnostic:
+
+```text
+LZY303 module 'numpy' is imported both eagerly and lazily
 ```
 
 ## CLI mode

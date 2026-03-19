@@ -115,6 +115,33 @@ def _is_type_checking_guard(node: ast.AST) -> bool:
     return False
 
 
+def _is_suppress_import_error_call(node: ast.expr) -> bool:
+    """Return True if ``node`` is suppress(ImportError/ModuleNotFoundError).
+
+    Recognises both ``suppress(ImportError)`` and
+    ``contextlib.suppress(ImportError)``, as well as ``ModuleNotFoundError``.
+    """
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    if isinstance(func, ast.Name):
+        is_suppress = func.id == "suppress"
+    elif isinstance(func, ast.Attribute):
+        is_suppress = (
+            func.attr == "suppress"
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "contextlib"
+        )
+    else:
+        is_suppress = False
+    if not is_suppress:
+        return False
+    import_error_names = {"ImportError", "ModuleNotFoundError"}
+    return any(
+        isinstance(arg, ast.Name) and arg.id in import_error_names for arg in node.args
+    )
+
+
 def _collect_loaded_names(node: ast.AST) -> set[str]:
     names: set[str] = set()
     for item in ast.walk(node):
@@ -195,6 +222,54 @@ def collect_top_level_lazy_imports(tree: ast.AST) -> list[ast.Import | ast.Impor
     collector = _TopLevelLazyImportCollector()
     collector.visit(tree)
     return collector.imports
+
+
+def _lazy_import_entries(
+    stmt: ast.Import | ast.ImportFrom,
+) -> list[tuple[str, int, int]]:
+    """Return (module, lineno, col_offset) for a single lazy import statement."""
+    if isinstance(stmt, ast.Import):
+        return [(alias.name, stmt.lineno, stmt.col_offset) for alias in stmt.names]
+    # ImportFrom: report the source module once per statement.
+    for alias in stmt.names:
+        if alias.name == "*":
+            continue
+        package = _package_for_import_from(stmt, alias)
+        if package is not None:
+            return [(package, stmt.lineno, stmt.col_offset)]
+    return []
+
+
+def collect_lazy_imports_in_suppress_blocks(
+    tree: ast.AST,
+) -> list[tuple[str, int, int]]:
+    """Return (module, lineno, col_offset) for lazy imports in suppress(ImportError).
+
+    With lazy imports the actual import happens at first use, which occurs
+    *outside* the ``with suppress(ImportError):`` block, so the suppression
+    has no effect and the author's intent is probably not met.
+
+    Only checks module-level ``with`` statements (Python 3.15+).
+    """
+    if not isinstance(tree, ast.Module):
+        return []
+
+    result: list[tuple[str, int, int]] = []
+    for node in tree.body:
+        if not isinstance(node, ast.With):
+            continue
+        if not any(
+            _is_suppress_import_error_call(item.context_expr) for item in node.items
+        ):
+            continue
+        for stmt in node.body:
+            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                continue
+            if not _is_lazy_import_node(stmt):
+                continue
+            result.extend(_lazy_import_entries(stmt))
+
+    return result
 
 
 def collect_top_level_lazy_import_bindings(tree: ast.AST) -> list[_ImportBinding]:
@@ -658,6 +733,53 @@ def collect_unnecessary_lazy_imports(tree: ast.AST) -> list[tuple[str, int, int]
     return unnecessary
 
 
+def collect_redundant_lazy_declarations(tree: ast.AST) -> list[tuple[str, int, int]]:
+    """Return (module, lineno, col_offset) for ``lazy`` imports in __lazy_modules__.
+
+    A ``lazy import`` statement already makes the import lazy; listing the
+    module in ``__lazy_modules__`` as well is redundant.
+    """
+    lazy_packages = collect_lazy_packages(tree)
+    if not lazy_packages:
+        return []
+
+    result: list[tuple[str, int, int]] = []
+    seen: set[str] = set()
+    for binding in collect_top_level_lazy_import_bindings(tree):
+        if binding.package is None:
+            continue
+        if binding.package in lazy_packages and binding.package not in seen:
+            result.append((binding.package, binding.lineno, binding.col_offset))
+            seen.add(binding.package)
+    return result
+
+
+def collect_mixed_lazy_eager_imports(tree: ast.AST) -> list[tuple[str, int, int]]:
+    """Return (module, lineno, col_offset) for modules imported both eagerly and lazily.
+
+    Having both ``import foo`` and ``lazy import foo`` in the same file is
+    unusual and likely unintentional; the eager import defeats laziness.
+    Reports the ``lazy import`` statement.
+    """
+    eager_packages = {
+        binding.package
+        for binding in collect_top_level_import_bindings(tree)
+        if binding.package is not None
+    }
+    if not eager_packages:
+        return []
+
+    result: list[tuple[str, int, int]] = []
+    seen: set[str] = set()
+    for binding in collect_top_level_lazy_import_bindings(tree):
+        if binding.package is None:
+            continue
+        if binding.package in eager_packages and binding.package not in seen:
+            result.append((binding.package, binding.lineno, binding.col_offset))
+            seen.add(binding.package)
+    return result
+
+
 def _lazy_module_error_code(module: str) -> str:
     root_module = module.split(".", maxsplit=1)[0]
     if root_module in sys.stdlib_module_names:
@@ -734,6 +856,46 @@ class LazyImportChecker:
                         f"LZY401 module '{package}' is declared lazy"
                         " but accessed at the top level"
                     ),
+                    type(self),
+                ),
+            )
+
+        for module, lineno, col_offset in collect_lazy_imports_in_suppress_blocks(
+            self.tree
+        ):
+            errors.append(
+                (
+                    lineno,
+                    col_offset,
+                    (
+                        f"LZY301 lazy import '{module}' inside suppress(ImportError)"
+                        " is misleading"
+                    ),
+                    type(self),
+                ),
+            )
+
+        for module, lineno, col_offset in collect_redundant_lazy_declarations(
+            self.tree
+        ):
+            errors.append(
+                (
+                    lineno,
+                    col_offset,
+                    (
+                        f"LZY302 module '{module}' is declared lazy"
+                        " by both 'lazy' keyword and __lazy_modules__"
+                    ),
+                    type(self),
+                ),
+            )
+
+        for module, lineno, col_offset in collect_mixed_lazy_eager_imports(self.tree):
+            errors.append(
+                (
+                    lineno,
+                    col_offset,
+                    f"LZY303 module '{module}' is imported both eagerly and lazily",
                     type(self),
                 ),
             )
