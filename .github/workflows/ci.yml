@@ -25,13 +25,14 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
 
       - uses: astral-sh/setup-uv@v7
 
-      - uses: pre-commit/action@v3.0.1
+      - uses: j178/prek-action@v2
 
       - name: Run Pylint
         run: uvx nox -s pylint -- --output-format=github
@@ -50,6 +51,9 @@ jobs:
             runs-on: ubuntu-latest
           - python-version: "3.11" # Exception notes are 3.11+
             runs-on: ubuntu-latest
+        exclude:
+          - python-version: "3.15" # Slow to setup Python
+            runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v6
