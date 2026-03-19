@@ -1,0 +1,36 @@
+name: "Copilot Setup Steps"
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+          allow-prereleases: true
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Install tooling
+        run: |
+          uv tool install nox
+          uv tool install prek
+
+      - name: Pre-install checks
+        run: |
+          prek prepare-hooks
+          nox -s pylint --install-only
