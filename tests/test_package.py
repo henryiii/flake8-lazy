@@ -525,7 +525,7 @@ import pandas
     ]
 
 
-def test_checker_emits_lzy204_when_lazy_modules_assigned_after_imports() -> None:
+def test_checker_emits_lzy204_when_named_module_imported_before_assignment() -> None:
     tree = ast.parse(
         """
 import numpy
@@ -541,7 +541,8 @@ __lazy_modules__ = ["numpy"]
         (
             3,
             0,
-            "LZY204 __lazy_modules__ should be assigned before imports begin",
+            "LZY204 __lazy_modules__ should be assigned "
+            "before importing modules it names",
             m.LazyImportChecker,
         ),
     ]
@@ -566,6 +567,22 @@ def test_checker_does_not_emit_lzy204_for_future_import_before_lazy_modules() ->
     tree = ast.parse(
         """
 from __future__ import annotations
+__lazy_modules__ = ["numpy"]
+import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy204_errors = [e for e in errors if e[2].startswith("LZY204")]
+    assert lzy204_errors == []
+
+
+def test_checker_does_not_emit_lzy204_for_unrelated_import_before_assignment() -> None:
+    tree = ast.parse(
+        """
+import os
 __lazy_modules__ = ["numpy"]
 import numpy
 """,

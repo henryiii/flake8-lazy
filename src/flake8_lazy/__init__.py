@@ -646,19 +646,26 @@ def collect_duplicate_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
 
 
 def collect_late_lazy_module_assignments(tree: ast.AST) -> list[tuple[int, int]]:
-    """Return ``__lazy_modules__`` assignment locations after non-future imports."""
+    """Return ``__lazy_modules__`` assignments after importing listed modules."""
     if not isinstance(tree, ast.Module):
         return []
 
     late_assignments: list[tuple[int, int]] = []
-    imports_started = False
+    imported_packages: set[str] = set()
 
     for node in tree.body:
         if isinstance(node, ast.Import):
-            imports_started = True
+            imported_packages.update(alias.name for alias in node.names)
             continue
+
         if isinstance(node, ast.ImportFrom) and node.module != "__future__":
-            imports_started = True
+            imported_packages.update(
+                package
+                for package in (
+                    _package_for_import_from(node, alias) for alias in node.names
+                )
+                if package is not None
+            )
             continue
 
         is_lazy_modules_assignment = (
@@ -673,7 +680,20 @@ def collect_late_lazy_module_assignments(tree: ast.AST) -> list[tuple[int, int]]
             and node.target.id == "__lazy_modules__"
         )
 
-        if imports_started and is_lazy_modules_assignment:
+        if not is_lazy_modules_assignment:
+            continue
+
+        value_node: ast.AST | None = None
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            value_node = node.value
+
+        modules = (
+            _parse_lazy_module_list(value_node) if value_node is not None else None
+        )
+        if modules is None:
+            continue
+
+        if any(module in imported_packages for module in modules):
             late_assignments.append((node.lineno, node.col_offset))
 
     return late_assignments
@@ -886,7 +906,10 @@ class LazyImportChecker:
                 (
                     lineno,
                     col_offset,
-                    "LZY204 __lazy_modules__ should be assigned before imports begin",
+                    (
+                        "LZY204 __lazy_modules__ should be assigned before"
+                        " importing modules it names"
+                    ),
                     type(self),
                 ),
             )
