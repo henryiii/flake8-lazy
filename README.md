@@ -40,6 +40,7 @@ flake8 will automatically discover the plugin. There's also a standalone
 - `LZY201`: `__lazy_modules__` list is not sorted
 - `LZY202`: Module listed in `__lazy_modules__` is never imported
 - `LZY203`: Module listed in `__lazy_modules__` appears more than once
+- `LZY204`: `__lazy_modules__` is assigned after imports begin
 
 ### 3xx: Native `lazy` keyword (Python 3.15+)
 

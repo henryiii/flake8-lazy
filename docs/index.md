@@ -45,6 +45,7 @@ The plugin is auto-discovered by flake8 via entry points.
 | `LZY201` | `__lazy_modules__` is not sorted                      |
 | `LZY202` | module listed in `__lazy_modules__` is never imported |
 | `LZY203` | module listed in `__lazy_modules__` is duplicated     |
+| `LZY204` | `__lazy_modules__` is assigned after imports begin    |
 
 ### 3xx: Native `lazy` keyword (Python 3.15+)
 

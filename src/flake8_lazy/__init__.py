@@ -645,6 +645,40 @@ def collect_duplicate_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     return duplicated
 
 
+def collect_late_lazy_module_assignments(tree: ast.AST) -> list[tuple[int, int]]:
+    """Return ``__lazy_modules__`` assignment locations after non-future imports."""
+    if not isinstance(tree, ast.Module):
+        return []
+
+    late_assignments: list[tuple[int, int]] = []
+    imports_started = False
+
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            imports_started = True
+            continue
+        if isinstance(node, ast.ImportFrom) and node.module != "__future__":
+            imports_started = True
+            continue
+
+        is_lazy_modules_assignment = (
+            isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
+                for target in node.targets
+            )
+        ) or (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "__lazy_modules__"
+        )
+
+        if imports_started and is_lazy_modules_assignment:
+            late_assignments.append((node.lineno, node.col_offset))
+
+    return late_assignments
+
+
 def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_modules__``."""
     bindings = collect_top_level_import_bindings(tree)
@@ -843,6 +877,16 @@ class LazyImportChecker:
                     lineno,
                     col_offset,
                     f"LZY203 module '{module}' is duplicated in __lazy_modules__",
+                    type(self),
+                ),
+            )
+
+        for lineno, col_offset in collect_late_lazy_module_assignments(self.tree):
+            errors.append(
+                (
+                    lineno,
+                    col_offset,
+                    "LZY204 __lazy_modules__ should be assigned before imports begin",
                     type(self),
                 ),
             )
