@@ -352,3 +352,209 @@ __lazy_modules__: List[str] = ["numpy"]
         lzy102_errors[0][2]
         == "LZY102 module 'numpy' is listed in __lazy_modules__ but never imported"
     )
+
+
+def test_collect_strictly_top_level_names_excludes_conditional_blocks() -> None:
+    tree = ast.parse(
+        """
+import re
+import os
+
+REGEX = re.compile(".")
+
+if condition:
+    x = os.path.join("a", "b")
+""",
+    )
+
+    names = m.collect_strictly_top_level_names(tree)
+
+    assert "re" in names
+    assert "os" not in names
+
+
+def test_collect_strictly_top_level_names_excludes_for_while_with_try() -> None:
+    tree = ast.parse(
+        """
+import a
+import b
+import c
+import d
+
+for item in a.items():
+    pass
+
+while b.running():
+    pass
+
+with c.context():
+    pass
+
+try:
+    d.connect()
+except Exception:
+    pass
+""",
+    )
+
+    names = m.collect_strictly_top_level_names(tree)
+
+    assert "a" not in names
+    assert "b" not in names
+    assert "c" not in names
+    assert "d" not in names
+
+
+def test_collect_unnecessary_lazy_imports_basic() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+REGEX = re.compile(".")
+""",
+    )
+
+    result = m.collect_unnecessary_lazy_imports(tree)
+
+    assert len(result) == 1
+    assert result[0][0] == "re"
+
+
+def test_collect_unnecessary_lazy_imports_not_flagged_in_if_block() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+if __name__ == "__main__":
+    REGEX = re.compile(".")
+""",
+    )
+
+    result = m.collect_unnecessary_lazy_imports(tree)
+
+    assert result == []
+
+
+def test_checker_emits_lzy103_for_lazy_module_accessed_at_top_level() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+REGEX = re.compile(".")
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    assert len(lzy103_errors) == 1
+    assert (
+        lzy103_errors[0][2]
+        == "LZY103 module 're' is declared lazy but accessed at the top level"
+    )
+
+
+def test_checker_does_not_emit_lzy103_for_lazy_module_used_only_in_if_block() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+if __name__ == "__main__":
+    REGEX = re.compile(".")
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    assert lzy103_errors == []
+
+
+def test_checker_does_not_emit_lzy103_for_lazy_module_used_only_in_function() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+def func() -> None:
+    REGEX = re.compile(".")
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    assert lzy103_errors == []
+
+
+def test_checker_emits_lzy103_for_aliased_lazy_import_accessed_at_top_level() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re as regex
+
+REGEX = regex.compile(".")
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    assert len(lzy103_errors) == 1
+    assert (
+        lzy103_errors[0][2]
+        == "LZY103 module 're' is declared lazy but accessed at the top level"
+    )
+
+
+def test_checker_emits_lzy103_for_lazy_from_import_accessed_at_top_level() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+from re import compile
+
+REGEX = compile(".")
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    assert len(lzy103_errors) == 1
+    assert (
+        lzy103_errors[0][2]
+        == "LZY103 module 're' is declared lazy but accessed at the top level"
+    )
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_emits_lzy103_for_native_lazy_import_accessed_at_top_level() -> None:
+    tree = ast.parse(
+        """
+lazy import re
+
+REGEX = re.compile(".")
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy103_errors = [e for e in errors if e[2].startswith("LZY103")]
+    assert len(lzy103_errors) == 1
+    assert (
+        lzy103_errors[0][2]
+        == "LZY103 module 're' is declared lazy but accessed at the top level"
+    )
