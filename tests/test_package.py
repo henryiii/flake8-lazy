@@ -56,8 +56,8 @@ lazy from pathlib import Path
 def test_checker_collects_top_level_imports_without_errors() -> None:
     tree = ast.parse(
         """
-import os
 __lazy_modules__ = ["os"]
+import os
 
 def func() -> None:
     import json
@@ -118,12 +118,12 @@ __lazy_modules__ = ["numpy", "pandas"]
 def test_checker_emits_lzy102_for_missing_lazy_packages() -> None:
     tree = ast.parse(
         """
+__lazy_modules__ = ["pandas"]
 import numpy
 import pandas as pd
 from sklearn import metrics
 
 value = metrics
-__lazy_modules__ = ["pandas"]
 """,
     )
 
@@ -298,8 +298,8 @@ if TYPE_CHECKING:
 def test_checker_requires_explicit_nested_import_package() -> None:
     tree = ast.parse(
         """
-import email.header
 __lazy_modules__ = ["email"]
+import email.header
 
 def process() -> None:
     msg = email.header.decode_header("=?utf-8?b?dGVzdA==?=")
@@ -523,6 +523,76 @@ import pandas
         "LZY203 module 'numpy' is duplicated in __lazy_modules__",
         "LZY203 module 'pandas' is duplicated in __lazy_modules__",
     ]
+
+
+def test_checker_emits_lzy204_when_named_module_imported_before_assignment() -> None:
+    tree = ast.parse(
+        """
+import numpy
+__lazy_modules__ = ["numpy"]
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy204_errors = [e for e in errors if e[2].startswith("LZY204")]
+    assert lzy204_errors == [
+        (
+            3,
+            0,
+            "LZY204 __lazy_modules__ should be assigned "
+            "before importing modules it names",
+            m.LazyImportChecker,
+        ),
+    ]
+
+
+def test_checker_does_not_emit_lzy204_when_lazy_modules_precedes_imports() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["numpy"]
+import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy204_errors = [e for e in errors if e[2].startswith("LZY204")]
+    assert lzy204_errors == []
+
+
+def test_checker_does_not_emit_lzy204_for_future_import_before_lazy_modules() -> None:
+    tree = ast.parse(
+        """
+from __future__ import annotations
+__lazy_modules__ = ["numpy"]
+import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy204_errors = [e for e in errors if e[2].startswith("LZY204")]
+    assert lzy204_errors == []
+
+
+def test_checker_does_not_emit_lzy204_for_unrelated_import_before_assignment() -> None:
+    tree = ast.parse(
+        """
+import os
+__lazy_modules__ = ["numpy"]
+import numpy
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy204_errors = [e for e in errors if e[2].startswith("LZY204")]
+    assert lzy204_errors == []
 
 
 def test_collect_strictly_top_level_names_excludes_conditional_blocks() -> None:
