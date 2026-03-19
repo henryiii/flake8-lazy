@@ -27,7 +27,14 @@ Usually you would include this in some sort of dependency-group in your project,
 e.g. `dev` or `lint`.
 
 flake8 will automatically discover the plugin. There's also a standalone
-`flake8-lazy` runner.
+`flake8-lazy` runner. If you use uv or pipx, you can run it from anywhere
+without installation:
+
+```bash
+uvx flake8-lazy <filenames>
+# OR
+pipx run flake8-lazy <filenames>
+```
 
 ## Rule codes
 

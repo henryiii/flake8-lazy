@@ -19,7 +19,14 @@ python -m pip install flake8-lazy
 ```
 
 Usually you would include this in some sort of dependency-group in your project,
-e.g. `dev` or `lint`.
+e.g. `dev` or `lint`. There's also a standalone runner. If you use uv or pipx,
+you can run it from anywhere without installation:
+
+```bash
+uvx flake8-lazy <filenames>
+# OR
+pipx run flake8-lazy <filenames>
+```
 
 ## Run through flake8
 
