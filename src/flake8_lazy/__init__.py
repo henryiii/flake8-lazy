@@ -581,8 +581,8 @@ def collect_unnecessary_lazy_imports(tree: ast.AST) -> list[tuple[str, int, int]
 def _lazy_module_error_code(module: str) -> str:
     root_module = module.split(".", maxsplit=1)[0]
     if root_module in sys.stdlib_module_names:
-        return "LZY001"
-    return "LZY002"
+        return "LZY101"
+    return "LZY102"
 
 
 class LazyImportChecker:
@@ -599,7 +599,7 @@ class LazyImportChecker:
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         for package, lineno, col_offset in collect_missing_lazy_modules(self.tree):
             code = _lazy_module_error_code(package)
-            stdlib = " stdlib" if code == "LZY001" else ""
+            stdlib = " stdlib" if code == "LZY101" else ""
             errors.append(
                 (
                     lineno,
@@ -617,7 +617,7 @@ class LazyImportChecker:
                 (
                     lineno,
                     col_offset,
-                    "LZY101 __lazy_modules__ should be sorted",
+                    "LZY201 __lazy_modules__ should be sorted",
                     type(self),
                 ),
             )
@@ -628,7 +628,7 @@ class LazyImportChecker:
                     lineno,
                     col_offset,
                     (
-                        f"LZY102 module '{module}' is listed in __lazy_modules__"
+                        f"LZY202 module '{module}' is listed in __lazy_modules__"
                         " but never imported"
                     ),
                     type(self),
@@ -641,7 +641,7 @@ class LazyImportChecker:
                     lineno,
                     col_offset,
                     (
-                        f"LZY103 module '{package}' is declared lazy"
+                        f"LZY401 module '{package}' is declared lazy"
                         " but accessed at the top level"
                     ),
                     type(self),

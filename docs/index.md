@@ -31,13 +31,25 @@ The plugin is auto-discovered by flake8 via entry points.
 
 ## Rule reference
 
+### 1xx: Missing lazy declarations
+
 | Code     | Meaning                                                            |
 | -------- | ------------------------------------------------------------------ |
-| `LZY001` | stdlib module should be listed in `__lazy_modules__`               |
-| `LZY002` | third-party or local module should be listed in `__lazy_modules__` |
-| `LZY101` | `__lazy_modules__` is not sorted                                   |
-| `LZY102` | module listed in `__lazy_modules__` is never imported              |
-| `LZY103` | module is declared lazy but accessed at the top level              |
+| `LZY101` | stdlib module should be listed in `__lazy_modules__`               |
+| `LZY102` | third-party or local module should be listed in `__lazy_modules__` |
+
+### 2xx: `__lazy_modules__` validation
+
+| Code     | Meaning                                               |
+| -------- | ----------------------------------------------------- |
+| `LZY201` | `__lazy_modules__` is not sorted                      |
+| `LZY202` | module listed in `__lazy_modules__` is never imported |
+
+### 4xx: Lazy import safety and semantics
+
+| Code     | Meaning                                               |
+| -------- | ----------------------------------------------------- |
+| `LZY401` | module is declared lazy but accessed at the top level |
 
 ## Expected pattern
 
@@ -81,7 +93,7 @@ import numpy
 Diagnostic:
 
 ```text
-LZY002 module 'numpy' should be listed in __lazy_modules__
+LZY102 module 'numpy' should be listed in __lazy_modules__
 ```
 
 ### Unsorted list
@@ -93,7 +105,7 @@ __lazy_modules__ = ["zlib", "abc"]
 Diagnostic:
 
 ```text
-LZY101 __lazy_modules__ should be sorted
+LZY201 __lazy_modules__ should be sorted
 ```
 
 ### Nested imports require exact name
@@ -107,7 +119,7 @@ __lazy_modules__ = ["email"]
 Diagnostic:
 
 ```text
-LZY001 stdlib module 'email.header' should be listed in __lazy_modules__
+LZY101 stdlib module 'email.header' should be listed in __lazy_modules__
 ```
 
 ### Unused entry in `__lazy_modules__`
@@ -120,7 +132,7 @@ import numpy
 Diagnostic:
 
 ```text
-LZY102 module 'pandas' is listed in __lazy_modules__ but never imported
+LZY202 module 'pandas' is listed in __lazy_modules__ but never imported
 ```
 
 ### Module accessed at module scope
@@ -135,7 +147,7 @@ BASE = pathlib.Path("/tmp")
 Diagnostic:
 
 ```text
-LZY103 module 'pathlib' is declared lazy but accessed at the top level
+LZY401 module 'pathlib' is declared lazy but accessed at the top level
 ```
 
 ## CLI mode
@@ -151,7 +163,7 @@ uvx flake8-lazy path/to/file.py
 Output is flake8-like:
 
 ```text
-path/to/file.py:1:0: LZY002 module 'numpy' should be listed in __lazy_modules__
+path/to/file.py:1:0: LZY102 module 'numpy' should be listed in __lazy_modules__
 ```
 
 The command exits with status `1` if any diagnostics are produced.

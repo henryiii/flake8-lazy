@@ -22,7 +22,7 @@ def test_collect_errors_for_file(tmp_path: Path) -> None:
         (
             1,
             0,
-            "LZY002 module 'numpy' should be listed in __lazy_modules__",
+            "LZY102 module 'numpy' should be listed in __lazy_modules__",
         ),
     ]
 
@@ -38,7 +38,7 @@ def test_collect_errors_for_file_respects_encoding_cookie(tmp_path: Path) -> Non
         (
             3,
             0,
-            "LZY002 module 'numpy' should be listed in __lazy_modules__",
+            "LZY102 module 'numpy' should be listed in __lazy_modules__",
         ),
     ]
 
@@ -56,7 +56,7 @@ def test_collect_errors_for_file_includes_path_in_decode_error(tmp_path: Path) -
         assert getattr(excinfo.value, "__notes__", None) is None
 
 
-def test_main_outputs_lzy001_and_exits_nonzero(
+def test_main_outputs_lzy102_and_exits_nonzero(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -70,7 +70,7 @@ def test_main_outputs_lzy001_and_exits_nonzero(
 
     output = capsys.readouterr().out
     assert (
-        f"{path}:1:0: LZY002 module 'numpy' should be listed in __lazy_modules__"
+        f"{path}:1:0: LZY102 module 'numpy' should be listed in __lazy_modules__"
         in output
     )
 

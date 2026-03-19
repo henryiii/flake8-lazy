@@ -30,11 +30,19 @@ flake8 will automatically discover the plugin. There's also a standalone
 
 ## Rule codes
 
-- `LZY001`: Missing lazy stdlib module in `__lazy_modules__`
-- `LZY002`: Missing lazy third-party or local module in `__lazy_modules__`
-- `LZY101`: `__lazy_modules__` list is not sorted
-- `LZY102`: Module listed in `__lazy_modules__` is never imported
-- `LZY103`: Module is declared lazy but accessed at the top level
+### 1xx: Missing lazy declarations
+
+- `LZY101`: Missing lazy stdlib module in `__lazy_modules__`
+- `LZY102`: Missing lazy third-party or local module in `__lazy_modules__`
+
+### 2xx: `__lazy_modules__` validation
+
+- `LZY201`: `__lazy_modules__` list is not sorted
+- `LZY202`: Module listed in `__lazy_modules__` is never imported
+
+### 4xx: Lazy import safety and semantics
+
+- `LZY401`: Module is declared lazy but accessed at the top level
 
 ## Basic example
 
@@ -51,7 +59,7 @@ def run() -> None:
 ```
 
 In this example, `numpy` is never used at module runtime, so the checker expects
-it in `__lazy_modules__` and emits `LZY002`.
+it in `__lazy_modules__` and emits `LZY102`.
 
 ## How detection works
 
@@ -72,7 +80,7 @@ import email.header
 __lazy_modules__ = ["email"]  # Not enough
 ```
 
-This emits `LZY001`; the required entry is `"email.header"`. PEP 810 requires
+This emits `LZY101`; the required entry is `"email.header"`. PEP 810 requires
 full module names.
 
 Missing relative imports are mentioned as `.name`, but you need to list the full
@@ -91,7 +99,7 @@ uvx flake8-lazy path/to/file.py another_file.py
 Output format matches flake8-style diagnostics:
 
 ```text
-path/to/file.py:12:0: LZY002 module 'numpy' should be listed in __lazy_modules__
+path/to/file.py:12:0: LZY102 module 'numpy' should be listed in __lazy_modules__
 ```
 
 The command exits with status code `1` if any error is found.
