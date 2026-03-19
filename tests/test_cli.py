@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
@@ -23,6 +24,19 @@ def test_collect_errors_for_file(tmp_path: Path) -> None:
             "LZY002 module 'numpy' should be listed in __lazy_modules__",
         ),
     ]
+
+
+def test_collect_errors_for_file_includes_path_in_decode_error(tmp_path: Path) -> None:
+    path = tmp_path / "mod.py"
+    path.write_bytes(b"\xff")
+
+    with pytest.raises(UnicodeDecodeError) as excinfo:
+        m.collect_errors_for_file(path)
+
+    if sys.version_info >= (3, 11):
+        assert excinfo.value.__notes__ == [f"while reading {path}"]
+    else:
+        assert getattr(excinfo.value, "__notes__", None) is None
 
 
 def test_main_outputs_lzy001_and_exits_nonzero(

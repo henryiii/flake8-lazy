@@ -454,7 +454,12 @@ class LazyImportChecker:
 def collect_errors_for_file(path: str | Path) -> list[tuple[int, int, str]]:
     """Return checker errors for a single Python file."""
     item = Path(path)
-    source = item.read_text(encoding="utf-8")
+    try:
+        source = item.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        if sys.version_info >= (3, 11):
+            exc.add_note(f"while reading {item}")
+        raise
     tree = ast.parse(source, filename=str(item))
     checker = LazyImportChecker(tree=tree, filename=str(item))
     return [(line, col, message) for line, col, message, _checker in checker.run()]
