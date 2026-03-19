@@ -167,7 +167,7 @@ def _package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | No
 
     prefix = "." * node.level
     if node.module is None:
-        return f"{prefix}{alias.name}"
+        return None
 
     root_module = node.module.split(".", maxsplit=1)[0]
     return f"{prefix}{root_module}"

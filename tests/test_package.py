@@ -268,6 +268,18 @@ from .local import helper
     assert errors[0][2] == "LZY002 module '.local' should be listed in __lazy_modules__"
 
 
+def test_checker_ignores_relative_package_only_import() -> None:
+    tree = ast.parse(
+        """
+from . import helper
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+
+    assert list(checker.run()) == []
+
+
 def test_checker_emits_lzy101_for_unsorted_lazy_modules() -> None:
     tree = ast.parse(
         """
