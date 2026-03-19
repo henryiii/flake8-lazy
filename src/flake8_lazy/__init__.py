@@ -372,6 +372,47 @@ def collect_unsorted_lazy_modules(tree: ast.AST) -> list[tuple[int, int]]:
     return unsorted
 
 
+def collect_unused_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
+    """Return modules listed in ``__lazy_modules__`` that are never imported."""
+    if not isinstance(tree, ast.Module):
+        return []
+
+    imported_packages = {
+        binding.package
+        for binding in collect_top_level_import_bindings(tree)
+        if binding.package is not None
+    }
+
+    unused: list[tuple[str, int, int]] = []
+    for node in tree.body:
+        value_node: ast.AST | None = None
+        match node:
+            case ast.Assign(targets=targets, value=value) if any(
+                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
+                for target in targets
+            ):
+                value_node = value
+            case ast.AnnAssign(target=ast.Name(id="__lazy_modules__"), value=value) if (
+                value is not None
+            ):
+                value_node = value
+
+        if value_node is None:
+            continue
+
+        modules = _parse_lazy_module_list(value_node)
+        if modules is None:
+            continue
+
+        unused.extend(
+            (module, node.lineno, node.col_offset)
+            for module in modules
+            if module not in imported_packages
+        )
+
+    return unused
+
+
 def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_modules__``."""
     bindings = collect_top_level_import_bindings(tree)
@@ -445,6 +486,19 @@ class LazyImportChecker:
                     lineno,
                     col_offset,
                     "LZY101 __lazy_modules__ should be sorted",
+                    type(self),
+                ),
+            )
+
+        for module, lineno, col_offset in collect_unused_lazy_modules(self.tree):
+            errors.append(
+                (
+                    lineno,
+                    col_offset,
+                    (
+                        f"LZY102 module '{module}' is listed in __lazy_modules__"
+                        " but never imported"
+                    ),
                     type(self),
                 ),
             )

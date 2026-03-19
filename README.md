@@ -49,6 +49,7 @@ flake8 your_package
 - `LZY001`: Missing lazy stdlib module in `__lazy_modules__`
 - `LZY002`: Missing lazy third-party or local module in `__lazy_modules__`
 - `LZY101`: `__lazy_modules__` list is not sorted
+- `LZY102`: Module listed in `__lazy_modules__` is never imported
 
 ## Basic example
 

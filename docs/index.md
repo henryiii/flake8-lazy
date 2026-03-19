@@ -36,6 +36,7 @@ The plugin is auto-discovered by flake8 via entry points.
 | `LZY001` | stdlib module should be listed in `__lazy_modules__`               |
 | `LZY002` | third-party or local module should be listed in `__lazy_modules__` |
 | `LZY101` | `__lazy_modules__` is not sorted                                   |
+| `LZY102` | module listed in `__lazy_modules__` is never imported              |
 
 ## Expected pattern
 
@@ -106,6 +107,19 @@ Diagnostic:
 
 ```text
 LZY001 stdlib module 'email.header' should be listed in __lazy_modules__
+```
+
+### Unused entry in `__lazy_modules__`
+
+```python
+__lazy_modules__ = ["numpy", "pandas"]
+import numpy
+```
+
+Diagnostic:
+
+```text
+LZY102 module 'pandas' is listed in __lazy_modules__ but never imported
 ```
 
 ## CLI mode
