@@ -352,12 +352,12 @@ class _StrictTopLevelRuntimeNameCollector(_TopLevelRuntimeNameCollector):
     def visit_Try(self, node: ast.Try) -> None:
         pass
 
-    def visit_TryStar(self, node: ast.TryStar) -> None:  # type: ignore[attr-defined]  # Python 3.11+
+    def visit_TryStar(self, node: ast.AST) -> None:  # Python 3.11+ try/except*
         pass
 
 
 def collect_strictly_top_level_names(tree: ast.AST) -> set[str]:
-    """Return names loaded at the strict top level (not inside any conditional block)."""
+    """Return names loaded at the strict top level (no conditional blocks)."""
     collector = _StrictTopLevelRuntimeNameCollector()
     collector.visit(tree)
     return collector.names
@@ -526,39 +526,54 @@ def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     return missing
 
 
+def _check_binding_unnecessary(
+    binding: _ImportBinding,
+    strict_names: set[str],
+    seen_packages: set[str],
+    *,
+    require_lazy_package: bool,
+    lazy_packages: set[str],
+) -> bool:
+    """Return True if the binding represents an unnecessarily lazy import."""
+    if binding.package is None:
+        return False
+    if binding.package == "__future__":
+        return False
+    if require_lazy_package and binding.package not in lazy_packages:
+        return False
+    if binding.bound_name not in strict_names:
+        return False
+    return binding.package not in seen_packages
+
+
 def collect_unnecessary_lazy_imports(tree: ast.AST) -> list[tuple[str, int, int]]:
     """Return lazy imports whose bound names are used at the strict module top level."""
     lazy_packages = collect_lazy_packages(tree)
     strict_names = collect_strictly_top_level_names(tree)
-
     unnecessary: list[tuple[str, int, int]] = []
     seen_packages: set[str] = set()
 
     for binding in collect_top_level_import_bindings(tree):
-        if binding.package is None:
-            continue
-        if binding.package == "__future__":
-            continue
-        if binding.package not in lazy_packages:
-            continue
-        if binding.bound_name not in strict_names:
-            continue
-        if binding.package in seen_packages:
-            continue
-        unnecessary.append((binding.package, binding.lineno, binding.col_offset))
-        seen_packages.add(binding.package)
+        if _check_binding_unnecessary(
+            binding,
+            strict_names,
+            seen_packages,
+            require_lazy_package=True,
+            lazy_packages=lazy_packages,
+        ):
+            unnecessary.append((binding.package, binding.lineno, binding.col_offset))  # type: ignore[arg-type]
+            seen_packages.add(binding.package)  # type: ignore[arg-type]
 
     for binding in collect_top_level_lazy_import_bindings(tree):
-        if binding.package is None:
-            continue
-        if binding.package == "__future__":
-            continue
-        if binding.bound_name not in strict_names:
-            continue
-        if binding.package in seen_packages:
-            continue
-        unnecessary.append((binding.package, binding.lineno, binding.col_offset))
-        seen_packages.add(binding.package)
+        if _check_binding_unnecessary(
+            binding,
+            strict_names,
+            seen_packages,
+            require_lazy_package=False,
+            lazy_packages=lazy_packages,
+        ):
+            unnecessary.append((binding.package, binding.lineno, binding.col_offset))  # type: ignore[arg-type]
+            seen_packages.add(binding.package)  # type: ignore[arg-type]
 
     return unnecessary
 
