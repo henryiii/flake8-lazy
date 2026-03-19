@@ -83,6 +83,22 @@ class _TopLevelImportCollector(_TopLevelScopeVisitor):
             self.imports.append(node)
 
 
+class _TopLevelLazyImportCollector(_TopLevelScopeVisitor):
+    """Collect natively-lazy imports executed in module scope (Python 3.15+)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.imports: list[ast.Import | ast.ImportFrom] = []
+
+    def visit_Import(self, node: ast.Import) -> None:
+        if self.in_top_level_scope and _is_lazy_import_node(node):
+            self.imports.append(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if self.in_top_level_scope and _is_lazy_import_node(node):
+            self.imports.append(node)
+
+
 def _is_lazy_import_node(node: ast.Import | ast.ImportFrom) -> bool:
     return False if sys.version_info < (3, 15) else bool(node.is_lazy)  # type: ignore[union-attr]
 
@@ -172,6 +188,41 @@ def collect_top_level_imported_names(tree: ast.AST) -> list[str]:
                 if alias.name != "*"
             )
     return names
+
+
+def collect_top_level_lazy_imports(tree: ast.AST) -> list[ast.Import | ast.ImportFrom]:
+    """Return natively-lazy imports that execute at module scope (Python 3.15+)."""
+    collector = _TopLevelLazyImportCollector()
+    collector.visit(tree)
+    return collector.imports
+
+
+def collect_top_level_lazy_import_bindings(tree: ast.AST) -> list[_ImportBinding]:
+    """Return package and bound-name details for natively-lazy module-scope imports."""
+    bindings: list[_ImportBinding] = []
+    for node in collect_top_level_lazy_imports(tree):
+        if isinstance(node, ast.Import):
+            bindings.extend(
+                _ImportBinding(
+                    package=alias.name,
+                    bound_name=_bound_name_for_import(alias, from_import=False),
+                    lineno=node.lineno,
+                    col_offset=node.col_offset,
+                )
+                for alias in node.names
+            )
+        else:
+            bindings.extend(
+                _ImportBinding(
+                    package=_package_for_import_from(node, alias),
+                    bound_name=_bound_name_for_import(alias, from_import=True),
+                    lineno=node.lineno,
+                    col_offset=node.col_offset,
+                )
+                for alias in node.names
+                if alias.name != "*"
+            )
+    return bindings
 
 
 def collect_top_level_import_bindings(tree: ast.AST) -> list[_ImportBinding]:
@@ -279,6 +330,35 @@ class _TopLevelRuntimeNameCollector(_TopLevelScopeVisitor):
 def collect_top_level_runtime_names(tree: ast.AST) -> set[str]:
     """Return names loaded at top-level module runtime."""
     collector = _TopLevelRuntimeNameCollector()
+    collector.visit(tree)
+    return collector.names
+
+
+class _StrictTopLevelRuntimeNameCollector(_TopLevelRuntimeNameCollector):
+    """Like _TopLevelRuntimeNameCollector but skips all conditional block bodies."""
+
+    def visit_If(self, node: ast.If) -> None:
+        pass
+
+    def visit_For(self, node: ast.For) -> None:
+        pass
+
+    def visit_While(self, node: ast.While) -> None:
+        pass
+
+    def visit_With(self, node: ast.With) -> None:
+        pass
+
+    def visit_Try(self, node: ast.Try) -> None:
+        pass
+
+    def visit_TryStar(self, node: ast.TryStar) -> None:  # type: ignore[attr-defined]  # Python 3.11+
+        pass
+
+
+def collect_strictly_top_level_names(tree: ast.AST) -> set[str]:
+    """Return names loaded at the strict top level (not inside any conditional block)."""
+    collector = _StrictTopLevelRuntimeNameCollector()
     collector.visit(tree)
     return collector.names
 
@@ -446,6 +526,43 @@ def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     return missing
 
 
+def collect_unnecessary_lazy_imports(tree: ast.AST) -> list[tuple[str, int, int]]:
+    """Return lazy imports whose bound names are used at the strict module top level."""
+    lazy_packages = collect_lazy_packages(tree)
+    strict_names = collect_strictly_top_level_names(tree)
+
+    unnecessary: list[tuple[str, int, int]] = []
+    seen_packages: set[str] = set()
+
+    for binding in collect_top_level_import_bindings(tree):
+        if binding.package is None:
+            continue
+        if binding.package == "__future__":
+            continue
+        if binding.package not in lazy_packages:
+            continue
+        if binding.bound_name not in strict_names:
+            continue
+        if binding.package in seen_packages:
+            continue
+        unnecessary.append((binding.package, binding.lineno, binding.col_offset))
+        seen_packages.add(binding.package)
+
+    for binding in collect_top_level_lazy_import_bindings(tree):
+        if binding.package is None:
+            continue
+        if binding.package == "__future__":
+            continue
+        if binding.bound_name not in strict_names:
+            continue
+        if binding.package in seen_packages:
+            continue
+        unnecessary.append((binding.package, binding.lineno, binding.col_offset))
+        seen_packages.add(binding.package)
+
+    return unnecessary
+
+
 def _lazy_module_error_code(module: str) -> str:
     root_module = module.split(".", maxsplit=1)[0]
     if root_module in sys.stdlib_module_names:
@@ -498,6 +615,19 @@ class LazyImportChecker:
                     (
                         f"LZY102 module '{module}' is listed in __lazy_modules__"
                         " but never imported"
+                    ),
+                    type(self),
+                ),
+            )
+
+        for package, lineno, col_offset in collect_unnecessary_lazy_imports(self.tree):
+            errors.append(
+                (
+                    lineno,
+                    col_offset,
+                    (
+                        f"LZY103 module '{package}' is declared lazy"
+                        " but accessed at the top level"
                     ),
                     type(self),
                 ),
