@@ -5,21 +5,21 @@ flake8-lazy: Detect imports that can be lazy
 
 from __future__ import annotations
 
-__lazy_modules__ = ["argparse", "ast", "dataclasses", "pathlib", "sys", "tokenize"]
+__lazy_modules__ = ["ast", "dataclasses", "pathlib", "sys", "tokenize"]
 
-import argparse
 import ast
+import importlib.metadata
 import sys
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 
-__version__ = "0.1.0"
+__version__ = importlib.metadata.version("flake8-lazy")
 
 __all__ = [
     "LazyImportChecker",
     "__version__",
-    "main",
+    "collect_errors_for_file",
 ]
 
 
@@ -664,34 +664,3 @@ def collect_errors_for_file(path: str | Path) -> list[tuple[int, int, str]]:
     tree = ast.parse(source, filename=str(item))
     checker = LazyImportChecker(tree=tree, filename=str(item))
     return [(line, col, message) for line, col, message, _checker in checker.run()]
-
-
-def main(argv: list[str] | None = None) -> None:
-    """Run flake8-lazy checks directly from the command line."""
-    parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument("files", nargs="+", type=Path)
-    namespace = parser.parse_args(list(argv) if argv is not None else None)
-
-    found_errors = False
-    for path in namespace.files:
-        try:
-            errors = collect_errors_for_file(path)
-        except OSError as exc:
-            sys.stderr.write(f"{path}:0:0: LZY000 failed to read file ({exc})\n")
-            found_errors = True
-            continue
-        except SyntaxError as exc:
-            lineno = exc.lineno if exc.lineno is not None else 0
-            col_offset = (exc.offset - 1) if exc.offset is not None else 0
-            sys.stderr.write(
-                f"{path}:{lineno}:{col_offset}: LZY000 failed to parse Python file\n",
-            )
-            found_errors = True
-            continue
-
-        for lineno, col_offset, message in errors:
-            sys.stdout.write(f"{path}:{lineno}:{col_offset}: {message}\n")
-            found_errors = True
-
-    if found_errors:
-        raise SystemExit(1)
