@@ -103,3 +103,8 @@ repos:
     rev: 2026.03.02
     hooks:
       - id: sp-repo-review
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.22.0
+    hooks:
+      - id: zizmor
