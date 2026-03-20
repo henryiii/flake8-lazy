@@ -267,7 +267,8 @@ path/to/file.py: __lazy_modules__ = ["numpy"]
 ```
 
 This prints the sorted `__lazy_modules__` value the checker recommends for each
-file while keeping the same exit-status behavior.
+file when it differs from the file's current static `__lazy_modules__`
+declaration, while keeping the same exit-status behavior.
 
 The command exits with status `1` if any diagnostics are produced.
 

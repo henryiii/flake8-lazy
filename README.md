@@ -135,7 +135,8 @@ path/to/file.py: __lazy_modules__ = ["numpy", "pandas"]
 ```
 
 This prints the sorted `__lazy_modules__` value the checker recommends for each
-file. The command still exits with status code `1` if the file has any
+file when it differs from the file's current static `__lazy_modules__`
+declaration. The command still exits with status code `1` if the file has any
 diagnostics.
 
 The command exits with status code `1` if any error is found.

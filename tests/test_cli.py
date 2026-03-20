@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from flake8_lazy import (
+    collect_declared_lazy_modules,
     collect_errors_for_file,
     collect_recommended_lazy_modules,
 )
@@ -93,6 +94,17 @@ HOME = pathlib.Path.home()
     assert collect_recommended_lazy_modules(tree) == ["requests"]
 
 
+def test_collect_declared_lazy_modules_returns_last_static_list() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["numpy"]
+__lazy_modules__ = ["pandas", "numpy"]
+""",
+    )
+
+    assert collect_declared_lazy_modules(tree) == ["pandas", "numpy"]
+
+
 def test_main_outputs_lazy_modules_format_and_exits_nonzero(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -123,7 +135,7 @@ def test_main_outputs_lazy_modules_format_for_clean_file(
     main(["--format", "lazy-modules", str(path)])
 
     captured = capsys.readouterr()
-    assert captured.out == f'{path}: __lazy_modules__ = ["numpy"]\n'
+    assert captured.out == ""
     assert captured.err == ""
 
 
