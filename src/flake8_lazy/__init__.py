@@ -5,7 +5,7 @@ flake8-lazy: Detect imports that can be lazy
 
 from __future__ import annotations
 
-__lazy_modules__ = ["ast", "dataclasses", "pathlib", "sys", "tokenize"]
+__lazy_modules__ = ["pathlib", "sys", "tokenize"]
 
 import ast
 import importlib.metadata
@@ -383,6 +383,14 @@ class _TopLevelRuntimeNameCollector(_TopLevelScopeVisitor):
             self.visit(kw_default)
         self._visit_annotation(node.returns)
 
+    def _visit_class_signature(self, node: ast.ClassDef) -> None:
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        for base in node.bases:
+            self.visit(base)
+        for keyword in node.keywords:
+            self.visit(keyword.value)
+
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._visit_function_signature(node)
 
@@ -400,8 +408,8 @@ class _TopLevelRuntimeNameCollector(_TopLevelScopeVisitor):
         self.visit(node.body)
         self._scope_depth -= 1
 
-    def visit_ClassDef(self, _node: ast.ClassDef) -> None:
-        return
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._visit_class_signature(node)
 
 
 def collect_top_level_runtime_names(tree: ast.AST) -> set[str]:

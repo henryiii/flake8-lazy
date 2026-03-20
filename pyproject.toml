@@ -127,11 +127,12 @@ similarities.ignore-imports = "yes"
 messages_control.disable = [
   "design",
   "fixme",
-  "line-too-long",
-  "missing-module-docstring",
-  "missing-function-docstring",
-  "wrong-import-position",
   "invalid-name",
+  "line-too-long",
+  "missing-function-docstring",
+  "missing-module-docstring",
+  "too-many-lines",
+  "wrong-import-position",
 ]
 
 [tool.check-sdist]
