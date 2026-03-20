@@ -105,6 +105,16 @@ __lazy_modules__ = ["pandas", "numpy"]
     assert collect_declared_lazy_modules(tree) == ["pandas", "numpy"]
 
 
+def test_collect_declared_lazy_modules_supports_relative_spec_parent_syntax() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = [f"{__spec__.parent}.subpackage"]
+""",
+    )
+
+    assert collect_declared_lazy_modules(tree) == ['f"{__spec__.parent}.subpackage"']
+
+
 def test_main_outputs_lazy_modules_format_and_exits_nonzero(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -119,6 +129,26 @@ def test_main_outputs_lazy_modules_format_and_exits_nonzero(
 
     captured = capsys.readouterr()
     assert captured.out == f'{path}: __lazy_modules__ = ["numpy", "pandas"]\n'
+    assert captured.err == ""
+
+
+def test_main_outputs_lazy_modules_format_for_relative_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("from .subpackage import helper\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--format", "lazy-modules", str(path)])
+
+    assert excinfo.value.code == 1
+
+    captured = capsys.readouterr()
+    assert (
+        captured.out
+        == f'{path}: __lazy_modules__ = [f"{{__spec__.parent}}.subpackage"]\n'
+    )
     assert captured.err == ""
 
 

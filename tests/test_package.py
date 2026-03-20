@@ -403,7 +403,7 @@ def fn(x: Any) -> Any:
     assert list(checker.run()) == []
 
 
-def test_checker_preserves_relative_import_prefix_in_message() -> None:
+def test_checker_uses_spec_parent_syntax_for_relative_import_message() -> None:
     tree = ast.parse(
         """
 from .local import helper
@@ -414,7 +414,10 @@ from .local import helper
     errors = list(checker.run())
 
     assert len(errors) == 1
-    assert errors[0][2] == "LZY102 module '.local' should be listed in __lazy_modules__"
+    assert (
+        errors[0][2]
+        == "LZY102 module 'f\"{__spec__.parent}.local\"' should be listed in __lazy_modules__"
+    )
 
 
 def test_checker_ignores_relative_package_only_import() -> None:

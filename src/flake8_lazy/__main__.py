@@ -15,7 +15,12 @@ from . import (
 
 
 def _format_lazy_modules(path: Path, modules: list[str]) -> str:
-    joined_modules = ", ".join(f'"{module}"' for module in modules)
+    joined_modules = ", ".join(
+        module
+        if module.startswith('f"{__spec__.parent') and module.endswith('"')
+        else f'"{module}"'
+        for module in modules
+    )
     return f"{path}: __lazy_modules__ = [{joined_modules}]"
 
 
