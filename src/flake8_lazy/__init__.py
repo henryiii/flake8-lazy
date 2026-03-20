@@ -192,16 +192,82 @@ def _bound_name_for_import(alias: ast.alias, *, from_import: bool) -> str:
     return alias.name.split(".", maxsplit=1)[0]
 
 
+def _relative_parent_expression(*, level: int) -> str:
+    if level == 1:
+        return "__spec__.parent"
+    return f'__spec__.parent.rsplit(".", {level - 1})[0]'
+
+
+def _relative_import_package_name(*, level: int, root_module: str) -> str:
+    parent_expression = _relative_parent_expression(level=level)
+    return f'f"{{{parent_expression}}}.{root_module}"'
+
+
+def _relative_parent_level(node: ast.AST) -> int | None:
+    match node:
+        case ast.Attribute(value=ast.Name(id="__spec__"), attr="parent"):
+            return 1
+        case ast.Subscript(
+            value=ast.Call(
+                func=ast.Attribute(
+                    value=ast.Attribute(
+                        value=ast.Name(id="__spec__"),
+                        attr="parent",
+                    ),
+                    attr="rsplit",
+                ),
+                args=[ast.Constant(value="."), ast.Constant(value=level_minus_one)],
+                keywords=[],
+            ),
+            slice=ast.Constant(value=0),
+        ) if isinstance(level_minus_one, int):
+            return level_minus_one + 1
+        case _:
+            return None
+
+
+def _parse_relative_lazy_module(node: ast.JoinedStr) -> str | None:
+    match node:
+        case ast.JoinedStr(
+            values=[
+                ast.FormattedValue(
+                    value=expression,
+                    conversion=-1,
+                    format_spec=None,
+                ),
+                ast.Constant(value=suffix),
+            ],
+        ) if isinstance(suffix, str) and suffix.startswith("."):
+            level = _relative_parent_level(expression)
+            if level is None:
+                return None
+
+            root_module = suffix.removeprefix(".")
+            if not root_module:
+                return None
+
+            return _relative_import_package_name(level=level, root_module=root_module)
+        case _:
+            return None
+
+
 def _package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | None:
-    if alias.name == "*":
-        return None
+    match alias:
+        case ast.alias(name="*"):
+            return None
+        case _:
+            pass
 
-    prefix = "." * node.level
-    if node.module is None:
-        return None
-
-    root_module = node.module.split(".", maxsplit=1)[0]
-    return f"{prefix}{root_module}"
+    match node:
+        case ast.ImportFrom(module=None):
+            return None
+        case ast.ImportFrom(module=module, level=0) if isinstance(module, str):
+            return module.split(".", maxsplit=1)[0]
+        case ast.ImportFrom(module=module, level=level) if isinstance(module, str):
+            root_module = module.split(".", maxsplit=1)[0]
+            return _relative_import_package_name(level=level, root_module=root_module)
+        case _:
+            return None
 
 
 def collect_top_level_imported_names(tree: ast.AST) -> list[str]:
@@ -496,9 +562,17 @@ def _parse_lazy_module_list(node: ast.AST) -> list[str] | None:
         return None
     modules: list[str] = []
     for element in node.elts:
-        if not isinstance(element, ast.Constant) or not isinstance(element.value, str):
+        if isinstance(element, ast.Constant) and isinstance(element.value, str):
+            modules.append(element.value)
+            continue
+
+        if not isinstance(element, ast.JoinedStr):
             return None
-        modules.append(element.value)
+
+        parsed_relative = _parse_relative_lazy_module(element)
+        if parsed_relative is None:
+            return None
+        modules.append(parsed_relative)
     return modules
 
 
