@@ -53,6 +53,7 @@ The plugin is auto-discovered by flake8 via entry points.
 | `LZY202` | module listed in `__lazy_modules__` is never imported           |
 | `LZY203` | module listed in `__lazy_modules__` is duplicated               |
 | `LZY204` | `__lazy_modules__` is assigned after importing modules it names |
+| `LZY205` | module listed in `__lazy_modules__` must be an absolute name    |
 
 ### 3xx: Native `lazy` keyword (Python 3.15+)
 
@@ -149,6 +150,18 @@ Diagnostic:
 
 ```text
 LZY101 stdlib module 'email.header' should be listed in __lazy_modules__
+```
+
+### Relative names are invalid in `__lazy_modules__`
+
+```python
+__lazy_modules__ = [".local"]
+```
+
+Diagnostic:
+
+```text
+LZY205 module '.local' in __lazy_modules__ must be absolute
 ```
 
 ### Unused entry in `__lazy_modules__`

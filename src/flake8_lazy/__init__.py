@@ -792,6 +792,38 @@ def collect_late_lazy_module_assignments(tree: ast.AST) -> list[tuple[int, int]]
     return late_assignments
 
 
+def collect_invalid_lazy_module_names(tree: ast.AST) -> list[tuple[str, int, int]]:
+    """Return relative ``__lazy_modules__`` entries that must be absolute.
+
+    String literal entries beginning with ``.`` are invalid because
+    ``__lazy_modules__`` names must be absolute module names. Relative modules
+    should use the ``f"{__spec__.parent}.name"`` form.
+    """
+    if not isinstance(tree, ast.Module):
+        return []
+
+    invalid: list[tuple[str, int, int]] = []
+    for node in tree.body:
+        value_node = _lazy_modules_assignment_value(node)
+        if value_node is None:
+            continue
+
+        match value_node:
+            case ast.List(elts=elements):
+                for element in elements:
+                    match element:
+                        case ast.Constant(
+                            value=value, lineno=lineno, col_offset=col_offset
+                        ) if isinstance(value, str) and value.startswith("."):
+                            invalid.append((value, lineno, col_offset))
+                        case _:
+                            continue
+            case _:
+                continue
+
+    return invalid
+
+
 def _collect_recommended_lazy_bindings(tree: ast.AST) -> list[_ImportBinding]:
     """Return module-scope imports that should appear in ``__lazy_modules__``."""
     bindings = collect_top_level_import_bindings(tree)
@@ -966,7 +998,9 @@ class LazyImportChecker:
         self.tree = tree
         self.filename = filename
 
-    def run(self) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
+    def _build_missing_lazy_module_errors(
+        self,
+    ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         for package, lineno, col_offset in collect_missing_lazy_modules(self.tree):
             code = _lazy_module_error_code(package)
@@ -982,7 +1016,12 @@ class LazyImportChecker:
                     type(self),
                 ),
             )
+        return errors
 
+    def _build_lazy_module_validation_errors(
+        self,
+    ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
+        errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         for lineno, col_offset in collect_unsorted_lazy_modules(self.tree):
             errors.append(
                 (
@@ -1029,19 +1068,22 @@ class LazyImportChecker:
                 ),
             )
 
-        for package, lineno, col_offset in collect_unnecessary_lazy_imports(self.tree):
+        for module, lineno, col_offset in collect_invalid_lazy_module_names(self.tree):
             errors.append(
                 (
                     lineno,
                     col_offset,
-                    (
-                        f"LZY401 module '{package}' is declared lazy"
-                        " but accessed at the top level"
-                    ),
+                    f"LZY205 module '{module}' in __lazy_modules__ must be absolute",
                     type(self),
                 ),
             )
 
+        return errors
+
+    def _build_lazy_keyword_errors(
+        self,
+    ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
+        errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         for module, lineno, col_offset in collect_lazy_imports_in_suppress_blocks(
             self.tree
         ):
@@ -1082,6 +1124,32 @@ class LazyImportChecker:
                 ),
             )
 
+        return errors
+
+    def _build_semantic_lazy_errors(
+        self,
+    ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
+        errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
+        for package, lineno, col_offset in collect_unnecessary_lazy_imports(self.tree):
+            errors.append(
+                (
+                    lineno,
+                    col_offset,
+                    (
+                        f"LZY401 module '{package}' is declared lazy"
+                        " but accessed at the top level"
+                    ),
+                    type(self),
+                ),
+            )
+        return errors
+
+    def run(self) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
+        errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
+        errors.extend(self._build_missing_lazy_module_errors())
+        errors.extend(self._build_lazy_module_validation_errors())
+        errors.extend(self._build_lazy_keyword_errors())
+        errors.extend(self._build_semantic_lazy_errors())
         return errors
 
 

@@ -629,6 +629,41 @@ import numpy
     assert lzy204_errors == []
 
 
+def test_checker_emits_lzy205_for_relative_name_in_lazy_modules() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = [".local"]
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy205_errors = [e for e in errors if e[2].startswith("LZY205")]
+    assert lzy205_errors == [
+        (
+            2,
+            20,
+            "LZY205 module '.local' in __lazy_modules__ must be absolute",
+            m.LazyImportChecker,
+        ),
+    ]
+
+
+def test_checker_does_not_emit_lzy205_for_spec_parent_relative_form() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = [f"{__spec__.parent}.local"]
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy205_errors = [e for e in errors if e[2].startswith("LZY205")]
+    assert lzy205_errors == []
+
+
 def test_collect_strictly_top_level_names_excludes_conditional_blocks() -> None:
     tree = ast.parse(
         """
