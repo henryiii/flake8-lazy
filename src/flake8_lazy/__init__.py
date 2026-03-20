@@ -847,6 +847,11 @@ def _collect_recommended_lazy_bindings(tree: ast.AST) -> list[_ImportBinding]:
         for binding in bindings
         if binding.package is not None and binding.bound_name in guard_names
     }
+    non_lazy_packages = {
+        binding.package
+        for binding in bindings
+        if binding.package is not None and binding.bound_name in non_lazy_names
+    }
 
     recommended: list[_ImportBinding] = []
     seen_packages: set[str] = set()
@@ -858,6 +863,8 @@ def _collect_recommended_lazy_bindings(tree: ast.AST) -> list[_ImportBinding]:
         if binding.package in side_effect_packages:
             continue
         if binding.package in guard_packages:
+            continue
+        if binding.package in non_lazy_packages:
             continue
         if binding.bound_name in non_lazy_names:
             continue

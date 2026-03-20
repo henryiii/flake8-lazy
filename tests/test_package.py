@@ -403,6 +403,48 @@ def fn(x: Any) -> Any:
     assert list(checker.run()) == []
 
 
+def test_checker_typing_mixed_any_and_typevar_repro() -> None:
+    tree_without_lazy = ast.parse(
+        """
+from typing import Any, TypeVar
+
+_TProjectBuilder = TypeVar("_TProjectBuilder")
+
+def fn(x: Any) -> Any:
+    return x
+""",
+    )
+    checker_without_lazy = m.LazyImportChecker(
+        tree=tree_without_lazy,
+        filename="example.py",
+    )
+    messages_without_lazy = [error[2] for error in checker_without_lazy.run()]
+
+    assert (
+        "LZY101 stdlib module 'typing' should be listed in __lazy_modules__"
+        not in messages_without_lazy
+    )
+
+    tree_with_lazy = ast.parse(
+        """
+__lazy_modules__ = ["typing"]
+from typing import Any, TypeVar
+
+_TProjectBuilder = TypeVar("_TProjectBuilder")
+
+def fn(x: Any) -> Any:
+    return x
+""",
+    )
+    checker_with_lazy = m.LazyImportChecker(tree=tree_with_lazy, filename="example.py")
+    messages_with_lazy = [error[2] for error in checker_with_lazy.run()]
+
+    assert (
+        "LZY401 module 'typing' is declared lazy but accessed at the top level"
+        in messages_with_lazy
+    )
+
+
 def test_checker_uses_spec_parent_syntax_for_relative_import_message() -> None:
     tree = ast.parse(
         """
