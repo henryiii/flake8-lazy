@@ -31,7 +31,7 @@ def __dir__() -> list[str]:
     return __all__
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class _ImportBinding:
     package: str | None
     bound_name: str
@@ -41,6 +41,8 @@ class _ImportBinding:
 
 class _TopLevelScopeVisitor(ast.NodeVisitor):
     """Visit nodes while tracking module-level vs nested scope."""
+
+    __slots__ = ("_scope_depth",)
 
     def __init__(self) -> None:
         self._scope_depth = 0
@@ -74,6 +76,8 @@ class _TopLevelScopeVisitor(ast.NodeVisitor):
 class _TopLevelImportCollector(_TopLevelScopeVisitor):
     """Collect imports that are executed in module scope."""
 
+    __slots__ = ("imports",)
+
     def __init__(self) -> None:
         super().__init__()
         self.imports: list[ast.Import | ast.ImportFrom] = []
@@ -89,6 +93,8 @@ class _TopLevelImportCollector(_TopLevelScopeVisitor):
 
 class _TopLevelLazyImportCollector(_TopLevelScopeVisitor):
     """Collect natively-lazy imports executed in module scope (Python 3.15+)."""
+
+    __slots__ = ("imports",)
 
     def __init__(self) -> None:
         super().__init__()
@@ -156,6 +162,8 @@ def _collect_loaded_names(node: ast.AST) -> set[str]:
 
 class _TypeCheckingGuardNameCollector(_TopLevelScopeVisitor):
     """Collect names used in top-level TYPE_CHECKING guard expressions."""
+
+    __slots__ = ("names",)
 
     def __init__(self) -> None:
         super().__init__()
@@ -446,6 +454,8 @@ class _TopLevelRuntimeNameCollector(_TopLevelScopeVisitor):
     Names in class scopes and annotation contexts are ignored.
     """
 
+    __slots__ = ("_annotation_depth", "names")
+
     def __init__(self) -> None:
         super().__init__()
         self.names: set[str] = set()
@@ -531,6 +541,8 @@ def collect_top_level_runtime_names(tree: ast.AST) -> set[str]:
 
 class _StrictTopLevelRuntimeNameCollector(_TopLevelRuntimeNameCollector):
     """Like _TopLevelRuntimeNameCollector but skips all conditional block bodies."""
+
+    __slots__ = ()
 
     def visit_If(self, node: ast.If) -> None:
         pass
@@ -993,6 +1005,7 @@ class LazyImportChecker:
 
     name = "flake8-lazy"
     version = __version__
+    __slots__ = ("filename", "tree")
 
     def __init__(self, tree: ast.AST, filename: str) -> None:
         self.tree = tree
