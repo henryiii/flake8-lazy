@@ -415,8 +415,8 @@ from .local import helper
 
     assert len(errors) == 1
     assert (
-        errors[0][2]
-        == "LZY102 module 'f\"{__spec__.parent}.local\"' should be listed in __lazy_modules__"
+        errors[0][2] == "LZY102 module 'f\"{__spec__.parent}.local\"'"
+        " should be listed in __lazy_modules__"
     )
 
 

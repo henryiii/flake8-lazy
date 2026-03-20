@@ -203,91 +203,71 @@ def _relative_import_package_name(*, level: int, root_module: str) -> str:
     return f'f"{{{parent_expression}}}.{root_module}"'
 
 
-def _is_spec_parent_attribute(node: ast.AST) -> bool:
-    return (
-        isinstance(node, ast.Attribute)
-        and node.attr == "parent"
-        and isinstance(node.value, ast.Name)
-        and node.value.id == "__spec__"
-    )
-
-
 def _relative_parent_level(node: ast.AST) -> int | None:
-    if _is_spec_parent_attribute(node):
-        return 1
-
-    if not isinstance(node, ast.Subscript):
-        return None
-
-    if not (
-        isinstance(node.slice, ast.Constant)
-        and isinstance(node.slice.value, int)
-        and node.slice.value == 0
-    ):
-        return None
-
-    if not isinstance(node.value, ast.Call):
-        return None
-
-    call = node.value
-    if not (
-        isinstance(call.func, ast.Attribute)
-        and call.func.attr == "rsplit"
-        and _is_spec_parent_attribute(call.func.value)
-    ):
-        return None
-
-    if len(call.args) != 2 or call.keywords:
-        return None
-
-    separator, level = call.args
-    if not (
-        isinstance(separator, ast.Constant)
-        and separator.value == "."
-        and isinstance(level, ast.Constant)
-        and isinstance(level.value, int)
-    ):
-        return None
-
-    return level.value + 1
+    match node:
+        case ast.Attribute(value=ast.Name(id="__spec__"), attr="parent"):
+            return 1
+        case ast.Subscript(
+            value=ast.Call(
+                func=ast.Attribute(
+                    value=ast.Attribute(
+                        value=ast.Name(id="__spec__"),
+                        attr="parent",
+                    ),
+                    attr="rsplit",
+                ),
+                args=[ast.Constant(value="."), ast.Constant(value=level_minus_one)],
+                keywords=[],
+            ),
+            slice=ast.Constant(value=0),
+        ) if isinstance(level_minus_one, int):
+            return level_minus_one + 1
+        case _:
+            return None
 
 
 def _parse_relative_lazy_module(node: ast.JoinedStr) -> str | None:
-    if len(node.values) != 2:
-        return None
+    match node:
+        case ast.JoinedStr(
+            values=[
+                ast.FormattedValue(
+                    value=expression,
+                    conversion=-1,
+                    format_spec=None,
+                ),
+                ast.Constant(value=suffix),
+            ],
+        ) if isinstance(suffix, str) and suffix.startswith("."):
+            level = _relative_parent_level(expression)
+            if level is None:
+                return None
 
-    expression, suffix = node.values
-    if not isinstance(expression, ast.FormattedValue):
-        return None
-    if expression.conversion != -1 or expression.format_spec is not None:
-        return None
-    if not isinstance(suffix, ast.Constant) or not isinstance(suffix.value, str):
-        return None
-    if not suffix.value.startswith("."):
-        return None
+            root_module = suffix.removeprefix(".")
+            if not root_module:
+                return None
 
-    level = _relative_parent_level(expression.value)
-    if level is None:
-        return None
-
-    root_module = suffix.value.removeprefix(".")
-    if not root_module:
-        return None
-
-    return _relative_import_package_name(level=level, root_module=root_module)
+            return _relative_import_package_name(level=level, root_module=root_module)
+        case _:
+            return None
 
 
 def _package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | None:
-    if alias.name == "*":
-        return None
+    match alias:
+        case ast.alias(name="*"):
+            return None
+        case _:
+            pass
 
-    if node.module is None:
-        return None
-
-    root_module = node.module.split(".", maxsplit=1)[0]
-    if node.level == 0:
-        return root_module
-    return _relative_import_package_name(level=node.level, root_module=root_module)
+    match node:
+        case ast.ImportFrom(module=None):
+            return None
+        case ast.ImportFrom(module=module, level=0) if isinstance(module, str):
+            return module.split(".", maxsplit=1)[0]
+        case ast.ImportFrom(module=module, level=level) if isinstance(module, str):
+            root_module = module.split(".", maxsplit=1)[0]
+            return _relative_import_package_name(level=level, root_module=root_module)
+        case _:
+            return None
 
 
 def collect_top_level_imported_names(tree: ast.AST) -> list[str]:
