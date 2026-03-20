@@ -105,6 +105,37 @@ def fn() -> None:
     assert m.collect_non_lazy_imports(tree) == ["la", "P"]
 
 
+def test_collect_non_lazy_imports_detects_class_decorator_usage() -> None:
+    tree = ast.parse(
+        """
+from dataclasses import dataclass
+import pathlib
+
+
+@dataclass
+class Item:
+    path: pathlib.Path
+""",
+    )
+
+    assert m.collect_non_lazy_imports(tree) == ["dataclass"]
+
+
+def test_collect_non_lazy_imports_detects_class_base_usage() -> None:
+    tree = ast.parse(
+        """
+import ast
+import pathlib
+
+
+class Visitor(ast.NodeVisitor):
+    path: pathlib.Path
+""",
+    )
+
+    assert m.collect_non_lazy_imports(tree) == ["ast"]
+
+
 def test_collect_lazy_packages() -> None:
     tree = ast.parse(
         """
