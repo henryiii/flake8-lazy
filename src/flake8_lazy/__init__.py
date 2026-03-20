@@ -108,15 +108,21 @@ def _is_lazy_import_node(node: ast.Import | ast.ImportFrom) -> bool:
 
 
 def _is_type_checking_guard(node: ast.AST) -> bool:
-    if isinstance(node, ast.Name):
-        return node.id == "TYPE_CHECKING"
-    if isinstance(node, ast.Attribute):
-        return (
-            isinstance(node.value, ast.Name)
-            and node.value.id == "typing"
-            and node.attr == "TYPE_CHECKING"
-        )
-    return False
+    match node:
+        case ast.Name(id="TYPE_CHECKING"):
+            return True
+        case ast.Attribute(value=ast.Name(id="typing"), attr="TYPE_CHECKING"):
+            return True
+        case _:
+            return False
+
+
+def _is_import_error_name(node: ast.AST) -> bool:
+    match node:
+        case ast.Name(id="ImportError" | "ModuleNotFoundError"):
+            return True
+        case _:
+            return False
 
 
 def _is_suppress_import_error_call(node: ast.expr) -> bool:
@@ -125,32 +131,26 @@ def _is_suppress_import_error_call(node: ast.expr) -> bool:
     Recognises both ``suppress(ImportError)`` and
     ``contextlib.suppress(ImportError)``, as well as ``ModuleNotFoundError``.
     """
-    if not isinstance(node, ast.Call):
-        return False
-    func = node.func
-    if isinstance(func, ast.Name):
-        is_suppress = func.id == "suppress"
-    elif isinstance(func, ast.Attribute):
-        is_suppress = (
-            func.attr == "suppress"
-            and isinstance(func.value, ast.Name)
-            and func.value.id == "contextlib"
-        )
-    else:
-        is_suppress = False
-    if not is_suppress:
-        return False
-    import_error_names = {"ImportError", "ModuleNotFoundError"}
-    return any(
-        isinstance(arg, ast.Name) and arg.id in import_error_names for arg in node.args
-    )
+    match node:
+        case ast.Call(func=ast.Name(id="suppress"), args=args):
+            return any(_is_import_error_name(arg) for arg in args)
+        case ast.Call(
+            func=ast.Attribute(value=ast.Name(id="contextlib"), attr="suppress"),
+            args=args,
+        ):
+            return any(_is_import_error_name(arg) for arg in args)
+        case _:
+            return False
 
 
 def _collect_loaded_names(node: ast.AST) -> set[str]:
     names: set[str] = set()
     for item in ast.walk(node):
-        if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load):
-            names.add(item.id)
+        match item:
+            case ast.Name(id=name, ctx=ast.Load()):
+                names.add(name)
+            case _:
+                pass
     return names
 
 
@@ -270,20 +270,44 @@ def _package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | No
             return None
 
 
+def _is_lazy_modules_target(node: ast.AST) -> bool:
+    match node:
+        case ast.Name(id="__lazy_modules__"):
+            return True
+        case _:
+            return False
+
+
+def _lazy_modules_assignment_value(node: ast.AST) -> ast.AST | None:
+    match node:
+        case ast.Assign(targets=targets, value=value) if any(
+            _is_lazy_modules_target(target) for target in targets
+        ):
+            return value
+        case ast.AnnAssign(target=ast.Name(id="__lazy_modules__"), value=value):
+            return value
+        case _:
+            return None
+
+
 def collect_top_level_imported_names(tree: ast.AST) -> list[str]:
     """Return imported names as bound in module scope."""
     names: list[str] = []
     for node in collect_top_level_imports(tree):
-        if isinstance(node, ast.Import):
-            names.extend(
-                _bound_name_for_import(alias, from_import=False) for alias in node.names
-            )
-        else:
-            names.extend(
-                _bound_name_for_import(alias, from_import=True)
-                for alias in node.names
-                if alias.name != "*"
-            )
+        match node:
+            case ast.Import(names=aliases):
+                names.extend(
+                    _bound_name_for_import(alias, from_import=False)
+                    for alias in aliases
+                )
+            case ast.ImportFrom(names=aliases):
+                names.extend(
+                    _bound_name_for_import(alias, from_import=True)
+                    for alias in aliases
+                    if alias.name != "*"
+                )
+            case _:
+                pass
     return names
 
 
@@ -298,16 +322,20 @@ def _lazy_import_entries(
     stmt: ast.Import | ast.ImportFrom,
 ) -> list[tuple[str, int, int]]:
     """Return (module, lineno, col_offset) for a single lazy import statement."""
-    if isinstance(stmt, ast.Import):
-        return [(alias.name, stmt.lineno, stmt.col_offset) for alias in stmt.names]
-    # ImportFrom: report the source module once per statement.
-    for alias in stmt.names:
-        if alias.name == "*":
-            continue
-        package = _package_for_import_from(stmt, alias)
-        if package is not None:
-            return [(package, stmt.lineno, stmt.col_offset)]
-    return []
+    match stmt:
+        case ast.Import(names=aliases, lineno=lineno, col_offset=col_offset):
+            return [(alias.name, lineno, col_offset) for alias in aliases]
+        case ast.ImportFrom(names=aliases, lineno=lineno, col_offset=col_offset):
+            # ImportFrom: report the source module once per statement.
+            for alias in aliases:
+                if alias.name == "*":
+                    continue
+                package = _package_for_import_from(stmt, alias)
+                if package is not None:
+                    return [(package, lineno, col_offset)]
+            return []
+        case _:
+            return []  # type: ignore[unreachable]
 
 
 def collect_lazy_imports_in_suppress_blocks(
@@ -326,18 +354,18 @@ def collect_lazy_imports_in_suppress_blocks(
 
     result: list[tuple[str, int, int]] = []
     for node in tree.body:
-        if not isinstance(node, ast.With):
-            continue
-        if not any(
-            _is_suppress_import_error_call(item.context_expr) for item in node.items
-        ):
-            continue
-        for stmt in node.body:
-            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+        match node:
+            case ast.With(items=items, body=body) if any(
+                _is_suppress_import_error_call(item.context_expr) for item in items
+            ):
+                for stmt in body:
+                    if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                        continue
+                    if not _is_lazy_import_node(stmt):
+                        continue
+                    result.extend(_lazy_import_entries(stmt))
+            case _:
                 continue
-            if not _is_lazy_import_node(stmt):
-                continue
-            result.extend(_lazy_import_entries(stmt))
 
     return result
 
@@ -346,27 +374,34 @@ def collect_top_level_lazy_import_bindings(tree: ast.AST) -> list[_ImportBinding
     """Return package and bound-name details for natively-lazy module-scope imports."""
     bindings: list[_ImportBinding] = []
     for node in collect_top_level_lazy_imports(tree):
-        if isinstance(node, ast.Import):
-            bindings.extend(
-                _ImportBinding(
-                    package=alias.name,
-                    bound_name=_bound_name_for_import(alias, from_import=False),
-                    lineno=node.lineno,
-                    col_offset=node.col_offset,
+        match node:
+            case ast.Import(names=aliases, lineno=lineno, col_offset=col_offset):
+                bindings.extend(
+                    _ImportBinding(
+                        package=alias.name,
+                        bound_name=_bound_name_for_import(alias, from_import=False),
+                        lineno=lineno,
+                        col_offset=col_offset,
+                    )
+                    for alias in aliases
                 )
-                for alias in node.names
-            )
-        else:
-            bindings.extend(
-                _ImportBinding(
-                    package=_package_for_import_from(node, alias),
-                    bound_name=_bound_name_for_import(alias, from_import=True),
-                    lineno=node.lineno,
-                    col_offset=node.col_offset,
+            case ast.ImportFrom(
+                names=aliases,
+                lineno=lineno,
+                col_offset=col_offset,
+            ):
+                bindings.extend(
+                    _ImportBinding(
+                        package=_package_for_import_from(node, alias),
+                        bound_name=_bound_name_for_import(alias, from_import=True),
+                        lineno=lineno,
+                        col_offset=col_offset,
+                    )
+                    for alias in aliases
+                    if alias.name != "*"
                 )
-                for alias in node.names
-                if alias.name != "*"
-            )
+            case _:
+                pass
     return bindings
 
 
@@ -374,27 +409,34 @@ def collect_top_level_import_bindings(tree: ast.AST) -> list[_ImportBinding]:
     """Return package and bound-name details for module-scope imports."""
     bindings: list[_ImportBinding] = []
     for node in collect_top_level_imports(tree):
-        if isinstance(node, ast.Import):
-            bindings.extend(
-                _ImportBinding(
-                    package=alias.name,
-                    bound_name=_bound_name_for_import(alias, from_import=False),
-                    lineno=node.lineno,
-                    col_offset=node.col_offset,
+        match node:
+            case ast.Import(names=aliases, lineno=lineno, col_offset=col_offset):
+                bindings.extend(
+                    _ImportBinding(
+                        package=alias.name,
+                        bound_name=_bound_name_for_import(alias, from_import=False),
+                        lineno=lineno,
+                        col_offset=col_offset,
+                    )
+                    for alias in aliases
                 )
-                for alias in node.names
-            )
-        else:
-            bindings.extend(
-                _ImportBinding(
-                    package=_package_for_import_from(node, alias),
-                    bound_name=_bound_name_for_import(alias, from_import=True),
-                    lineno=node.lineno,
-                    col_offset=node.col_offset,
+            case ast.ImportFrom(
+                names=aliases,
+                lineno=lineno,
+                col_offset=col_offset,
+            ):
+                bindings.extend(
+                    _ImportBinding(
+                        package=_package_for_import_from(node, alias),
+                        bound_name=_bound_name_for_import(alias, from_import=True),
+                        lineno=lineno,
+                        col_offset=col_offset,
+                    )
+                    for alias in aliases
+                    if alias.name != "*"
                 )
-                for alias in node.names
-                if alias.name != "*"
-            )
+            case _:
+                pass
     return bindings
 
 
@@ -542,37 +584,41 @@ def collect_side_effect_only_import_packages(tree: ast.AST) -> set[str]:
     all_loaded = _collect_loaded_names(tree)
     packages: set[str] = set()
     for node in collect_top_level_imports(tree):
-        if not isinstance(node, ast.Import):
-            continue
-        for alias in node.names:
-            if alias.asname is not None:
-                # `import a.b as ab` — the alias is intentionally used
+        match node:
+            case ast.Import(names=aliases):
+                for alias in aliases:
+                    match alias:
+                        case ast.alias(name=name, asname=None) if "." in name:
+                            bound_name = name.split(".", maxsplit=1)[0]
+                            if bound_name not in all_loaded:
+                                packages.add(name)
+                        case _:
+                            # Skip aliased and non-dotted imports.
+                            pass
+            case _:
                 continue
-            if "." not in alias.name:
-                # plain `import a` — not a dotted side-effect import
-                continue
-            bound_name = alias.name.split(".", maxsplit=1)[0]
-            if bound_name not in all_loaded:
-                packages.add(alias.name)
     return packages
 
 
 def _parse_lazy_module_list(node: ast.AST) -> list[str] | None:
-    if not isinstance(node, ast.List):
-        return None
+    match node:
+        case ast.List(elts=elements):
+            pass
+        case _:
+            return None
+
     modules: list[str] = []
-    for element in node.elts:
-        if isinstance(element, ast.Constant) and isinstance(element.value, str):
-            modules.append(element.value)
-            continue
-
-        if not isinstance(element, ast.JoinedStr):
-            return None
-
-        parsed_relative = _parse_relative_lazy_module(element)
-        if parsed_relative is None:
-            return None
-        modules.append(parsed_relative)
+    for element in elements:
+        match element:
+            case ast.Constant(value=value) if isinstance(value, str):
+                modules.append(value)
+            case ast.JoinedStr():
+                parsed_relative = _parse_relative_lazy_module(element)
+                if parsed_relative is None:
+                    return None
+                modules.append(parsed_relative)
+            case _:
+                return None
     return modules
 
 
@@ -590,24 +636,13 @@ def collect_declared_lazy_modules(tree: ast.AST) -> list[str] | None:
 
     declared: list[str] | None = None
     for node in tree.body:
-        if isinstance(node, ast.Assign):
-            if any(
-                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
-                for target in node.targets
-            ):
-                parsed_assign = _parse_lazy_module_list(node.value)
-                if parsed_assign is not None:
-                    declared = parsed_assign
-        elif (
-            isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and node.target.id == "__lazy_modules__"
-        ):
-            parsed_annassign = (
-                _parse_lazy_module_list(node.value) if node.value is not None else None
-            )
-            if parsed_annassign is not None:
-                declared = parsed_annassign
+        value_node = _lazy_modules_assignment_value(node)
+        if value_node is None:
+            continue
+
+        parsed = _parse_lazy_module_list(value_node)
+        if parsed is not None:
+            declared = parsed
 
     return declared
 
@@ -619,24 +654,13 @@ def collect_lazy_packages(tree: ast.AST) -> set[str]:
 
     lazy_modules: set[str] = set()
     for node in tree.body:
-        if isinstance(node, ast.Assign):
-            if any(
-                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
-                for target in node.targets
-            ):
-                parsed_assign = _parse_lazy_module_set(node.value)
-                if parsed_assign is not None:
-                    lazy_modules = parsed_assign
-        elif (
-            isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and node.target.id == "__lazy_modules__"
-        ):
-            parsed_annassign = (
-                _parse_lazy_module_set(node.value) if node.value is not None else None
-            )
-            if parsed_annassign is not None:
-                lazy_modules = parsed_annassign
+        value_node = _lazy_modules_assignment_value(node)
+        if value_node is None:
+            continue
+
+        parsed = _parse_lazy_module_set(value_node)
+        if parsed is not None:
+            lazy_modules = parsed
 
     return lazy_modules
 
@@ -648,16 +672,7 @@ def collect_unsorted_lazy_modules(tree: ast.AST) -> list[tuple[int, int]]:
 
     unsorted: list[tuple[int, int]] = []
     for node in tree.body:
-        value_node: ast.AST | None = None
-        match node:
-            case ast.Assign(targets=targets, value=value) if any(
-                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
-                for target in targets
-            ):
-                value_node = value
-            case ast.AnnAssign(target=ast.Name(id="__lazy_modules__"), value=value):
-                value_node = value
-
+        value_node = _lazy_modules_assignment_value(node)
         if value_node is None:
             continue
 
@@ -683,18 +698,7 @@ def collect_unused_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
 
     unused: list[tuple[str, int, int]] = []
     for node in tree.body:
-        value_node: ast.AST | None = None
-        match node:
-            case ast.Assign(targets=targets, value=value) if any(
-                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
-                for target in targets
-            ):
-                value_node = value
-            case ast.AnnAssign(target=ast.Name(id="__lazy_modules__"), value=value) if (
-                value is not None
-            ):
-                value_node = value
-
+        value_node = _lazy_modules_assignment_value(node)
         if value_node is None:
             continue
 
@@ -733,18 +737,7 @@ def collect_duplicate_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
 
     duplicated: list[tuple[str, int, int]] = []
     for node in tree.body:
-        value_node: ast.AST | None = None
-        match node:
-            case ast.Assign(targets=targets, value=value) if any(
-                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
-                for target in targets
-            ):
-                value_node = value
-            case ast.AnnAssign(target=ast.Name(id="__lazy_modules__"), value=value) if (
-                value is not None
-            ):
-                value_node = value
-
+        value_node = _lazy_modules_assignment_value(node)
         if value_node is None:
             continue
 
@@ -769,42 +762,27 @@ def collect_late_lazy_module_assignments(tree: ast.AST) -> list[tuple[int, int]]
     imported_packages: set[str] = set()
 
     for node in tree.body:
-        if isinstance(node, ast.Import):
-            imported_packages.update(alias.name for alias in node.names)
-            continue
-
-        if isinstance(node, ast.ImportFrom) and node.module != "__future__":
-            imported_packages.update(
-                package
-                for package in (
-                    _package_for_import_from(node, alias) for alias in node.names
+        match node:
+            case ast.Import(names=aliases):
+                imported_packages.update(alias.name for alias in aliases)
+                continue
+            case ast.ImportFrom(module=module, names=aliases) if module != "__future__":
+                imported_packages.update(
+                    package
+                    for package in (
+                        _package_for_import_from(node, alias) for alias in aliases
+                    )
+                    if package is not None
                 )
-                if package is not None
-            )
+                continue
+            case _:
+                pass
+
+        value_node = _lazy_modules_assignment_value(node)
+        if value_node is None:
             continue
 
-        is_lazy_modules_assignment = (
-            isinstance(node, ast.Assign)
-            and any(
-                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
-                for target in node.targets
-            )
-        ) or (
-            isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and node.target.id == "__lazy_modules__"
-        )
-
-        if not is_lazy_modules_assignment:
-            continue
-
-        value_node: ast.AST | None = None
-        if isinstance(node, (ast.Assign, ast.AnnAssign)):
-            value_node = node.value
-
-        modules = (
-            _parse_lazy_module_list(value_node) if value_node is not None else None
-        )
+        modules = _parse_lazy_module_list(value_node)
         if modules is None:
             continue
 
