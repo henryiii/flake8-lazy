@@ -7,7 +7,7 @@ icon: lucide/rocket
 flake8-lazy helps keep import-time overhead low by detecting imports that can be
 declared as lazy in `__lazy_modules__`. For this package itself,
 `flake8-lazy --help` runs roughly twice as fast when using Python 3.15's new
-lazy import system.
+lazy import system (following [PEP 810](https://peps.python.org/pep-0810/)).
 
 Error messages will mention `__lazy_modules__`, but the `lazy` keyword is
 supported too.
@@ -250,11 +250,24 @@ flake8-lazy path/to/file.py
 uvx flake8-lazy path/to/file.py
 ```
 
-Output is flake8-like:
+By default, output is flake8-like:
 
 ```text
 path/to/file.py:1:0: LZY102 module 'numpy' should be listed in __lazy_modules__
 ```
+
+For a copy-pasteable recommendation, use the alternate format:
+
+```bash
+flake8-lazy --format lazy-modules path/to/file.py
+```
+
+```text
+path/to/file.py: __lazy_modules__ = ["numpy"]
+```
+
+This prints the sorted `__lazy_modules__` value the checker recommends for each
+file while keeping the same exit-status behavior.
 
 The command exits with status `1` if any diagnostics are produced.
 

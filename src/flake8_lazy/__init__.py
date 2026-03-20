@@ -20,6 +20,8 @@ __all__ = [
     "LazyImportChecker",
     "__version__",
     "collect_errors_for_file",
+    "collect_recommended_lazy_modules",
+    "collect_recommended_lazy_modules_for_file",
 ]
 
 
@@ -699,12 +701,11 @@ def collect_late_lazy_module_assignments(tree: ast.AST) -> list[tuple[int, int]]
     return late_assignments
 
 
-def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
-    """Return lazy-capable packages missing from ``__lazy_modules__``."""
+def _collect_recommended_lazy_bindings(tree: ast.AST) -> list[_ImportBinding]:
+    """Return module-scope imports that should appear in ``__lazy_modules__``."""
     bindings = collect_top_level_import_bindings(tree)
     non_lazy_names = set(collect_non_lazy_imports(tree))
     guard_names = collect_type_checking_guard_names(tree)
-    lazy_modules = collect_lazy_packages(tree)
     side_effect_packages = collect_side_effect_only_import_packages(tree)
     guard_packages = {
         binding.package
@@ -712,7 +713,7 @@ def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
         if binding.package is not None and binding.bound_name in guard_names
     }
 
-    missing: list[tuple[str, int, int]] = []
+    recommended: list[_ImportBinding] = []
     seen_packages: set[str] = set()
     for binding in bindings:
         if binding.package is None:
@@ -727,11 +728,34 @@ def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
             continue
         if binding.bound_name in guard_names:
             continue
-        if binding.package in lazy_modules or binding.package in seen_packages:
+        if binding.package in seen_packages:
             continue
-        missing.append((binding.package, binding.lineno, binding.col_offset))
+        recommended.append(binding)
         seen_packages.add(binding.package)
 
+    return recommended
+
+
+def collect_recommended_lazy_modules(tree: ast.AST) -> list[str]:
+    """Return a sorted ``__lazy_modules__`` recommendation for ``tree``."""
+    recommended_modules: list[str] = []
+    for binding in _collect_recommended_lazy_bindings(tree):
+        package = binding.package
+        if package is None:
+            continue
+        recommended_modules.append(package)
+    return sorted(recommended_modules)
+
+
+def collect_missing_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
+    """Return lazy-capable packages missing from ``__lazy_modules__``."""
+    lazy_modules = collect_lazy_packages(tree)
+    missing: list[tuple[str, int, int]] = []
+    for binding in _collect_recommended_lazy_bindings(tree):
+        package = binding.package
+        if package is None or package in lazy_modules:
+            continue
+        missing.append((package, binding.lineno, binding.col_offset))
     return missing
 
 
@@ -983,3 +1007,17 @@ def collect_errors_for_file(path: str | Path) -> list[tuple[int, int, str]]:
     tree = ast.parse(source, filename=str(item))
     checker = LazyImportChecker(tree=tree, filename=str(item))
     return [(line, col, message) for line, col, message, _checker in checker.run()]
+
+
+def collect_recommended_lazy_modules_for_file(path: str | Path) -> list[str]:
+    """Return a sorted ``__lazy_modules__`` recommendation for a file."""
+    item = Path(path)
+    try:
+        with tokenize.open(item) as f:
+            source = f.read()
+    except UnicodeDecodeError as exc:
+        if sys.version_info >= (3, 11):
+            exc.add_note(f"while reading {item}")
+        raise
+    tree = ast.parse(source, filename=str(item))
+    return collect_recommended_lazy_modules(tree)
