@@ -57,6 +57,7 @@ def main(argv: list[str] | None = None) -> None:
 
         if (
             namespace.format == "lazy-modules"
+            and recommended_modules
             and declared_modules != recommended_modules
         ):
             sys.stdout.write(f"{_format_lazy_modules(path, recommended_modules)}\n")

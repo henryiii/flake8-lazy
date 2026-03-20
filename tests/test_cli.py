@@ -139,6 +139,20 @@ def test_main_outputs_lazy_modules_format_for_clean_file(
     assert captured.err == ""
 
 
+def test_main_outputs_lazy_modules_format_skips_empty_recommendation(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import pathlib\nBASE = pathlib.Path.home()\n", encoding="utf-8")
+
+    main(["--format", "lazy-modules", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
 def test_main_passes_when_file_is_configured(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
