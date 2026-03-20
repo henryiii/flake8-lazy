@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import (
     __version__,
+    collect_declared_lazy_modules_for_file,
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
@@ -40,6 +41,7 @@ def main(argv: list[str] | None = None) -> None:
         try:
             errors = collect_errors_for_file(path)
             recommended_modules = collect_recommended_lazy_modules_for_file(path)
+            declared_modules = collect_declared_lazy_modules_for_file(path)
         except OSError as exc:
             sys.stderr.write(f"{path}:0:0: LZY000 failed to read file ({exc})\n")
             found_errors = True
@@ -53,7 +55,11 @@ def main(argv: list[str] | None = None) -> None:
             found_errors = True
             continue
 
-        if namespace.format == "lazy-modules":
+        if (
+            namespace.format == "lazy-modules"
+            and recommended_modules
+            and declared_modules != recommended_modules
+        ):
             sys.stdout.write(f"{_format_lazy_modules(path, recommended_modules)}\n")
 
         for lineno, col_offset, message in errors:

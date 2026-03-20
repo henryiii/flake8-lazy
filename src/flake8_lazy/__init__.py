@@ -19,6 +19,8 @@ __version__ = importlib.metadata.version("flake8-lazy")
 __all__ = [
     "LazyImportChecker",
     "__version__",
+    "collect_declared_lazy_modules",
+    "collect_declared_lazy_modules_for_file",
     "collect_errors_for_file",
     "collect_recommended_lazy_modules",
     "collect_recommended_lazy_modules_for_file",
@@ -505,6 +507,35 @@ def _parse_lazy_module_set(node: ast.AST) -> set[str] | None:
     if parsed is None:
         return None
     return set(parsed)
+
+
+def collect_declared_lazy_modules(tree: ast.AST) -> list[str] | None:
+    """Return the last static ``__lazy_modules__`` declaration, if present."""
+    if not isinstance(tree, ast.Module):
+        return None
+
+    declared: list[str] | None = None
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            if any(
+                isinstance(target, ast.Name) and target.id == "__lazy_modules__"
+                for target in node.targets
+            ):
+                parsed_assign = _parse_lazy_module_list(node.value)
+                if parsed_assign is not None:
+                    declared = parsed_assign
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "__lazy_modules__"
+        ):
+            parsed_annassign = (
+                _parse_lazy_module_list(node.value) if node.value is not None else None
+            )
+            if parsed_annassign is not None:
+                declared = parsed_annassign
+
+    return declared
 
 
 def collect_lazy_packages(tree: ast.AST) -> set[str]:
@@ -1029,3 +1060,17 @@ def collect_recommended_lazy_modules_for_file(path: str | Path) -> list[str]:
         raise
     tree = ast.parse(source, filename=str(item))
     return collect_recommended_lazy_modules(tree)
+
+
+def collect_declared_lazy_modules_for_file(path: str | Path) -> list[str] | None:
+    """Return the last static ``__lazy_modules__`` declaration for a file."""
+    item = Path(path)
+    try:
+        with tokenize.open(item) as f:
+            source = f.read()
+    except UnicodeDecodeError as exc:
+        if sys.version_info >= (3, 11):
+            exc.add_note(f"while reading {item}")
+        raise
+    tree = ast.parse(source, filename=str(item))
+    return collect_declared_lazy_modules(tree)
