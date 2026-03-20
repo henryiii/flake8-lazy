@@ -6,7 +6,16 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import __version__, collect_errors_for_file
+from . import (
+    __version__,
+    collect_errors_for_file,
+    collect_recommended_lazy_modules_for_file,
+)
+
+
+def _format_lazy_modules(path: Path, modules: list[str]) -> str:
+    joined_modules = ", ".join(f'"{module}"' for module in modules)
+    return f"{path}: __lazy_modules__ = [{joined_modules}]"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -18,12 +27,19 @@ def main(argv: list[str] | None = None) -> None:
         action="version",
         version=f"%(prog)s {__version__}",
     )
+    parser.add_argument(
+        "--format",
+        choices=("flake8", "lazy-modules"),
+        default="flake8",
+        help="output style for results",
+    )
     namespace = parser.parse_args(list(argv) if argv is not None else None)
 
     found_errors = False
     for path in namespace.files:
         try:
             errors = collect_errors_for_file(path)
+            recommended_modules = collect_recommended_lazy_modules_for_file(path)
         except OSError as exc:
             sys.stderr.write(f"{path}:0:0: LZY000 failed to read file ({exc})\n")
             found_errors = True
@@ -37,8 +53,12 @@ def main(argv: list[str] | None = None) -> None:
             found_errors = True
             continue
 
+        if namespace.format == "lazy-modules":
+            sys.stdout.write(f"{_format_lazy_modules(path, recommended_modules)}\n")
+
         for lineno, col_offset, message in errors:
-            sys.stdout.write(f"{path}:{lineno}:{col_offset}: {message}\n")
+            if namespace.format == "flake8":
+                sys.stdout.write(f"{path}:{lineno}:{col_offset}: {message}\n")
             found_errors = True
 
     if found_errors:

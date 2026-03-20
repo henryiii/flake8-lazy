@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import ast
 import sys
 from typing import TYPE_CHECKING
 
 import pytest
 
-from flake8_lazy import collect_errors_for_file
+from flake8_lazy import (
+    collect_errors_for_file,
+    collect_recommended_lazy_modules,
+)
 from flake8_lazy.__main__ import main
 
 if TYPE_CHECKING:
@@ -73,6 +77,54 @@ def test_main_outputs_lzy102_and_exits_nonzero(
         f"{path}:1:0: LZY102 module 'numpy' should be listed in __lazy_modules__"
         in output
     )
+
+
+def test_collect_recommended_lazy_modules_sorts_and_filters() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["unused"]
+import requests
+import pathlib
+
+HOME = pathlib.Path.home()
+""",
+    )
+
+    assert collect_recommended_lazy_modules(tree) == ["requests"]
+
+
+def test_main_outputs_lazy_modules_format_and_exits_nonzero(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import pandas\nimport numpy\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--format", "lazy-modules", str(path)])
+
+    assert excinfo.value.code == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == f'{path}: __lazy_modules__ = ["numpy", "pandas"]\n'
+    assert captured.err == ""
+
+
+def test_main_outputs_lazy_modules_format_for_clean_file(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ["numpy"]\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--format", "lazy-modules", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == f'{path}: __lazy_modules__ = ["numpy"]\n'
+    assert captured.err == ""
 
 
 def test_main_passes_when_file_is_configured(

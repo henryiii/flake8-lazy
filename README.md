@@ -7,7 +7,7 @@
 [![PyPI platforms][pypi-platforms]][pypi-link]
 
 flake8-lazy is a flake8 plugin that finds imports which can be made lazy in
-Python 3.15.
+Python 3.15 (following [PEP 810](https://peps.python.org/pep-0810/)).
 
 flake8-lazy helps keep import-time overhead low by detecting imports that can be
 declared as lazy in `__lazy_modules__`. For this package itself,
@@ -118,11 +118,25 @@ flake8-lazy path/to/file.py another_file.py
 uvx flake8-lazy path/to/file.py another_file.py
 ```
 
-Output format matches flake8-style diagnostics:
+The default output format matches flake8-style diagnostics:
 
 ```text
 path/to/file.py:12:0: LZY102 module 'numpy' should be listed in __lazy_modules__
 ```
+
+You can also ask for a copy-pasteable recommendation instead:
+
+```bash
+flake8-lazy --format lazy-modules path/to/file.py
+```
+
+```text
+path/to/file.py: __lazy_modules__ = ["numpy", "pandas"]
+```
+
+This prints the sorted `__lazy_modules__` value the checker recommends for each
+file. The command still exits with status code `1` if the file has any
+diagnostics.
 
 The command exits with status code `1` if any error is found.
 
