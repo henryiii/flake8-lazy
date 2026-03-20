@@ -49,6 +49,8 @@ pipx run flake8-lazy <filenames>
 - `LZY202`: Module listed in `__lazy_modules__` is never imported
 - `LZY203`: Module listed in `__lazy_modules__` appears more than once
 - `LZY204`: `__lazy_modules__` is assigned after importing modules it names
+- `LZY205`: Module name in `__lazy_modules__` is relative (`.name`) instead of
+  absolute
 
 ### 3xx: Native `lazy` keyword (Python 3.15+)
 
@@ -105,8 +107,7 @@ __lazy_modules__ = ["email"]  # Not enough
 This emits `LZY101`; the required entry is `"email.header"`. PEP 810 requires
 full module names.
 
-Missing relative imports are mentioned as `.name`, but you need to list the full
-name, or generate the full name dynamically if you support embedding (rare).
+Missing relative imports use `f"{__spec__.parent}.name"`.
 
 ## CLI
 
