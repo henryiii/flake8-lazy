@@ -62,6 +62,9 @@ docs = [
 source-include = [
   "tests/*.py",
 ]
+source-exclude = [
+  "*.swp",
+]
 
 
 [tool.pytest]

@@ -867,17 +867,15 @@ def _collect_recommended_lazy_bindings(tree: ast.AST) -> list[_ImportBinding]:
             continue
         if binding.package == "__future__":
             continue
-        if binding.package in side_effect_packages:
-            continue
-        if binding.package in guard_packages:
-            continue
-        if binding.package in non_lazy_packages:
-            continue
-        if binding.bound_name in non_lazy_names:
-            continue
-        if binding.bound_name in guard_names:
-            continue
-        if binding.package in seen_packages:
+        if (
+            binding.package
+            in side_effect_packages
+            | guard_packages
+            | non_lazy_packages
+            | non_lazy_names
+            | guard_names
+            | seen_packages
+        ):
             continue
         recommended.append(binding)
         seen_packages.add(binding.package)
