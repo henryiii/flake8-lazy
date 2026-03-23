@@ -882,6 +882,35 @@ def _collect_recommended_lazy_bindings(tree: ast.AST) -> list[_ImportBinding]:
         recommended.append(binding)
         seen_packages.add(binding.package)
 
+        # If the import is a dotted submodule (e.g. `a.b`), also consider
+        # recommending the parent/root package (e.g. `a`) for laziness — but
+        # only when the parent itself is eligible (not used at top level,
+        # not a side-effect-only package, and not already seen).
+        # Only split real dotted module names; skip f-string/relative
+        # package representations (they contain '{' or are formatted
+        # f-strings) which would not yield a valid module name when
+        # split.
+        if "." in binding.package and "{" not in binding.package:
+            root = binding.package.split(".", maxsplit=1)[0]
+            if (
+                root not in seen_packages
+                and root not in side_effect_packages
+                and root not in guard_packages
+                and root not in non_lazy_packages
+            ):
+                # Create a synthetic binding for the root package so callers
+                # (eg. recommendations) can include it. Use the same location
+                # info as the original binding.
+                recommended.append(
+                    _ImportBinding(
+                        package=root,
+                        bound_name=root,
+                        lineno=binding.lineno,
+                        col_offset=binding.col_offset,
+                    )
+                )
+                seen_packages.add(root)
+
     return recommended
 
 
