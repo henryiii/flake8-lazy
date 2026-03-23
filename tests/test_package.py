@@ -272,10 +272,14 @@ def process() -> None:
     errors = list(checker.run())
 
     lzy10x_errors = [e for e in errors if e[2].startswith(("LZY101", "LZY102"))]
-    assert len(lzy10x_errors) == 1
+    assert len(lzy10x_errors) == 2
     assert (
         lzy10x_errors[0][2]
         == "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
+    )
+    assert (
+        lzy10x_errors[1][2]
+        == "LZY101 stdlib module 'email' should be listed in __lazy_modules__"
     )
 
 
@@ -291,10 +295,14 @@ import email.header as eh
     errors = list(checker.run())
 
     lzy10x_errors = [e for e in errors if e[2].startswith(("LZY101", "LZY102"))]
-    assert len(lzy10x_errors) == 1
+    assert len(lzy10x_errors) == 2
     assert (
         lzy10x_errors[0][2]
         == "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
+    )
+    assert (
+        lzy10x_errors[1][2]
+        == "LZY101 stdlib module 'email' should be listed in __lazy_modules__"
     )
 
 
