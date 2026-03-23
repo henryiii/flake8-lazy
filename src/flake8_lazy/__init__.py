@@ -224,11 +224,14 @@ def _relative_parent_level(node: ast.AST) -> int | None:
                     ),
                     attr="rsplit",
                 ),
-                args=[ast.Constant(value="."), ast.Constant(value=level_minus_one)],
+                args=[
+                    ast.Constant(value="."),
+                    ast.Constant(value=int() as level_minus_one),
+                ],
                 keywords=[],
             ),
             slice=ast.Constant(value=0),
-        ) if isinstance(level_minus_one, int):
+        ):
             return level_minus_one + 1
         case _:
             return None
@@ -243,9 +246,9 @@ def _parse_relative_lazy_module(node: ast.JoinedStr) -> str | None:
                     conversion=-1,
                     format_spec=None,
                 ),
-                ast.Constant(value=suffix),
+                ast.Constant(value=str() as suffix),
             ],
-        ) if isinstance(suffix, str) and suffix.startswith("."):
+        ) if suffix.startswith("."):
             level = _relative_parent_level(expression)
             if level is None:
                 return None
@@ -269,9 +272,13 @@ def _package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | No
     match node:
         case ast.ImportFrom(module=None):
             return None
-        case ast.ImportFrom(module=module, level=0) if isinstance(module, str):
-            return module.split(".", maxsplit=1)[0]
-        case ast.ImportFrom(module=module, level=level) if isinstance(module, str):
+        case ast.ImportFrom(module=str() as module, level=0):
+            # For `from package.module import name` return the full
+            # module path (e.g. ``cibuildwheel.logger``) so that
+            # submodules are preserved when recommending
+            # ``__lazy_modules__`` entries.
+            return module
+        case ast.ImportFrom(module=str() as module, level=level):
             root_module = module.split(".", maxsplit=1)[0]
             return _relative_import_package_name(level=level, root_module=root_module)
         case _:
@@ -622,7 +629,7 @@ def _parse_lazy_module_list(node: ast.AST) -> list[str] | None:
     modules: list[str] = []
     for element in elements:
         match element:
-            case ast.Constant(value=value) if isinstance(value, str):
+            case ast.Constant(value=str() as value):
                 modules.append(value)
             case ast.JoinedStr():
                 parsed_relative = _parse_relative_lazy_module(element)
@@ -825,8 +832,8 @@ def collect_invalid_lazy_module_names(tree: ast.AST) -> list[tuple[str, int, int
                 for element in elements:
                     match element:
                         case ast.Constant(
-                            value=value, lineno=lineno, col_offset=col_offset
-                        ) if isinstance(value, str) and value.startswith("."):
+                            value=str() as value, lineno=lineno, col_offset=col_offset
+                        ) if value.startswith("."):
                             invalid.append((value, lineno, col_offset))
                         case _:
                             continue
