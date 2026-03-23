@@ -105,6 +105,26 @@ def fn() -> None:
     assert m.collect_non_lazy_imports(tree) == ["la", "P"]
 
 
+def test_recommended_includes_import_from_submodule() -> None:
+    tree = ast.parse(
+        """
+import cibuildwheel
+import cibuildwheel.util
+from cibuildwheel.logger import log
+
+def fn() -> None:
+    cibuildwheel.util.do_something()
+    log("Hello")
+""",
+    )
+
+    assert m.collect_recommended_lazy_modules(tree) == [
+        "cibuildwheel",
+        "cibuildwheel.logger",
+        "cibuildwheel.util",
+    ]
+
+
 def test_collect_non_lazy_imports_detects_class_decorator_usage() -> None:
     tree = ast.parse(
         """
