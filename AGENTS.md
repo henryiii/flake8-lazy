@@ -39,6 +39,8 @@ The CLI tools `uv`, `prek`, and `nox` should be pre-installed as Python tools.
   issues the faster checks can't.
 - Docs are build with `nox -s docs --non-interactive`, and uses Zensical, a new
   tool that is very, very similar to mkdocs.
+- You can run this on itself with `nox -s selfcheck`, which should be done if
+  imports change.
 
 ## Testing instructions
 
