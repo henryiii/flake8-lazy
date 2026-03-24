@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__lazy_modules__ = [f"{__spec__.parent}.ast_helpers"]
+
 import ast
 
 from .ast_helpers import (

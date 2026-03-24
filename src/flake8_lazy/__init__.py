@@ -5,6 +5,13 @@ flake8-lazy: Detect imports that can be lazy
 
 from __future__ import annotations
 
+__lazy_modules__ = [
+    f"{__spec__.parent}.analysis",
+    f"{__spec__.parent}.api",
+    f"{__spec__.parent}.checker",
+    f"{__spec__.parent}.visitors",
+]
+
 import importlib.metadata
 
 from .analysis import (

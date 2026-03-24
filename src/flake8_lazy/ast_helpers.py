@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__lazy_modules__ = ["ast", "pathlib", "sys"]
+
 import ast
 import sys
 from pathlib import Path

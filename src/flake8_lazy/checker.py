@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+__lazy_modules__ = [
+    f"{__spec__.parent}.analysis",
+    "importlib",
+    "importlib.metadata",
+    "sys",
+]
+
 import importlib.metadata
 import sys
 from typing import TYPE_CHECKING
