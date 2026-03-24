@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-__lazy_modules__ = ["argparse", "pathlib", "sys"]
+__lazy_modules__ = ["argparse", "flake8_lazy.rewriter", "pathlib", "sys"]
 
 import argparse
 import sys
 from pathlib import Path
 
-from . import (
+from flake8_lazy import (
     __version__,
     collect_declared_lazy_modules_for_file,
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
+from flake8_lazy.rewriter import apply_lazy_modules
 
 
 def _format_lazy_modules(path: Path, modules: list[str]) -> str:
@@ -39,14 +40,23 @@ def main(argv: list[str] | None = None) -> None:
         default="flake8",
         help="output style for results",
     )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="rewrite files to use the recommended __lazy_modules__ declaration",
+    )
     namespace = parser.parse_args(list(argv) if argv is not None else None)
 
     found_errors = False
     for path in namespace.files:
         try:
-            errors = collect_errors_for_file(path)
             recommended_modules = collect_recommended_lazy_modules_for_file(path)
             declared_modules = collect_declared_lazy_modules_for_file(path)
+            if namespace.apply and declared_modules != recommended_modules:
+                apply_lazy_modules(path, recommended_modules)
+                recommended_modules = collect_recommended_lazy_modules_for_file(path)
+                declared_modules = collect_declared_lazy_modules_for_file(path)
+            errors = collect_errors_for_file(path)
         except OSError as exc:
             sys.stderr.write(f"{path}:0:0: LZY000 failed to read file ({exc})\n")
             found_errors = True
