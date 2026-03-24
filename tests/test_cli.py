@@ -286,3 +286,68 @@ def test_main_passes_when_file_is_configured(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
+
+
+def test_main_apply_replaces_existing_lazy_modules(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ["unused"]\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ["numpy"]\nimport numpy\n'
+    )
+
+
+def test_main_apply_inserts_after_comments_and_docstring(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "# SPDX-License-Identifier: BSD-3-Clause\n"
+        '"""Module docs."""\n\n'
+        "import pandas\n",
+        encoding="utf-8",
+    )
+
+    main(["--apply", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '# SPDX-License-Identifier: BSD-3-Clause\n"""Module docs."""\n\n'
+        '__lazy_modules__ = ["pandas"]\n\nimport pandas\n'
+    )
+
+
+def test_main_apply_inserts_after_future_annotations_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from __future__ import annotations\n\nimport requests\n",
+        encoding="utf-8",
+    )
+
+    main(["--apply", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        "from __future__ import annotations\n"
+        '__lazy_modules__ = ["requests"]\n\n'
+        "import requests\n"
+    )
