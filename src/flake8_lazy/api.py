@@ -4,7 +4,7 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "ast",
-    f"{__spec__.parent}.analysis",
+    f"{__spec__.parent}._analysis",
     f"{__spec__.parent}.checker",
     "pathlib",
     "sys",
@@ -16,8 +16,14 @@ import sys
 import tokenize
 from pathlib import Path
 
-from .analysis import collect_declared_lazy_modules, collect_recommended_lazy_modules
+from ._analysis import collect_declared_lazy_modules, collect_recommended_lazy_modules
 from .checker import LazyImportChecker
+
+__all__ = [
+    "collect_declared_lazy_modules_for_file",
+    "collect_errors_for_file",
+    "collect_recommended_lazy_modules_for_file",
+]
 
 
 def collect_errors_for_file(path: str | Path) -> list[tuple[int, int, str]]:

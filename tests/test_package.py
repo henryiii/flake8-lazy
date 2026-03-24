@@ -6,7 +6,18 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-import flake8_lazy as m
+from flake8_lazy import LazyImportChecker
+from flake8_lazy._analysis import (
+    collect_lazy_packages,
+    collect_recommended_lazy_modules,
+    collect_side_effect_only_import_packages,
+    collect_unnecessary_lazy_imports,
+)
+from flake8_lazy._visitors import (
+    collect_non_lazy_imports,
+    collect_strictly_top_level_names,
+    collect_top_level_imports,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,7 +40,7 @@ class Example:
 """,
     )
 
-    imports = m.collect_top_level_imports(tree)
+    imports = collect_top_level_imports(tree)
 
     assert len(imports) == 3
     assert isinstance(imports[0], ast.Import)
@@ -50,7 +61,7 @@ lazy from pathlib import Path
 """,
     )
 
-    imports = m.collect_top_level_imports(tree)
+    imports = collect_top_level_imports(tree)
 
     assert len(imports) == 1
     assert isinstance(imports[0], ast.Import)
@@ -68,7 +79,7 @@ def func() -> None:
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
 
     assert list(checker.run()) == []
 
@@ -88,7 +99,7 @@ class C:
 """,
     )
 
-    assert m.collect_non_lazy_imports(tree) == ["os"]
+    assert collect_non_lazy_imports(tree) == ["os"]
 
 
 def test_collect_non_lazy_imports_handles_aliases_and_from_imports() -> None:
@@ -106,7 +117,7 @@ def fn() -> None:
 """,
     )
 
-    assert m.collect_non_lazy_imports(tree) == ["la", "P"]
+    assert collect_non_lazy_imports(tree) == ["la", "P"]
 
 
 def test_recommended_includes_import_from_submodule() -> None:
@@ -122,7 +133,7 @@ def fn() -> None:
 """,
     )
 
-    assert m.collect_recommended_lazy_modules(tree) == [
+    assert collect_recommended_lazy_modules(tree) == [
         "cibuildwheel",
         "cibuildwheel.logger",
         "cibuildwheel.util",
@@ -142,7 +153,7 @@ class Item:
 """,
     )
 
-    assert m.collect_non_lazy_imports(tree) == ["dataclass"]
+    assert collect_non_lazy_imports(tree) == ["dataclass"]
 
 
 def test_collect_non_lazy_imports_detects_class_base_usage() -> None:
@@ -157,7 +168,7 @@ class Visitor(ast.NodeVisitor):
 """,
     )
 
-    assert m.collect_non_lazy_imports(tree) == ["ast"]
+    assert collect_non_lazy_imports(tree) == ["ast"]
 
 
 def test_collect_lazy_packages() -> None:
@@ -167,7 +178,7 @@ __lazy_modules__ = ["numpy", "pandas"]
 """,
     )
 
-    assert m.collect_lazy_packages(tree) == {"numpy", "pandas"}
+    assert collect_lazy_packages(tree) == {"numpy", "pandas"}
 
 
 def test_checker_emits_lzy102_for_missing_lazy_packages() -> None:
@@ -182,7 +193,7 @@ value = metrics
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     assert len(errors) == 1
@@ -199,7 +210,7 @@ import os
 
     # logging.config is a dotted unaliased import and logging is never loaded;
     # os is a plain import so it is not side-effect-only.
-    result = m.collect_side_effect_only_import_packages(tree)
+    result = collect_side_effect_only_import_packages(tree)
 
     assert result == {"logging.config"}
 
@@ -214,7 +225,7 @@ logging.basicConfig()
     )
 
     # `logging` is loaded via attribute access, so the import is NOT side-effect-only.
-    result = m.collect_side_effect_only_import_packages(tree)
+    result = collect_side_effect_only_import_packages(tree)
 
     assert result == set()
 
@@ -227,7 +238,7 @@ import logging.config as lc
     )
 
     # `as lc` means the caller intends to use the binding explicitly.
-    result = m.collect_side_effect_only_import_packages(tree)
+    result = collect_side_effect_only_import_packages(tree)
 
     assert result == set()
 
@@ -241,7 +252,7 @@ import email.header
 
     # email.header is a stdlib dotted import and email is never used
     # — treat it as a side-effect import and emit no LZY101 error.
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
 
     assert list(checker.run()) == []
 
@@ -254,7 +265,7 @@ import pkg.plugin
     )
 
     # pkg.plugin is a dotted import whose bound name pkg is never used.
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
 
     lzy10x_errors = [e for e in checker.run() if e[2].startswith(("LZY101", "LZY102"))]
     assert lzy10x_errors == []
@@ -272,7 +283,7 @@ def process() -> None:
 
     # `email` is used inside a function, so it is not side-effect-only
     # (it IS in all loaded names) and should still be flagged as LZY101.
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy10x_errors = [e for e in errors if e[2].startswith(("LZY101", "LZY102"))]
@@ -295,7 +306,7 @@ import email.header as eh
     )
 
     # The `as` alias signals intentional use of the binding; not side-effect-only.
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy10x_errors = [e for e in errors if e[2].startswith(("LZY101", "LZY102"))]
@@ -317,7 +328,7 @@ from __future__ import annotations
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
 
     assert list(checker.run()) == []
 
@@ -333,7 +344,7 @@ if typing.TYPE_CHECKING:
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     assert len(errors) == 1
@@ -351,7 +362,7 @@ if TYPE_CHECKING:
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     assert len(errors) == 1
@@ -371,7 +382,7 @@ def process() -> None:
 
     # A child import satisfies the parent package entry in __lazy_modules__.
     # Only the nested module still needs its own lazy declaration.
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     assert len(errors) == 1
@@ -388,7 +399,7 @@ import zoneinfo
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     assert len(errors) == 1
@@ -405,7 +416,7 @@ import numpy
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     assert len(errors) == 1
@@ -426,7 +437,7 @@ def fn(x: Any) -> Any:
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
 
     assert list(checker.run()) == []
 
@@ -442,7 +453,7 @@ def fn(x: Any) -> Any:
     return x
 """,
     )
-    checker_without_lazy = m.LazyImportChecker(
+    checker_without_lazy = LazyImportChecker(
         tree=tree_without_lazy,
         filename="example.py",
     )
@@ -464,7 +475,7 @@ def fn(x: Any) -> Any:
     return x
 """,
     )
-    checker_with_lazy = m.LazyImportChecker(tree=tree_with_lazy, filename="example.py")
+    checker_with_lazy = LazyImportChecker(tree=tree_with_lazy, filename="example.py")
     messages_with_lazy = [error[2] for error in checker_with_lazy.run()]
 
     assert (
@@ -480,7 +491,7 @@ from .local import helper
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     assert len(errors) == 1
@@ -497,7 +508,7 @@ from . import helper
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
 
     assert list(checker.run()) == []
 
@@ -509,7 +520,7 @@ __lazy_modules__ = ["zlib", "abc"]
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy201_errors = [e for e in errors if e[2].startswith("LZY201")]
@@ -518,7 +529,7 @@ __lazy_modules__ = ["zlib", "abc"]
             2,
             0,
             "LZY201 __lazy_modules__ should be sorted",
-            m.LazyImportChecker,
+            LazyImportChecker,
         ),
     ]
 
@@ -530,7 +541,7 @@ __lazy_modules__ = ["abc", "zlib"]
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy201_errors = [e for e in errors if e[2].startswith("LZY201")]
@@ -545,7 +556,7 @@ import numpy
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     assert len(errors) == 1
@@ -564,7 +575,7 @@ import pandas
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
 
     assert list(checker.run()) == []
 
@@ -577,7 +588,7 @@ import packaging.version
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy202_errors = [e for e in errors if e[2].startswith("LZY202")]
@@ -592,7 +603,7 @@ __lazy_modules__: List[str] = ["numpy"]
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy202_errors = [e for e in errors if e[2].startswith("LZY202")]
@@ -611,7 +622,7 @@ import numpy
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy203_errors = [e for e in errors if e[2].startswith("LZY203")]
@@ -620,7 +631,7 @@ import numpy
             2,
             0,
             "LZY203 module 'numpy' is duplicated in __lazy_modules__",
-            m.LazyImportChecker,
+            LazyImportChecker,
         ),
     ]
 
@@ -634,7 +645,7 @@ import pandas
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy203_messages = [e[2] for e in errors if e[2].startswith("LZY203")]
@@ -652,7 +663,7 @@ __lazy_modules__ = ["numpy"]
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy204_errors = [e for e in errors if e[2].startswith("LZY204")]
@@ -662,7 +673,7 @@ __lazy_modules__ = ["numpy"]
             0,
             "LZY204 __lazy_modules__ should be assigned "
             "before importing modules it names",
-            m.LazyImportChecker,
+            LazyImportChecker,
         ),
     ]
 
@@ -675,7 +686,7 @@ import numpy
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy204_errors = [e for e in errors if e[2].startswith("LZY204")]
@@ -691,7 +702,7 @@ import numpy
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy204_errors = [e for e in errors if e[2].startswith("LZY204")]
@@ -707,7 +718,7 @@ import numpy
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy204_errors = [e for e in errors if e[2].startswith("LZY204")]
@@ -721,7 +732,7 @@ __lazy_modules__ = [".local"]
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy205_errors = [e for e in errors if e[2].startswith("LZY205")]
@@ -730,7 +741,7 @@ __lazy_modules__ = [".local"]
             2,
             20,
             "LZY205 module '.local' in __lazy_modules__ must be absolute",
-            m.LazyImportChecker,
+            LazyImportChecker,
         ),
     ]
 
@@ -742,7 +753,7 @@ __lazy_modules__ = [f"{__spec__.parent}.local"]
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy205_errors = [e for e in errors if e[2].startswith("LZY205")]
@@ -762,7 +773,7 @@ if condition:
 """,
     )
 
-    names = m.collect_strictly_top_level_names(tree)
+    names = collect_strictly_top_level_names(tree)
 
     assert "re" in names
     assert "os" not in names
@@ -792,7 +803,7 @@ except Exception:
 """,
     )
 
-    names = m.collect_strictly_top_level_names(tree)
+    names = collect_strictly_top_level_names(tree)
 
     assert "a" not in names
     assert "b" not in names
@@ -810,7 +821,7 @@ REGEX = re.compile(".")
 """,
     )
 
-    result = m.collect_unnecessary_lazy_imports(tree)
+    result = collect_unnecessary_lazy_imports(tree)
 
     assert len(result) == 1
     assert result[0][0] == "re"
@@ -827,7 +838,7 @@ if __name__ == "__main__":
 """,
     )
 
-    result = m.collect_unnecessary_lazy_imports(tree)
+    result = collect_unnecessary_lazy_imports(tree)
 
     assert result == []
 
@@ -844,7 +855,7 @@ def test_collect_unnecessary_lazy_imports_ignores_enclosing_packages(
     path.write_text(source, encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
 
-    result = m.collect_unnecessary_lazy_imports(tree)
+    result = collect_unnecessary_lazy_imports(tree)
 
     assert result == []
 
@@ -859,7 +870,7 @@ REGEX = re.compile(".")
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
@@ -881,7 +892,7 @@ if __name__ == "__main__":
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
@@ -900,7 +911,7 @@ def test_checker_emits_lzy402_for_enclosing_packages_declared_lazy(
     path.write_text(source, encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
 
-    checker = m.LazyImportChecker(tree=tree, filename=str(path))
+    checker = LazyImportChecker(tree=tree, filename=str(path))
     errors = list(checker.run())
 
     lzy402_errors = [e for e in errors if e[2].startswith("LZY402")]
@@ -933,7 +944,7 @@ def test_checker_emits_lzy402_for_enclosing_packages_with_native_lazy_import(
     path.write_text(source, encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
 
-    checker = m.LazyImportChecker(tree=tree, filename=str(path))
+    checker = LazyImportChecker(tree=tree, filename=str(path))
     errors = list(checker.run())
 
     lzy402_errors = [e for e in errors if e[2].startswith("LZY402")]
@@ -961,7 +972,7 @@ def func() -> None:
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
@@ -978,7 +989,7 @@ REGEX = regex.compile(".")
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
@@ -999,7 +1010,7 @@ REGEX = compile(".")
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
@@ -1023,7 +1034,7 @@ REGEX = re.compile(".")
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
@@ -1053,7 +1064,7 @@ with suppress(ImportError):
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy301_errors = [e for e in errors if e[2].startswith("LZY301")]
@@ -1078,7 +1089,7 @@ with contextlib.suppress(ImportError):
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy301_errors = [e for e in errors if e[2].startswith("LZY301")]
@@ -1103,7 +1114,7 @@ with suppress(ModuleNotFoundError):
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy301_errors = [e for e in errors if e[2].startswith("LZY301")]
@@ -1128,7 +1139,7 @@ with suppress(ImportError):
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy301_errors = [e for e in errors if e[2].startswith("LZY301")]
@@ -1149,7 +1160,7 @@ with suppress(ImportError):
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy301_errors = [e for e in errors if e[2].startswith("LZY301")]
@@ -1178,7 +1189,7 @@ lazy import numpy
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy302_errors = [e for e in errors if e[2].startswith("LZY302")]
@@ -1202,7 +1213,7 @@ lazy import numpy
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy302_errors = [e for e in errors if e[2].startswith("LZY302")]
@@ -1222,7 +1233,7 @@ lazy from numpy import linalg
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy302_errors = [e for e in errors if e[2].startswith("LZY302")]
@@ -1250,7 +1261,7 @@ lazy import numpy
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy303_errors = [e for e in errors if e[2].startswith("LZY303")]
@@ -1272,7 +1283,7 @@ lazy import numpy
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy303_errors = [e for e in errors if e[2].startswith("LZY303")]
@@ -1291,7 +1302,7 @@ lazy from numpy import random
 """,
     )
 
-    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
     lzy303_errors = [e for e in errors if e[2].startswith("LZY303")]

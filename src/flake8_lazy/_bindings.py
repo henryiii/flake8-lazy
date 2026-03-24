@@ -4,15 +4,22 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "ast",
-    f"{__spec__.parent}.ast_helpers",
-    f"{__spec__.parent}.visitors",
+    f"{__spec__.parent}._ast_helpers",
+    f"{__spec__.parent}._visitors",
 ]
 
 import ast
 from dataclasses import dataclass
 
-from .ast_helpers import _bound_name_for_import, _package_for_import_from
-from .visitors import collect_top_level_imports, collect_top_level_lazy_imports
+from ._ast_helpers import bound_name_for_import, package_for_import_from
+from ._visitors import collect_top_level_imports, collect_top_level_lazy_imports
+
+__all__ = [
+    "ImportBinding",
+    "collect_import_bindings",
+    "collect_top_level_import_bindings",
+    "collect_top_level_lazy_import_bindings",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,7 +32,7 @@ class ImportBinding:
     col_offset: int
 
 
-def _collect_import_bindings(
+def collect_import_bindings(
     imports: list[ast.Import | ast.ImportFrom],
 ) -> list[ImportBinding]:
     """Return package and bound-name details for import statements."""
@@ -36,7 +43,7 @@ def _collect_import_bindings(
                 bindings.extend(
                     ImportBinding(
                         package=alias.name,
-                        bound_name=_bound_name_for_import(alias, from_import=False),
+                        bound_name=bound_name_for_import(alias, from_import=False),
                         lineno=lineno,
                         col_offset=col_offset,
                     )
@@ -49,8 +56,8 @@ def _collect_import_bindings(
             ):
                 bindings.extend(
                     ImportBinding(
-                        package=_package_for_import_from(node, alias),
-                        bound_name=_bound_name_for_import(alias, from_import=True),
+                        package=package_for_import_from(node, alias),
+                        bound_name=bound_name_for_import(alias, from_import=True),
                         lineno=lineno,
                         col_offset=col_offset,
                     )
@@ -64,9 +71,9 @@ def _collect_import_bindings(
 
 def collect_top_level_lazy_import_bindings(tree: ast.AST) -> list[ImportBinding]:
     """Return package and bound-name details for natively-lazy module-scope imports."""
-    return _collect_import_bindings(collect_top_level_lazy_imports(tree))
+    return collect_import_bindings(collect_top_level_lazy_imports(tree))
 
 
 def collect_top_level_import_bindings(tree: ast.AST) -> list[ImportBinding]:
     """Return package and bound-name details for module-scope imports."""
-    return _collect_import_bindings(collect_top_level_imports(tree))
+    return collect_import_bindings(collect_top_level_imports(tree))

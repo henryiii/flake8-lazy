@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 __lazy_modules__ = [
-    f"{__spec__.parent}.analysis",
+    f"{__spec__.parent}._analysis",
     "importlib",
     "importlib.metadata",
     "sys",
@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import ast
 
-from .analysis import (
+from ._analysis import (
     collect_duplicate_lazy_modules,
     collect_enclosing_lazy_modules,
     collect_invalid_lazy_module_names,
@@ -29,6 +29,8 @@ from .analysis import (
     collect_unsorted_lazy_modules,
     collect_unused_lazy_modules,
 )
+
+__all__ = ["LazyImportChecker"]
 
 
 def _lazy_module_error_code(module: str) -> str:

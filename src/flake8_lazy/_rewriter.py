@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-__lazy_modules__ = ["ast", f"{__spec__.parent}.ast_helpers", "io", "tokenize"]
+__lazy_modules__ = ["ast", f"{__spec__.parent}._ast_helpers", "io", "tokenize"]
 
 import ast
 import io
 import tokenize
 from typing import TYPE_CHECKING
 
-from .ast_helpers import _is_lazy_modules_target
+from ._ast_helpers import is_lazy_modules_target
+
+__all__ = ["apply_lazy_modules"]
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -27,7 +29,7 @@ def _lazy_modules_assignment_line(modules: list[str]) -> str:
 def _is_lazy_modules_assignment(node: ast.stmt) -> bool:
     match node:
         case ast.Assign(targets=targets) if any(
-            _is_lazy_modules_target(target) for target in targets
+            is_lazy_modules_target(target) for target in targets
         ):
             return True
         case ast.AnnAssign(target=ast.Name(id="__lazy_modules__")):
