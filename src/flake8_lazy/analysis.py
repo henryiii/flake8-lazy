@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+__lazy_modules__ = [
+    "ast",
+    f"{__spec__.parent}.ast_helpers",
+    f"{__spec__.parent}.bindings",
+    f"{__spec__.parent}.visitors",
+]
+
 import ast
 from typing import TYPE_CHECKING
 
