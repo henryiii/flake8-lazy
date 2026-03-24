@@ -62,6 +62,13 @@ def docs(session: nox.Session) -> None:
         session.run("zensical", "build", "--clean", *session.posargs)
 
 
+@nox.session
+def selfcheck(session: nox.Session) -> None:
+    """Run flake8 with --select=LZY on the project itself."""
+    session.install("-e.", "flake8")
+    session.run("flake8", "--select=LZY", "src/", *session.posargs)
+
+
 @nox.session(default=False)
 def build(session: nox.Session) -> None:
     """Build an SDist and wheel."""

@@ -39,6 +39,9 @@ jobs:
       - name: Run Pylint
         run: uvx nox -s pylint -- --output-format=github
 
+      - name: Self-check with flake8 --select=LZY
+        run: uvx nox -s selfcheck
+
   checks:
     name: Check Python ${{ matrix.python-version }} on ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
