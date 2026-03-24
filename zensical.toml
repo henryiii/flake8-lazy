@@ -2,14 +2,16 @@
 site_name = "flake8-lazy"
 site_description = "Detect imports that can be lazy"
 site_author = "Henry Schreiner"
-copyright = """
-Copyright &copy; 2026 The authors
-"""
+repo_url = "https://github.com/henryiii/flake8-lazy"
+docs_dir = "docs"
+copyright = "&copy; 2026 Henry Schreiner"
 
 [project.theme]
 language = "en"
 features = [
     "announce.dismiss",
+    "content.action.edit",
+    "content.action.view",
     "content.code.annotate",
     "content.code.copy",
     "content.code.select",
@@ -26,17 +28,29 @@ features = [
     "navigation.tracking",
     "search.highlight",
 ]
+icon.repo = "fontawesome/brands/github"
 
+# Palette toggle for automatic mode
 [[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+# Palette toggle for light mode
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
 scheme = "default"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
+# Palette toggle for dark mode
 [[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
 scheme = "slate"
 toggle.icon = "lucide/moon"
-toggle.name = "Switch to light mode"
+toggle.name = "Switch to system preference"
 
+# GitHub link
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/henryiii/flake8-lazy"
