@@ -2,14 +2,23 @@
 site_name = "flake8-lazy"
 site_description = "Detect imports that can be lazy"
 site_author = "Henry Schreiner"
+repo_url = "https://github.com/henryiii/flake8-lazy"
+docs_dir = "docs"
 copyright = """
-Copyright &copy; 2026 The authors
+Copyright &copy; 2026 Henry Schreiner
 """
+
+[project]
+nav = [
+  {"GitHub Repo" = "https://github.com/henryiii/flake8-lazy"}
+]
 
 [project.theme]
 language = "en"
 features = [
     "announce.dismiss",
+    "content.action.edit",
+    "content.action.view",
     "content.code.annotate",
     "content.code.copy",
     "content.code.select",
@@ -26,6 +35,7 @@ features = [
     "navigation.tracking",
     "search.highlight",
 ]
+icon.repo = "fontawesome/brands/github"
 
 [[project.theme.palette]]
 scheme = "default"
