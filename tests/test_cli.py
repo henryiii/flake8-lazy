@@ -13,7 +13,7 @@ from flake8_lazy import (
     collect_recommended_lazy_modules_for_file,
 )
 from flake8_lazy.__main__ import main
-from flake8_lazy.rewriter import apply_lazy_modules
+from flake8_lazy._rewriter import apply_lazy_modules
 
 if TYPE_CHECKING:
     from pathlib import Path

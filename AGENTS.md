@@ -18,10 +18,10 @@ Some key files:
 - `src/flake8_lazy/`: Core package code
 - `src/flake8_lazy/__init__.py`: Public plugin and runner entry points
 - `src/flake8_lazy/checker.py`: Main flake8 checker implementation
-- `src/flake8_lazy/analysis.py`: Import analysis logic
+- `src/flake8_lazy/_analysis.py`: Import analysis logic
 - `src/flake8_lazy/api.py`: Public types and helper APIs
-- `src/flake8_lazy/visitors.py`: AST visitor implementations
-- `src/flake8_lazy/rewriter.py`: Source rewriting helpers for `--apply`
+- `src/flake8_lazy/_visitors.py`: AST visitor implementations
+- `src/flake8_lazy/_rewriter.py`: Source rewriting helpers for `--apply`
 - `src/flake8_lazy/__main__.py`: Standalone CLI entry point
 - `tests/test_package.py`: Package-level behavior tests
 - `tests/test_cli.py`: CLI behavior tests

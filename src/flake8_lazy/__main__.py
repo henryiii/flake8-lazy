@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__lazy_modules__ = ["argparse", "flake8_lazy.rewriter", "pathlib", "sys"]
+__lazy_modules__ = ["argparse", "flake8_lazy._rewriter", "pathlib", "sys"]
 
 import argparse
 import sys
@@ -12,7 +12,9 @@ from flake8_lazy import (
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
-from flake8_lazy.rewriter import apply_lazy_modules
+from flake8_lazy._rewriter import apply_lazy_modules
+
+__all__ = ["main"]
 
 
 def _format_lazy_modules(path: Path, modules: list[str]) -> str:

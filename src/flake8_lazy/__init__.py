@@ -6,15 +6,15 @@ flake8-lazy: Detect imports that can be lazy
 from __future__ import annotations
 
 __lazy_modules__ = [
-    f"{__spec__.parent}.analysis",
+    f"{__spec__.parent}._analysis",
+    f"{__spec__.parent}._visitors",
     f"{__spec__.parent}.api",
     f"{__spec__.parent}.checker",
-    f"{__spec__.parent}.visitors",
 ]
 
 import importlib.metadata
 
-from .analysis import (
+from ._analysis import (
     collect_declared_lazy_modules,
     collect_duplicate_lazy_modules,
     collect_enclosing_lazy_modules,
@@ -31,17 +31,17 @@ from .analysis import (
     collect_unsorted_lazy_modules,
     collect_unused_lazy_modules,
 )
+from ._visitors import (
+    collect_non_lazy_imports,
+    collect_strictly_top_level_names,
+    collect_top_level_imports,
+)
 from .api import (
     collect_declared_lazy_modules_for_file,
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
 from .checker import LazyImportChecker
-from .visitors import (
-    collect_non_lazy_imports,
-    collect_strictly_top_level_names,
-    collect_top_level_imports,
-)
 
 __version__ = importlib.metadata.version("flake8-lazy")
 

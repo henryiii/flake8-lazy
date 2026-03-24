@@ -8,12 +8,30 @@ import ast
 import sys
 from pathlib import Path
 
+__all__ = [
+    "bound_name_for_import",
+    "collect_loaded_names",
+    "containing_package_prefixes",
+    "is_import_error_name",
+    "is_lazy_import_node",
+    "is_lazy_modules_target",
+    "is_suppress_import_error_call",
+    "is_type_checking_guard",
+    "lazy_modules_assignment_value",
+    "package_for_import_from",
+    "parse_lazy_module_list",
+    "parse_relative_lazy_module",
+    "relative_import_package_name",
+    "relative_parent_expression",
+    "relative_parent_level",
+]
 
-def _is_lazy_import_node(node: ast.Import | ast.ImportFrom) -> bool:
+
+def is_lazy_import_node(node: ast.Import | ast.ImportFrom) -> bool:
     return False if sys.version_info < (3, 15) else bool(node.is_lazy)  # type: ignore[union-attr]
 
 
-def _is_type_checking_guard(node: ast.AST) -> bool:
+def is_type_checking_guard(node: ast.AST) -> bool:
     match node:
         case ast.Name(id="TYPE_CHECKING"):
             return True
@@ -23,7 +41,7 @@ def _is_type_checking_guard(node: ast.AST) -> bool:
             return False
 
 
-def _is_import_error_name(node: ast.AST) -> bool:
+def is_import_error_name(node: ast.AST) -> bool:
     match node:
         case ast.Name(id="ImportError" | "ModuleNotFoundError"):
             return True
@@ -31,21 +49,21 @@ def _is_import_error_name(node: ast.AST) -> bool:
             return False
 
 
-def _is_suppress_import_error_call(node: ast.expr) -> bool:
+def is_suppress_import_error_call(node: ast.expr) -> bool:
     """Return True if ``node`` is suppress(ImportError/ModuleNotFoundError)."""
     match node:
         case ast.Call(func=ast.Name(id="suppress"), args=args):
-            return any(_is_import_error_name(arg) for arg in args)
+            return any(is_import_error_name(arg) for arg in args)
         case ast.Call(
             func=ast.Attribute(value=ast.Name(id="contextlib"), attr="suppress"),
             args=args,
         ):
-            return any(_is_import_error_name(arg) for arg in args)
+            return any(is_import_error_name(arg) for arg in args)
         case _:
             return False
 
 
-def _collect_loaded_names(node: ast.AST) -> set[str]:
+def collect_loaded_names(node: ast.AST) -> set[str]:
     names: set[str] = set()
     for item in ast.walk(node):
         match item:
@@ -56,7 +74,7 @@ def _collect_loaded_names(node: ast.AST) -> set[str]:
     return names
 
 
-def _bound_name_for_import(alias: ast.alias, *, from_import: bool) -> str:
+def bound_name_for_import(alias: ast.alias, *, from_import: bool) -> str:
     if alias.asname is not None:
         return alias.asname
     if from_import:
@@ -64,18 +82,18 @@ def _bound_name_for_import(alias: ast.alias, *, from_import: bool) -> str:
     return alias.name.split(".", maxsplit=1)[0]
 
 
-def _relative_parent_expression(*, level: int) -> str:
+def relative_parent_expression(*, level: int) -> str:
     if level == 1:
         return "__spec__.parent"
     return f'__spec__.parent.rsplit(".", {level - 1})[0]'
 
 
-def _relative_import_package_name(*, level: int, root_module: str) -> str:
-    parent_expression = _relative_parent_expression(level=level)
+def relative_import_package_name(*, level: int, root_module: str) -> str:
+    parent_expression = relative_parent_expression(level=level)
     return f'f"{{{parent_expression}}}.{root_module}"'
 
 
-def _relative_parent_level(node: ast.AST) -> int | None:
+def relative_parent_level(node: ast.AST) -> int | None:
     match node:
         case ast.Attribute(value=ast.Name(id="__spec__"), attr="parent"):
             return 1
@@ -101,7 +119,7 @@ def _relative_parent_level(node: ast.AST) -> int | None:
             return None
 
 
-def _parse_relative_lazy_module(node: ast.JoinedStr) -> str | None:
+def parse_relative_lazy_module(node: ast.JoinedStr) -> str | None:
     match node:
         case ast.JoinedStr(
             values=[
@@ -113,7 +131,7 @@ def _parse_relative_lazy_module(node: ast.JoinedStr) -> str | None:
                 ast.Constant(value=str() as suffix),
             ],
         ) if suffix.startswith("."):
-            level = _relative_parent_level(expression)
+            level = relative_parent_level(expression)
             if level is None:
                 return None
 
@@ -121,12 +139,12 @@ def _parse_relative_lazy_module(node: ast.JoinedStr) -> str | None:
             if not root_module:
                 return None
 
-            return _relative_import_package_name(level=level, root_module=root_module)
+            return relative_import_package_name(level=level, root_module=root_module)
         case _:
             return None
 
 
-def _containing_package_prefixes(filename: str | Path | None) -> set[str]:
+def containing_package_prefixes(filename: str | Path | None) -> set[str]:
     """Return enclosing package names for a file based on ``__init__.py`` parents."""
     if filename is None:
         return set()
@@ -149,7 +167,7 @@ def _containing_package_prefixes(filename: str | Path | None) -> set[str]:
     }
 
 
-def _package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | None:
+def package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | None:
     match alias:
         case ast.alias(name="*"):
             return None
@@ -163,12 +181,12 @@ def _package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | No
             return module
         case ast.ImportFrom(module=str() as module, level=level):
             root_module = module.split(".", maxsplit=1)[0]
-            return _relative_import_package_name(level=level, root_module=root_module)
+            return relative_import_package_name(level=level, root_module=root_module)
         case _:
             return None
 
 
-def _is_lazy_modules_target(node: ast.AST) -> bool:
+def is_lazy_modules_target(node: ast.AST) -> bool:
     match node:
         case ast.Name(id="__lazy_modules__"):
             return True
@@ -176,10 +194,10 @@ def _is_lazy_modules_target(node: ast.AST) -> bool:
             return False
 
 
-def _lazy_modules_assignment_value(node: ast.AST) -> ast.AST | None:
+def lazy_modules_assignment_value(node: ast.AST) -> ast.AST | None:
     match node:
         case ast.Assign(targets=targets, value=value) if any(
-            _is_lazy_modules_target(target) for target in targets
+            is_lazy_modules_target(target) for target in targets
         ):
             return value
         case ast.AnnAssign(target=ast.Name(id="__lazy_modules__"), value=value):
@@ -188,7 +206,7 @@ def _lazy_modules_assignment_value(node: ast.AST) -> ast.AST | None:
             return None
 
 
-def _parse_lazy_module_list(node: ast.AST) -> list[str] | None:
+def parse_lazy_module_list(node: ast.AST) -> list[str] | None:
     match node:
         case ast.List(elts=elements):
             pass
@@ -201,7 +219,7 @@ def _parse_lazy_module_list(node: ast.AST) -> list[str] | None:
             case ast.Constant(value=str() as value):
                 modules.append(value)
             case ast.JoinedStr():
-                parsed_relative = _parse_relative_lazy_module(element)
+                parsed_relative = parse_relative_lazy_module(element)
                 if parsed_relative is None:
                     return None
                 modules.append(parsed_relative)

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "ast",
-    f"{__spec__.parent}.ast_helpers",
-    f"{__spec__.parent}.bindings",
-    f"{__spec__.parent}.visitors",
+    f"{__spec__.parent}._ast_helpers",
+    f"{__spec__.parent}._bindings",
+    f"{__spec__.parent}._visitors",
 ]
 
 import ast
@@ -15,26 +15,44 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
-from .ast_helpers import (
-    _containing_package_prefixes,
-    _is_lazy_import_node,
-    _is_suppress_import_error_call,
-    _lazy_modules_assignment_value,
-    _package_for_import_from,
-    _parse_lazy_module_list,
-    _parse_relative_lazy_module,
+from ._ast_helpers import (
+    containing_package_prefixes,
+    is_lazy_import_node,
+    is_suppress_import_error_call,
+    lazy_modules_assignment_value,
+    package_for_import_from,
+    parse_lazy_module_list,
+    parse_relative_lazy_module,
 )
-from .bindings import (
+from ._bindings import (
     ImportBinding,
     collect_top_level_import_bindings,
     collect_top_level_lazy_import_bindings,
 )
-from .visitors import (
+from ._visitors import (
     collect_non_lazy_imports,
     collect_strictly_top_level_names,
     collect_top_level_imports,
     collect_type_checking_guard_names,
 )
+
+__all__ = [
+    "collect_declared_lazy_modules",
+    "collect_duplicate_lazy_modules",
+    "collect_enclosing_lazy_modules",
+    "collect_invalid_lazy_module_names",
+    "collect_late_lazy_module_assignments",
+    "collect_lazy_imports_in_suppress_blocks",
+    "collect_lazy_packages",
+    "collect_missing_lazy_modules",
+    "collect_mixed_lazy_eager_imports",
+    "collect_recommended_lazy_modules",
+    "collect_redundant_lazy_declarations",
+    "collect_side_effect_only_import_packages",
+    "collect_unnecessary_lazy_imports",
+    "collect_unsorted_lazy_modules",
+    "collect_unused_lazy_modules",
+]
 
 
 def _lazy_import_entries(
@@ -48,7 +66,7 @@ def _lazy_import_entries(
             for alias in aliases:
                 if alias.name == "*":
                     continue
-                package = _package_for_import_from(stmt, alias)
+                package = package_for_import_from(stmt, alias)
                 if package is not None:
                     return [(package, lineno, col_offset)]
             return []
@@ -67,12 +85,12 @@ def collect_lazy_imports_in_suppress_blocks(
     for node in tree.body:
         match node:
             case ast.With(items=items, body=body) if any(
-                _is_suppress_import_error_call(item.context_expr) for item in items
+                is_suppress_import_error_call(item.context_expr) for item in items
             ):
                 for stmt in body:
                     if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
                         continue
-                    if not _is_lazy_import_node(stmt):
+                    if not is_lazy_import_node(stmt):
                         continue
                     result.extend(_lazy_import_entries(stmt))
             case _:
@@ -117,7 +135,7 @@ def _iter_declared_lazy_module_entries(
 
     entries: list[tuple[str, int, int]] = []
     for node in tree.body:
-        value_node = _lazy_modules_assignment_value(node)
+        value_node = lazy_modules_assignment_value(node)
         if value_node is None:
             continue
 
@@ -135,7 +153,7 @@ def _iter_declared_lazy_module_entries(
                             lineno=lineno,
                             col_offset=col_offset,
                         ):
-                            parsed_relative = _parse_relative_lazy_module(element)
+                            parsed_relative = parse_relative_lazy_module(element)
                             if parsed_relative is not None:
                                 entries.append((parsed_relative, lineno, col_offset))
                         case _:
@@ -155,11 +173,11 @@ def _iter_static_lazy_module_assignments(
 
     assignments: list[tuple[ast.Assign | ast.AnnAssign, list[str]]] = []
     for node in tree.body:
-        value_node = _lazy_modules_assignment_value(node)
+        value_node = lazy_modules_assignment_value(node)
         if value_node is None:
             continue
 
-        parsed = _parse_lazy_module_list(value_node)
+        parsed = parse_lazy_module_list(value_node)
         if parsed is None:
             continue
 
@@ -210,7 +228,7 @@ def collect_unused_lazy_modules(
     filename: str | Path | None = None,
 ) -> list[tuple[str, int, int]]:
     """Return modules listed in ``__lazy_modules__`` that are never imported."""
-    excluded_packages = _containing_package_prefixes(filename)
+    excluded_packages = containing_package_prefixes(filename)
     imported_packages = {
         binding.package
         for binding in collect_top_level_import_bindings(tree)
@@ -273,7 +291,7 @@ def collect_late_lazy_module_assignments(tree: ast.AST) -> list[tuple[int, int]]
                 imported_packages.update(
                     package
                     for package in (
-                        _package_for_import_from(node, alias) for alias in aliases
+                        package_for_import_from(node, alias) for alias in aliases
                     )
                     if package is not None
                 )
@@ -281,11 +299,11 @@ def collect_late_lazy_module_assignments(tree: ast.AST) -> list[tuple[int, int]]
             case _:
                 pass
 
-        value_node = _lazy_modules_assignment_value(node)
+        value_node = lazy_modules_assignment_value(node)
         if value_node is None:
             continue
 
-        modules = _parse_lazy_module_list(value_node)
+        modules = parse_lazy_module_list(value_node)
         if modules is None:
             continue
 
@@ -378,7 +396,7 @@ def collect_recommended_lazy_modules(
     filename: str | Path | None = None,
 ) -> list[str]:
     """Return a sorted ``__lazy_modules__`` recommendation for ``tree``."""
-    excluded_packages = _containing_package_prefixes(filename)
+    excluded_packages = containing_package_prefixes(filename)
     recommended_modules: list[str] = []
     for binding in _collect_recommended_lazy_bindings(
         tree,
@@ -397,7 +415,7 @@ def collect_missing_lazy_modules(
 ) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_modules__``."""
     lazy_modules = collect_lazy_packages(tree)
-    excluded_packages = _containing_package_prefixes(filename)
+    excluded_packages = containing_package_prefixes(filename)
     missing: list[tuple[str, int, int]] = []
     for binding in _collect_recommended_lazy_bindings(
         tree,
@@ -476,7 +494,7 @@ def collect_enclosing_lazy_modules(
     filename: str | Path | None = None,
 ) -> list[tuple[str, int, int]]:
     """Return lazily-declared enclosing package modules for ``filename``."""
-    excluded_packages = _containing_package_prefixes(filename)
+    excluded_packages = containing_package_prefixes(filename)
     enclosing_lazy_modules: list[tuple[str, int, int]] = []
     seen_modules: set[str] = set()
 

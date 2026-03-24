@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-__lazy_modules__ = [f"{__spec__.parent}.ast_helpers"]
+__lazy_modules__ = [f"{__spec__.parent}._ast_helpers"]
 
 import ast
 
-from .ast_helpers import (
-    _bound_name_for_import,
-    _collect_loaded_names,
-    _is_lazy_import_node,
-    _is_type_checking_guard,
+from ._ast_helpers import (
+    bound_name_for_import,
+    collect_loaded_names,
+    is_lazy_import_node,
+    is_type_checking_guard,
 )
+
+__all__ = [
+    "collect_non_lazy_imports",
+    "collect_strictly_top_level_names",
+    "collect_top_level_imported_names",
+    "collect_top_level_imports",
+    "collect_top_level_lazy_imports",
+    "collect_top_level_runtime_names",
+    "collect_type_checking_guard_names",
+]
 
 
 class _TopLevelScopeVisitor(ast.NodeVisitor):
@@ -41,7 +51,7 @@ class _TopLevelScopeVisitor(ast.NodeVisitor):
         self._visit_nested_scope(node)
 
     def visit_If(self, node: ast.If) -> None:
-        if _is_type_checking_guard(node.test):
+        if is_type_checking_guard(node.test):
             for item in node.orelse:
                 self.visit(item)
             return
@@ -58,11 +68,11 @@ class _TopLevelImportCollector(_TopLevelScopeVisitor):
         self.imports: list[ast.Import | ast.ImportFrom] = []
 
     def visit_Import(self, node: ast.Import) -> None:
-        if self.in_top_level_scope and not _is_lazy_import_node(node):
+        if self.in_top_level_scope and not is_lazy_import_node(node):
             self.imports.append(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if self.in_top_level_scope and not _is_lazy_import_node(node):
+        if self.in_top_level_scope and not is_lazy_import_node(node):
             self.imports.append(node)
 
 
@@ -76,11 +86,11 @@ class _TopLevelLazyImportCollector(_TopLevelScopeVisitor):
         self.imports: list[ast.Import | ast.ImportFrom] = []
 
     def visit_Import(self, node: ast.Import) -> None:
-        if self.in_top_level_scope and _is_lazy_import_node(node):
+        if self.in_top_level_scope and is_lazy_import_node(node):
             self.imports.append(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if self.in_top_level_scope and _is_lazy_import_node(node):
+        if self.in_top_level_scope and is_lazy_import_node(node):
             self.imports.append(node)
 
 
@@ -94,8 +104,8 @@ class _TypeCheckingGuardNameCollector(_TopLevelScopeVisitor):
         self.names: set[str] = set()
 
     def visit_If(self, node: ast.If) -> None:
-        if self.in_top_level_scope and _is_type_checking_guard(node.test):
-            self.names.update(_collect_loaded_names(node.test))
+        if self.in_top_level_scope and is_type_checking_guard(node.test):
+            self.names.update(collect_loaded_names(node.test))
             for item in node.orelse:
                 self.visit(item)
             return
@@ -130,12 +140,11 @@ def collect_top_level_imported_names(tree: ast.AST) -> list[str]:
         match node:
             case ast.Import(names=aliases):
                 names.extend(
-                    _bound_name_for_import(alias, from_import=False)
-                    for alias in aliases
+                    bound_name_for_import(alias, from_import=False) for alias in aliases
                 )
             case ast.ImportFrom(names=aliases):
                 names.extend(
-                    _bound_name_for_import(alias, from_import=True)
+                    bound_name_for_import(alias, from_import=True)
                     for alias in aliases
                     if alias.name != "*"
                 )
