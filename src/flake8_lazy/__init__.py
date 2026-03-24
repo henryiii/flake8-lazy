@@ -410,43 +410,20 @@ def collect_lazy_imports_in_suppress_blocks(
 
 def collect_top_level_lazy_import_bindings(tree: ast.AST) -> list[_ImportBinding]:
     """Return package and bound-name details for natively-lazy module-scope imports."""
-    bindings: list[_ImportBinding] = []
-    for node in collect_top_level_lazy_imports(tree):
-        match node:
-            case ast.Import(names=aliases, lineno=lineno, col_offset=col_offset):
-                bindings.extend(
-                    _ImportBinding(
-                        package=alias.name,
-                        bound_name=_bound_name_for_import(alias, from_import=False),
-                        lineno=lineno,
-                        col_offset=col_offset,
-                    )
-                    for alias in aliases
-                )
-            case ast.ImportFrom(
-                names=aliases,
-                lineno=lineno,
-                col_offset=col_offset,
-            ):
-                bindings.extend(
-                    _ImportBinding(
-                        package=_package_for_import_from(node, alias),
-                        bound_name=_bound_name_for_import(alias, from_import=True),
-                        lineno=lineno,
-                        col_offset=col_offset,
-                    )
-                    for alias in aliases
-                    if alias.name != "*"
-                )
-            case _:
-                pass
-    return bindings
+    return _collect_import_bindings(collect_top_level_lazy_imports(tree))
 
 
 def collect_top_level_import_bindings(tree: ast.AST) -> list[_ImportBinding]:
     """Return package and bound-name details for module-scope imports."""
+    return _collect_import_bindings(collect_top_level_imports(tree))
+
+
+def _collect_import_bindings(
+    imports: list[ast.Import | ast.ImportFrom],
+) -> list[_ImportBinding]:
+    """Return package and bound-name details for import statements."""
     bindings: list[_ImportBinding] = []
-    for node in collect_top_level_imports(tree):
+    for node in imports:
         match node:
             case ast.Import(names=aliases, lineno=lineno, col_offset=col_offset):
                 bindings.extend(
@@ -664,13 +641,6 @@ def _parse_lazy_module_list(node: ast.AST) -> list[str] | None:
     return modules
 
 
-def _parse_lazy_module_set(node: ast.AST) -> set[str] | None:
-    parsed = _parse_lazy_module_list(node)
-    if parsed is None:
-        return None
-    return set(parsed)
-
-
 def _iter_declared_lazy_module_entries(
     tree: ast.AST,
 ) -> list[tuple[str, int, int]]:
@@ -711,55 +681,27 @@ def _iter_declared_lazy_module_entries(
 
 def collect_declared_lazy_modules(tree: ast.AST) -> list[str] | None:
     """Return the last static ``__lazy_modules__`` declaration, if present."""
-    if not isinstance(tree, ast.Module):
-        return None
-
     declared: list[str] | None = None
-    for node in tree.body:
-        value_node = _lazy_modules_assignment_value(node)
-        if value_node is None:
-            continue
-
-        parsed = _parse_lazy_module_list(value_node)
-        if parsed is not None:
-            declared = parsed
+    for _node, modules in _iter_static_lazy_module_assignments(tree):
+        declared = modules
 
     return declared
 
 
 def collect_lazy_packages(tree: ast.AST) -> set[str]:
     """Return statically-declared values of ``__lazy_modules__``."""
-    if not isinstance(tree, ast.Module):
-        return set()
-
     lazy_modules: set[str] = set()
-    for node in tree.body:
-        value_node = _lazy_modules_assignment_value(node)
-        if value_node is None:
-            continue
-
-        parsed = _parse_lazy_module_set(value_node)
-        if parsed is not None:
-            lazy_modules = parsed
+    for _node, modules in _iter_static_lazy_module_assignments(tree):
+        lazy_modules = set(modules)
 
     return lazy_modules
 
 
 def collect_unsorted_lazy_modules(tree: ast.AST) -> list[tuple[int, int]]:
     """Return locations of static ``__lazy_modules__`` assignments that are unsorted."""
-    if not isinstance(tree, ast.Module):
-        return []
-
     unsorted: list[tuple[int, int]] = []
-    for node in tree.body:
-        value_node = _lazy_modules_assignment_value(node)
-        if value_node is None:
-            continue
-
-        values = _parse_lazy_module_list(value_node)
-        if values is None:
-            continue
-        if values != sorted(values):
+    for node, modules in _iter_static_lazy_module_assignments(tree):
+        if modules != sorted(modules):
             unsorted.append((node.lineno, node.col_offset))
 
     return unsorted
@@ -778,9 +720,6 @@ def collect_unused_lazy_modules(
     filename: str | Path | None = None,
 ) -> list[tuple[str, int, int]]:
     """Return modules listed in ``__lazy_modules__`` that are never imported."""
-    if not isinstance(tree, ast.Module):
-        return []
-
     excluded_packages = _containing_package_prefixes(filename)
     imported_packages = {
         binding.package
@@ -789,21 +728,12 @@ def collect_unused_lazy_modules(
     }
 
     unused: list[tuple[str, int, int]] = []
-    for node in tree.body:
-        value_node = _lazy_modules_assignment_value(node)
-        if value_node is None:
-            continue
-
-        modules = _parse_lazy_module_list(value_node)
-        if modules is None:
-            continue
-
+    for node, modules in _iter_static_lazy_module_assignments(tree):
         unused.extend(
             (module, node.lineno, node.col_offset)
             for module in modules
             if not _is_imported_package(module, imported_packages)
             if module not in excluded_packages
-            if not _is_imported_package(module, imported_packages)
         )
 
     return unused
@@ -826,19 +756,8 @@ def _collect_duplicate_modules(modules: list[str]) -> list[str]:
 
 def collect_duplicate_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     """Return duplicated modules listed in ``__lazy_modules__``."""
-    if not isinstance(tree, ast.Module):
-        return []
-
     duplicated: list[tuple[str, int, int]] = []
-    for node in tree.body:
-        value_node = _lazy_modules_assignment_value(node)
-        if value_node is None:
-            continue
-
-        modules = _parse_lazy_module_list(value_node)
-        if modules is None:
-            continue
-
+    for node, modules in _iter_static_lazy_module_assignments(tree):
         duplicated.extend(
             (module, node.lineno, node.col_offset)
             for module in _collect_duplicate_modules(modules)
@@ -893,29 +812,34 @@ def collect_invalid_lazy_module_names(tree: ast.AST) -> list[tuple[str, int, int
     ``__lazy_modules__`` names must be absolute module names. Relative modules
     should use the ``f"{__spec__.parent}.name"`` form.
     """
+    return [
+        (module, lineno, col_offset)
+        for module, lineno, col_offset in _iter_declared_lazy_module_entries(tree)
+        if module.startswith(".")
+    ]
+
+
+def _iter_static_lazy_module_assignments(
+    tree: ast.AST,
+) -> list[tuple[ast.Assign | ast.AnnAssign, list[str]]]:
+    """Return static ``__lazy_modules__`` assignment nodes with parsed values."""
     if not isinstance(tree, ast.Module):
         return []
 
-    invalid: list[tuple[str, int, int]] = []
+    assignments: list[tuple[ast.Assign | ast.AnnAssign, list[str]]] = []
     for node in tree.body:
         value_node = _lazy_modules_assignment_value(node)
         if value_node is None:
             continue
 
-        match value_node:
-            case ast.List(elts=elements):
-                for element in elements:
-                    match element:
-                        case ast.Constant(
-                            value=str() as value, lineno=lineno, col_offset=col_offset
-                        ) if value.startswith("."):
-                            invalid.append((value, lineno, col_offset))
-                        case _:
-                            continue
-            case _:
-                continue
+        parsed = _parse_lazy_module_list(value_node)
+        if parsed is None:
+            continue
 
-    return invalid
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            assignments.append((node, parsed))
+
+    return assignments
 
 
 def _collect_recommended_lazy_bindings(
@@ -1363,35 +1287,25 @@ class LazyImportChecker:
 
 def collect_errors_for_file(path: str | Path) -> list[tuple[int, int, str]]:
     """Return checker errors for a single Python file."""
-    item = Path(path)
-    try:
-        with tokenize.open(item) as f:
-            source = f.read()
-    except UnicodeDecodeError as exc:
-        if sys.version_info >= (3, 11):
-            exc.add_note(f"while reading {item}")
-        raise
-    tree = ast.parse(source, filename=str(item))
+    item, tree = _parse_file(path)
     checker = LazyImportChecker(tree=tree, filename=str(item))
     return [(line, col, message) for line, col, message, _checker in checker.run()]
 
 
 def collect_recommended_lazy_modules_for_file(path: str | Path) -> list[str]:
     """Return a sorted ``__lazy_modules__`` recommendation for a file."""
-    item = Path(path)
-    try:
-        with tokenize.open(item) as f:
-            source = f.read()
-    except UnicodeDecodeError as exc:
-        if sys.version_info >= (3, 11):
-            exc.add_note(f"while reading {item}")
-        raise
-    tree = ast.parse(source, filename=str(item))
+    item, tree = _parse_file(path)
     return collect_recommended_lazy_modules(tree, filename=item)
 
 
 def collect_declared_lazy_modules_for_file(path: str | Path) -> list[str] | None:
     """Return the last static ``__lazy_modules__`` declaration for a file."""
+    _item, tree = _parse_file(path)
+    return collect_declared_lazy_modules(tree)
+
+
+def _parse_file(path: str | Path) -> tuple[Path, ast.AST]:
+    """Read and parse a Python file with filename-aware syntax errors."""
     item = Path(path)
     try:
         with tokenize.open(item) as f:
@@ -1400,5 +1314,4 @@ def collect_declared_lazy_modules_for_file(path: str | Path) -> list[str] | None
         if sys.version_info >= (3, 11):
             exc.add_note(f"while reading {item}")
         raise
-    tree = ast.parse(source, filename=str(item))
-    return collect_declared_lazy_modules(tree)
+    return item, ast.parse(source, filename=str(item))
