@@ -704,6 +704,14 @@ def collect_unsorted_lazy_modules(tree: ast.AST) -> list[tuple[int, int]]:
     return unsorted
 
 
+def _is_imported_package(module: str, imported_packages: set[str]) -> bool:
+    """Return True when ``module`` or one of its child modules is imported."""
+    return any(
+        package == module or package.startswith(f"{module}.")
+        for package in imported_packages
+    )
+
+
 def collect_unused_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
     """Return modules listed in ``__lazy_modules__`` that are never imported."""
     if not isinstance(tree, ast.Module):
@@ -728,7 +736,7 @@ def collect_unused_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
         unused.extend(
             (module, node.lineno, node.col_offset)
             for module in modules
-            if module not in imported_packages
+            if not _is_imported_package(module, imported_packages)
         )
 
     return unused

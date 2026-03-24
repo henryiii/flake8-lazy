@@ -365,19 +365,15 @@ def process() -> None:
 """,
     )
 
-    # email IS used (in a function), so the import is not side-effect-only;
-    # both LZY101 and LZY202 fire.
+    # A child import satisfies the parent package entry in __lazy_modules__.
+    # Only the nested module still needs its own lazy declaration.
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    assert len(errors) == 2
+    assert len(errors) == 1
     assert (
         errors[0][2]
         == "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
-    )
-    assert (
-        errors[1][2]
-        == "LZY202 module 'email' is listed in __lazy_modules__ but never imported"
     )
 
 
@@ -567,6 +563,21 @@ import pandas
     checker = m.LazyImportChecker(tree=tree, filename="example.py")
 
     assert list(checker.run()) == []
+
+
+def test_checker_does_not_emit_lzy202_when_child_module_is_imported() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["packaging"]
+import packaging.version
+""",
+    )
+
+    checker = m.LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy202_errors = [e for e in errors if e[2].startswith("LZY202")]
+    assert lzy202_errors == []
 
 
 def test_checker_emits_lzy202_for_annotated_assignment() -> None:
