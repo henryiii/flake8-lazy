@@ -67,7 +67,7 @@ pipx run flake8-lazy <filenames>
 ## Basic example
 
 ```python
-__lazy_modules__ = ["argparse"]
+__lazy_modules__ = ["argparse", "requests"]
 
 import argparse
 import requests
@@ -201,6 +201,12 @@ Serve docs locally:
 
 ```bash
 nox -s docs
+```
+
+Bump the version:
+
+```bash
+uv version <new_version>
 ```
 
 ## Acknowledgements
