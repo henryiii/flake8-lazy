@@ -5,9 +5,6 @@ site_author = "Henry Schreiner"
 repo_url = "https://github.com/henryiii/flake8-lazy"
 docs_dir = "docs"
 copyright = "&copy; 2026 Henry Schreiner"
-nav = [
-  {"GitHub Repo" = "https://github.com/henryiii/flake8-lazy"}
-]
 
 [project.theme]
 language = "en"
