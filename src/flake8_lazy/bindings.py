@@ -11,6 +11,8 @@ from .visitors import collect_top_level_imports, collect_top_level_lazy_imports
 
 @dataclass(frozen=True, slots=True)
 class ImportBinding:
+    """Represents a single import binding with its location in source."""
+
     package: str | None
     bound_name: str
     lineno: int
