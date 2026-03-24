@@ -388,3 +388,40 @@ def test_apply_lazy_modules_writes_raw_newlines(
     apply_lazy_modules(path, ["numpy"])
 
     assert captured_newline == ""
+
+
+def test_main_apply_removes_existing_lazy_modules_when_none_recommended(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    # A file with __lazy_modules__ but no module-level imports to recommend
+    path.write_text(
+        '__lazy_modules__ = ["numpy"]\n\ndef helper() -> None:\n    import numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        "\ndef helper() -> None:\n    import numpy\n"
+    )
+
+
+def test_main_apply_leaves_file_unchanged_when_no_modules_and_no_existing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    original = "def helper() -> None:\n    import numpy\n"
+    path.write_text(original, encoding="utf-8")
+
+    main(["--apply", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == original
