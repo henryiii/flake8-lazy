@@ -38,11 +38,18 @@ def _lazy_modules_assignment_line(modules: list[str]) -> str:
     return f"__lazy_modules__ = [{joined_modules}]"
 
 
+def _is_lazy_modules_target(node: ast.AST) -> bool:
+    match node:
+        case ast.Name(id="__lazy_modules__"):
+            return True
+        case _:
+            return False
+
+
 def _is_lazy_modules_assignment(node: ast.stmt) -> bool:
     match node:
         case ast.Assign(targets=targets) if any(
-            isinstance(target, ast.Name) and target.id == "__lazy_modules__"
-            for target in targets
+            _is_lazy_modules_target(target) for target in targets
         ):
             return True
         case ast.AnnAssign(target=ast.Name(id="__lazy_modules__")):
@@ -72,25 +79,31 @@ def _insertion_line_for_lazy_modules(tree: ast.Module, source: str) -> int:
     body = tree.body
     index = 0
 
-    if (
-        body
-        and isinstance(body[0], ast.Expr)
-        and isinstance(body[0].value, ast.Constant)
-        and isinstance(body[0].value.value, str)
-    ):
-        future_end_line = max(future_end_line, body[0].end_lineno or body[0].lineno)
-        index = 1
+    match body:
+        case [
+            ast.Expr(
+                value=ast.Constant(value=str()),
+                lineno=lineno,
+                end_lineno=end_lineno,
+            ),
+            *_rest,
+        ]:
+            future_end_line = max(future_end_line, end_lineno or lineno)
+            index = 1
+        case _:
+            pass
 
     while index < len(body):
-        statement = body[index]
-        if isinstance(statement, ast.ImportFrom) and statement.module == "__future__":
-            future_end_line = max(
-                future_end_line,
-                statement.end_lineno or statement.lineno,
-            )
-            index += 1
-            continue
-        break
+        match body[index]:
+            case ast.ImportFrom(module="__future__", lineno=lineno, end_lineno=end):
+                future_end_line = max(
+                    future_end_line,
+                    end or lineno,
+                )
+                index += 1
+                continue
+            case _:
+                break
 
     first_line = _first_non_comment_non_string_line(source)
     if first_line is None:
