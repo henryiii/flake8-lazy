@@ -94,13 +94,21 @@ def _insertion_line_for_lazy_modules(tree: ast.Module, source: str) -> int:
 
 def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
     tree = ast.parse(source)
-    assignment_line = _lazy_modules_assignment_line(modules)
     newline = "\r\n" if "\r\n" in source else "\n"
     lines = source.splitlines(keepends=True)
 
     assignments = [
         statement for statement in tree.body if _is_lazy_modules_assignment(statement)
     ]
+
+    if not modules:
+        # When no modules are recommended, remove any existing declarations
+        # rather than writing an empty __lazy_modules__ = [].
+        for statement in reversed(assignments):
+            del lines[statement.lineno - 1 : statement.end_lineno]
+        return "".join(lines)
+
+    assignment_line = _lazy_modules_assignment_line(modules)
 
     if assignments:
         first_assignment = assignments[0]
