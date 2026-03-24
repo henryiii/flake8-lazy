@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import ast
 import sys
+from typing import TYPE_CHECKING
 
 import pytest
 
 import flake8_lazy as m
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_collect_top_level_imports() -> None:
@@ -828,6 +832,23 @@ if __name__ == "__main__":
     assert result == []
 
 
+def test_collect_unnecessary_lazy_imports_ignores_enclosing_packages(
+    tmp_path: Path,
+) -> None:
+    package_dir = tmp_path / "a" / "b"
+    package_dir.mkdir(parents=True)
+    (tmp_path / "a" / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    path = package_dir / "c.py"
+    source = '__lazy_modules__ = ["a", "a.b"]\nimport a\nimport a.b\n'
+    path.write_text(source, encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+
+    result = m.collect_unnecessary_lazy_imports(tree)
+
+    assert result == []
+
+
 def test_checker_emits_lzy401_for_lazy_module_accessed_at_top_level() -> None:
     tree = ast.parse(
         """
@@ -865,6 +886,68 @@ if __name__ == "__main__":
 
     lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
     assert lzy103_errors == []
+
+
+def test_checker_emits_lzy402_for_enclosing_packages_declared_lazy(
+    tmp_path: Path,
+) -> None:
+    package_dir = tmp_path / "a" / "b"
+    package_dir.mkdir(parents=True)
+    (tmp_path / "a" / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    path = package_dir / "c.py"
+    source = '__lazy_modules__ = ["a", "a.b"]\nimport a\nimport a.b\n'
+    path.write_text(source, encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+
+    checker = m.LazyImportChecker(tree=tree, filename=str(path))
+    errors = list(checker.run())
+
+    lzy402_errors = [e for e in errors if e[2].startswith("LZY402")]
+    assert len(lzy402_errors) == 2
+    assert (
+        lzy402_errors[0][2]
+        == "LZY402 module 'a' is an enclosing package for this file and "
+        "should not be declared lazy"
+    )
+    assert (
+        lzy402_errors[1][2]
+        == "LZY402 module 'a.b' is an enclosing package for this file and "
+        "should not be declared lazy"
+    )
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_emits_lzy402_for_enclosing_packages_with_native_lazy_import(
+    tmp_path: Path,
+) -> None:
+    package_dir = tmp_path / "a" / "b"
+    package_dir.mkdir(parents=True)
+    (tmp_path / "a" / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    path = package_dir / "c.py"
+    source = "lazy import a\nlazy import a.b\n"
+    path.write_text(source, encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+
+    checker = m.LazyImportChecker(tree=tree, filename=str(path))
+    errors = list(checker.run())
+
+    lzy402_errors = [e for e in errors if e[2].startswith("LZY402")]
+    assert len(lzy402_errors) == 2
+    assert (
+        lzy402_errors[0][2]
+        == "LZY402 module 'a' is an enclosing package for this file and "
+        "should not be declared lazy"
+    )
+    assert (
+        lzy402_errors[1][2]
+        == "LZY402 module 'a.b' is an enclosing package for this file and "
+        "should not be declared lazy"
+    )
 
 
 def test_checker_does_not_emit_lzy401_for_lazy_module_used_only_in_function() -> None:

@@ -10,6 +10,7 @@ from flake8_lazy import (
     collect_declared_lazy_modules,
     collect_errors_for_file,
     collect_recommended_lazy_modules,
+    collect_recommended_lazy_modules_for_file,
 )
 from flake8_lazy.__main__ import main
 
@@ -92,6 +93,93 @@ HOME = pathlib.Path.home()
     )
 
     assert collect_recommended_lazy_modules(tree) == ["requests"]
+
+
+def test_collect_recommended_lazy_modules_for_file_skips_enclosing_packages(
+    tmp_path: Path,
+) -> None:
+    package_dir = tmp_path / "a" / "b"
+    package_dir.mkdir(parents=True)
+    (tmp_path / "a" / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    path = package_dir / "c.py"
+    path.write_text(
+        "import a\nimport a.b\nimport requests\n",
+        encoding="utf-8",
+    )
+
+    assert collect_recommended_lazy_modules_for_file(path) == ["requests"]
+
+
+def test_collect_errors_for_file_skips_enclosing_package_diagnostics(
+    tmp_path: Path,
+) -> None:
+    package_dir = tmp_path / "a" / "b"
+    package_dir.mkdir(parents=True)
+    (tmp_path / "a" / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    path = package_dir / "c.py"
+    path.write_text(
+        '__lazy_modules__ = ["a", "a.b"]\nimport a\nimport a.b\nimport requests\n',
+        encoding="utf-8",
+    )
+
+    errors = collect_errors_for_file(path)
+
+    assert errors == [
+        (
+            4,
+            0,
+            "LZY102 module 'requests' should be listed in __lazy_modules__",
+        ),
+        (
+            1,
+            20,
+            "LZY402 module 'a' is an enclosing package for this file and "
+            "should not be declared lazy",
+        ),
+        (
+            1,
+            25,
+            "LZY402 module 'a.b' is an enclosing package for this file and "
+            "should not be declared lazy",
+        ),
+    ]
+
+
+def test_collect_errors_for_package_init_skips_enclosing_package_diagnostics(
+    tmp_path: Path,
+) -> None:
+    package_dir = tmp_path / "a" / "b"
+    package_dir.mkdir(parents=True)
+    (tmp_path / "a" / "__init__.py").write_text("", encoding="utf-8")
+    path = package_dir / "__init__.py"
+    path.write_text(
+        '__lazy_modules__ = ["a", "a.b"]\nimport a\nimport a.b\nimport pandas\n',
+        encoding="utf-8",
+    )
+
+    errors = collect_errors_for_file(path)
+
+    assert errors == [
+        (
+            4,
+            0,
+            "LZY102 module 'pandas' should be listed in __lazy_modules__",
+        ),
+        (
+            1,
+            20,
+            "LZY402 module 'a' is an enclosing package for this file and "
+            "should not be declared lazy",
+        ),
+        (
+            1,
+            25,
+            "LZY402 module 'a.b' is an enclosing package for this file and "
+            "should not be declared lazy",
+        ),
+    ]
 
 
 def test_collect_declared_lazy_modules_returns_last_static_list() -> None:
