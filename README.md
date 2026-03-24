@@ -117,10 +117,14 @@ Enclosing package note:
 ```python
 # file: a/b/c.py
 __lazy_modules__ = ["a", "a.b", "requests"]
+
+# Python 3.15+ also applies
+# lazy import a
+# lazy import a.b
 ```
 
 This emits `LZY402` for `a` and `a.b`. Those are enclosing packages for the
-current file, so listing them as lazy is unnecessary and can be removed.
+current file, so declaring them lazy is unnecessary and can be removed.
 
 ## CLI
 

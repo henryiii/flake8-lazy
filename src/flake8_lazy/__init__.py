@@ -764,6 +764,7 @@ def collect_unsorted_lazy_modules(tree: ast.AST) -> list[tuple[int, int]]:
 
     return unsorted
 
+
 def _is_imported_package(module: str, imported_packages: set[str]) -> bool:
     """Return True when ``module`` or one of its child modules is imported."""
     return any(
@@ -1091,10 +1092,11 @@ def collect_enclosing_lazy_modules(
     tree: ast.AST,
     filename: str | Path | None = None,
 ) -> list[tuple[str, int, int]]:
-    """Return declared lazy modules that are enclosing packages for ``filename``."""
+    """Return lazily-declared enclosing package modules for ``filename``."""
     excluded_packages = _containing_package_prefixes(filename)
     enclosing_lazy_modules: list[tuple[str, int, int]] = []
     seen_modules: set[str] = set()
+
     for module, lineno, col_offset in _iter_declared_lazy_module_entries(tree):
         if module not in excluded_packages:
             continue
@@ -1102,6 +1104,19 @@ def collect_enclosing_lazy_modules(
             continue
         enclosing_lazy_modules.append((module, lineno, col_offset))
         seen_modules.add(module)
+
+    for binding in collect_top_level_lazy_import_bindings(tree):
+        if binding.package is None:
+            continue
+        if binding.package not in excluded_packages:
+            continue
+        if binding.package in seen_modules:
+            continue
+        enclosing_lazy_modules.append(
+            (binding.package, binding.lineno, binding.col_offset)
+        )
+        seen_modules.add(binding.package)
+
     return enclosing_lazy_modules
 
 
@@ -1330,7 +1345,7 @@ class LazyImportChecker:
                     col_offset,
                     (
                         f"LZY402 module '{package}' is an enclosing package"
-                        " for this file and should not be listed in __lazy_modules__"
+                        " for this file and should not be declared lazy"
                     ),
                     type(self),
                 ),

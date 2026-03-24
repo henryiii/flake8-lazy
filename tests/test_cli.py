@@ -136,13 +136,13 @@ def test_collect_errors_for_file_skips_enclosing_package_diagnostics(
             1,
             20,
             "LZY402 module 'a' is an enclosing package for this file and "
-            "should not be listed in __lazy_modules__",
+            "should not be declared lazy",
         ),
         (
             1,
             25,
             "LZY402 module 'a.b' is an enclosing package for this file and "
-            "should not be listed in __lazy_modules__",
+            "should not be declared lazy",
         ),
     ]
 
@@ -171,13 +171,13 @@ def test_collect_errors_for_package_init_skips_enclosing_package_diagnostics(
             1,
             20,
             "LZY402 module 'a' is an enclosing package for this file and "
-            "should not be listed in __lazy_modules__",
+            "should not be declared lazy",
         ),
         (
             1,
             25,
             "LZY402 module 'a.b' is an enclosing package for this file and "
-            "should not be listed in __lazy_modules__",
+            "should not be declared lazy",
         ),
     ]
 

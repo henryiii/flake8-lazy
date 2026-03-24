@@ -102,8 +102,8 @@ It intentionally ignores:
 - Imports inside function and class bodies
 
 For files inside a package, enclosing package names are also treated as
-non-lazy. For example, in `a/b/c.py`, entries `a` and `a.b` should not be in
-`__lazy_modules__`.
+non-lazy. For example, in `a/b/c.py`, names `a` and `a.b` should not be declared
+lazy (either in `__lazy_modules__` or with `lazy import`).
 
 ## Examples
 
@@ -215,13 +215,17 @@ LZY401 module 'pathlib' is declared lazy but accessed at the top level
 ```python
 # file: a/b/c.py
 __lazy_modules__ = ["a", "a.b", "requests"]
+
+# Python 3.15+ equivalent
+# lazy import a
+# lazy import a.b
 ```
 
 Diagnostics:
 
 ```text
-LZY402 module 'a' is an enclosing package for this file and should not be listed in __lazy_modules__
-LZY402 module 'a.b' is an enclosing package for this file and should not be listed in __lazy_modules__
+LZY402 module 'a' is an enclosing package for this file and should not be declared lazy
+LZY402 module 'a.b' is an enclosing package for this file and should not be declared lazy
 ```
 
 ### Lazy import inside `suppress(ImportError)` (Python 3.15+)
