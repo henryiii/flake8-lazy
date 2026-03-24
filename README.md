@@ -62,6 +62,7 @@ pipx run flake8-lazy <filenames>
 ### 4xx: Lazy import safety and semantics
 
 - `LZY401`: Module is declared lazy but accessed at the top level
+- `LZY402`: Module is an enclosing package for this file and should not be lazy
 
 ## Basic example
 
@@ -95,6 +96,8 @@ flake8-lazy inspects module-scope imports and module runtime usage.
 - Treats usage inside `if typing.TYPE_CHECKING:` as type-only.
 - Skips `from __future__ import ...`.
 - Requires exact module entries for nested imports.
+- Treats enclosing package names as non-lazy for a file. For example, in
+  `a/b/c.py`, `a` and `a.b` should not be listed as lazy.
 
 Nested import note:
 
@@ -108,6 +111,16 @@ This emits `LZY101`; the required entry is `"email.header"`. PEP 810 requires
 full module names.
 
 Missing relative imports use `f"{__spec__.parent}.name"`.
+
+Enclosing package note:
+
+```python
+# file: a/b/c.py
+__lazy_modules__ = ["a", "a.b", "requests"]
+```
+
+This emits `LZY402` for `a` and `a.b`. Those are enclosing packages for the
+current file, so listing them as lazy is unnecessary and can be removed.
 
 ## CLI
 

@@ -671,6 +671,44 @@ def _parse_lazy_module_set(node: ast.AST) -> set[str] | None:
     return set(parsed)
 
 
+def _iter_declared_lazy_module_entries(
+    tree: ast.AST,
+) -> list[tuple[str, int, int]]:
+    """Return parsed ``__lazy_modules__`` entries with source locations."""
+    if not isinstance(tree, ast.Module):
+        return []
+
+    entries: list[tuple[str, int, int]] = []
+    for node in tree.body:
+        value_node = _lazy_modules_assignment_value(node)
+        if value_node is None:
+            continue
+
+        match value_node:
+            case ast.List(elts=elements):
+                for element in elements:
+                    match element:
+                        case ast.Constant(
+                            value=str() as value,
+                            lineno=lineno,
+                            col_offset=col_offset,
+                        ):
+                            entries.append((value, lineno, col_offset))
+                        case ast.JoinedStr(
+                            lineno=lineno,
+                            col_offset=col_offset,
+                        ):
+                            parsed_relative = _parse_relative_lazy_module(element)
+                            if parsed_relative is not None:
+                                entries.append((parsed_relative, lineno, col_offset))
+                        case _:
+                            continue
+            case _:
+                continue
+
+    return entries
+
+
 def collect_declared_lazy_modules(tree: ast.AST) -> list[str] | None:
     """Return the last static ``__lazy_modules__`` declaration, if present."""
     if not isinstance(tree, ast.Module):
@@ -1015,7 +1053,9 @@ def _check_binding_unnecessary(
     return binding.package not in seen_packages
 
 
-def collect_unnecessary_lazy_imports(tree: ast.AST) -> list[tuple[str, int, int]]:
+def collect_unnecessary_lazy_imports(
+    tree: ast.AST,
+) -> list[tuple[str, int, int]]:
     """Return lazy imports whose bound names are used at the strict module top level."""
     lazy_packages = collect_lazy_packages(tree)
     strict_names = collect_strictly_top_level_names(tree)
@@ -1045,6 +1085,24 @@ def collect_unnecessary_lazy_imports(tree: ast.AST) -> list[tuple[str, int, int]
             seen_packages.add(binding.package)  # type: ignore[arg-type]
 
     return unnecessary
+
+
+def collect_enclosing_lazy_modules(
+    tree: ast.AST,
+    filename: str | Path | None = None,
+) -> list[tuple[str, int, int]]:
+    """Return declared lazy modules that are enclosing packages for ``filename``."""
+    excluded_packages = _containing_package_prefixes(filename)
+    enclosing_lazy_modules: list[tuple[str, int, int]] = []
+    seen_modules: set[str] = set()
+    for module, lineno, col_offset in _iter_declared_lazy_module_entries(tree):
+        if module not in excluded_packages:
+            continue
+        if module in seen_modules:
+            continue
+        enclosing_lazy_modules.append((module, lineno, col_offset))
+        seen_modules.add(module)
+    return enclosing_lazy_modules
 
 
 def collect_redundant_lazy_declarations(tree: ast.AST) -> list[tuple[str, int, int]]:
@@ -1258,6 +1316,21 @@ class LazyImportChecker:
                     (
                         f"LZY401 module '{package}' is declared lazy"
                         " but accessed at the top level"
+                    ),
+                    type(self),
+                ),
+            )
+        for package, lineno, col_offset in collect_enclosing_lazy_modules(
+            self.tree,
+            filename=self.filename,
+        ):
+            errors.append(
+                (
+                    lineno,
+                    col_offset,
+                    (
+                        f"LZY402 module '{package}' is an enclosing package"
+                        " for this file and should not be listed in __lazy_modules__"
                     ),
                     type(self),
                 ),

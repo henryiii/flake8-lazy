@@ -65,9 +65,10 @@ The plugin is auto-discovered by flake8 via entry points.
 
 ### 4xx: Lazy import safety and semantics
 
-| Code     | Meaning                                               |
-| -------- | ----------------------------------------------------- |
-| `LZY401` | module is declared lazy but accessed at the top level |
+| Code     | Meaning                                                             |
+| -------- | ------------------------------------------------------------------- |
+| `LZY401` | module is declared lazy but accessed at the top level               |
+| `LZY402` | module is an enclosing package for this file and should not be lazy |
 
 ## Expected pattern
 
@@ -99,6 +100,10 @@ It intentionally ignores:
 
 - `from __future__ import ...`
 - Imports inside function and class bodies
+
+For files inside a package, enclosing package names are also treated as
+non-lazy. For example, in `a/b/c.py`, entries `a` and `a.b` should not be in
+`__lazy_modules__`.
 
 ## Examples
 
@@ -203,6 +208,20 @@ Diagnostic:
 
 ```text
 LZY401 module 'pathlib' is declared lazy but accessed at the top level
+```
+
+### Enclosing package listed as lazy
+
+```python
+# file: a/b/c.py
+__lazy_modules__ = ["a", "a.b", "requests"]
+```
+
+Diagnostics:
+
+```text
+LZY402 module 'a' is an enclosing package for this file and should not be listed in __lazy_modules__
+LZY402 module 'a.b' is an enclosing package for this file and should not be listed in __lazy_modules__
 ```
 
 ### Lazy import inside `suppress(ImportError)` (Python 3.15+)
