@@ -133,4 +133,4 @@ def apply_lazy_modules(path: Path, modules: list[str]) -> None:
     encoding, _ = tokenize.detect_encoding(io.BytesIO(raw_bytes).readline)
     source = raw_bytes.decode(encoding)
     updated_source = _rewrite_lazy_modules_source(source, modules)
-    path.write_text(updated_source, encoding=encoding)
+    path.write_text(updated_source, encoding=encoding, newline="")
