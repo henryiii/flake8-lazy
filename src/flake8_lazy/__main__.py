@@ -1,18 +1,24 @@
 from __future__ import annotations
 
-__lazy_modules__ = ["argparse", "flake8_lazy._rewriter", "pathlib", "sys"]
+__lazy_modules__ = [
+    "argparse",
+    "flake8_lazy._rewriter",
+    "flake8_lazy.api",
+    "pathlib",
+    "sys",
+]
 
 import argparse
 import sys
 from pathlib import Path
 
-from flake8_lazy import (
-    __version__,
+from flake8_lazy import __version__
+from flake8_lazy._rewriter import apply_lazy_modules
+from flake8_lazy.api import (
     collect_declared_lazy_modules_for_file,
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
-from flake8_lazy._rewriter import apply_lazy_modules
 
 __all__ = ["main"]
 
