@@ -109,11 +109,9 @@ def version_guard_excludes_315_plus(node: ast.Compare) -> bool:
     match node:
         case ast.Compare(
             left=ast.Attribute(value=ast.Name(id="sys"), attr="version_info"),
-            ops=ops,
-            comparators=comparators,
-        ) if len(ops) == 1 and len(comparators) == 1:
-            op = ops[0]
-            comparator = comparators[0]
+            ops=[op],
+            comparators=[comparator],
+        ):
             comp_version = _extract_version_tuple(comparator)
             if comp_version is None:
                 return False
