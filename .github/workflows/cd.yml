@@ -38,8 +38,8 @@ jobs:
     name: Publish to PyPI
     environment: pypi
     permissions:
-      id-token: write
-      attestations: write
+      id-token: write # Trusted publishing
+      attestations: write # Writes out attestations
       contents: read
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'

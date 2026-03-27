@@ -1,5 +1,7 @@
 name: "Copilot Setup Steps"
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:
@@ -11,6 +13,7 @@ on:
 
 jobs:
   copilot-setup-steps:
+    name: Copilot Setup Steps
     runs-on: ubuntu-latest
     permissions:
       contents: read
