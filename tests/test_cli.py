@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ast
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
@@ -16,9 +16,6 @@ from flake8_lazy.api import (
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_collect_errors_for_file(tmp_path: Path) -> None:
@@ -112,6 +109,21 @@ def test_collect_recommended_lazy_modules_for_file_skips_enclosing_packages(
     )
 
     assert collect_recommended_lazy_modules_for_file(path) == ["requests"]
+
+
+def test_collect_recommended_lazy_modules_for_repo_review_rich_children() -> None:
+    path = Path(__file__).parent / "examples" / "repo_review" / "__main__.py.txt"
+
+    recommended = collect_recommended_lazy_modules_for_file(path)
+
+    assert "rich.console" in recommended
+    assert "rich.markdown" in recommended
+    assert "rich.syntax" in recommended
+    assert "rich.terminal_theme" in recommended
+    assert "rich.text" in recommended
+    assert "rich.tree" in recommended
+    assert "rich" not in recommended
+    assert "rich.traceback" not in recommended
 
 
 def test_collect_errors_for_file_skips_enclosing_package_diagnostics(

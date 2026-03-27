@@ -61,6 +61,7 @@ docs = [
 [tool.uv.build-backend]
 source-include = [
   "tests/*.py",
+  "tests/examples/*/*.txt",
 ]
 source-exclude = [
   "*.swp",

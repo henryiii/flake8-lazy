@@ -15,10 +15,12 @@ from ._ast_helpers import (
 
 __all__ = [
     "collect_non_lazy_imports",
+    "collect_strictly_top_level_attribute_paths",
     "collect_strictly_top_level_names",
     "collect_top_level_imported_names",
     "collect_top_level_imports",
     "collect_top_level_lazy_imports",
+    "collect_top_level_runtime_attribute_paths",
     "collect_top_level_runtime_names",
     "collect_type_checking_guard_names",
 ]
@@ -159,12 +161,26 @@ class _TopLevelRuntimeNameCollector(_TopLevelScopeVisitor):
     Names in class scopes and annotation contexts are ignored.
     """
 
-    __slots__ = ("_annotation_depth", "names")
+    __slots__ = ("_annotation_depth", "attribute_paths", "names")
 
     def __init__(self) -> None:
         super().__init__()
         self.names: set[str] = set()
+        self.attribute_paths: set[str] = set()
         self._annotation_depth = 0
+
+    def _attribute_path(self, node: ast.Attribute) -> str | None:
+        parts: list[str] = [node.attr]
+        current: ast.expr = node.value
+        while isinstance(current, ast.Attribute):
+            parts.append(current.attr)
+            current = current.value
+
+        if isinstance(current, ast.Name):
+            parts.append(current.id)
+            return ".".join(reversed(parts))
+
+        return None
 
     def _visit_annotation(self, node: ast.AST | None) -> None:
         if node is None:
@@ -180,6 +196,17 @@ class _TopLevelRuntimeNameCollector(_TopLevelScopeVisitor):
             and isinstance(node.ctx, ast.Load)
         ):
             self.names.add(node.id)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if (
+            self._annotation_depth == 0
+            and self.in_top_level_scope
+            and isinstance(node.ctx, ast.Load)
+        ):
+            path = self._attribute_path(node)
+            if path is not None:
+                self.attribute_paths.add(path)
+        self.generic_visit(node)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         if node.value is not None:
@@ -244,6 +271,13 @@ def collect_top_level_runtime_names(tree: ast.AST) -> set[str]:
     return collector.names
 
 
+def collect_top_level_runtime_attribute_paths(tree: ast.AST) -> set[str]:
+    """Return dotted attribute paths loaded at top-level module runtime."""
+    collector = _TopLevelRuntimeNameCollector()
+    collector.visit(tree)
+    return collector.attribute_paths
+
+
 class _StrictTopLevelRuntimeNameCollector(_TopLevelRuntimeNameCollector):
     """Like _TopLevelRuntimeNameCollector but skips all conditional block bodies."""
 
@@ -273,6 +307,13 @@ def collect_strictly_top_level_names(tree: ast.AST) -> set[str]:
     collector = _StrictTopLevelRuntimeNameCollector()
     collector.visit(tree)
     return collector.names
+
+
+def collect_strictly_top_level_attribute_paths(tree: ast.AST) -> set[str]:
+    """Return dotted attribute paths loaded at strict top level."""
+    collector = _StrictTopLevelRuntimeNameCollector()
+    collector.visit(tree)
+    return collector.attribute_paths
 
 
 def collect_non_lazy_imports(tree: ast.AST) -> list[str]:

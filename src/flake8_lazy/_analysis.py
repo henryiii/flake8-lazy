@@ -10,6 +10,7 @@ __lazy_modules__ = [
 ]
 
 import ast
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -31,8 +32,10 @@ from ._bindings import (
 )
 from ._visitors import (
     collect_non_lazy_imports,
+    collect_strictly_top_level_attribute_paths,
     collect_strictly_top_level_names,
     collect_top_level_imports,
+    collect_top_level_runtime_attribute_paths,
     collect_type_checking_guard_names,
 )
 
@@ -322,6 +325,51 @@ def collect_invalid_lazy_module_names(tree: ast.AST) -> list[tuple[str, int, int
     ]
 
 
+def _is_non_lazy_binding(
+    binding: ImportBinding,
+    non_lazy_names: set[str],
+    runtime_attribute_paths: set[str],
+) -> bool:
+    if binding.package is None or binding.bound_name not in non_lazy_names:
+        return False
+
+    if binding.package in runtime_attribute_paths:
+        return True
+
+    root = binding.package.split(".", maxsplit=1)[0]
+    if binding.package == binding.bound_name:
+        return True
+    if binding.is_aliased:
+        return True
+    return binding.bound_name != root
+
+
+@dataclass(frozen=True, slots=True)
+class _RecommendationPolicy:
+    excluded_packages: set[str]
+    blocked_packages: set[str]
+    side_effect_packages: set[str]
+    guard_packages: set[str]
+    non_lazy_packages: set[str]
+
+    def should_skip(self, package: str, *, seen_packages: set[str]) -> bool:
+        return (
+            package == "__future__"
+            or package in self.excluded_packages
+            or package in self.blocked_packages
+            or package in seen_packages
+        )
+
+    def should_add_root(self, root: str, *, seen_packages: set[str]) -> bool:
+        return (
+            root not in seen_packages
+            and root not in self.excluded_packages
+            and root not in self.side_effect_packages
+            and root not in self.guard_packages
+            and root not in self.non_lazy_packages
+        )
+
+
 def _collect_recommended_lazy_bindings(
     tree: ast.AST,
     *,
@@ -333,18 +381,35 @@ def _collect_recommended_lazy_bindings(
 
     bindings = collect_top_level_import_bindings(tree)
     non_lazy_names = set(collect_non_lazy_imports(tree))
+    runtime_attribute_paths = collect_top_level_runtime_attribute_paths(tree)
     guard_names = collect_type_checking_guard_names(tree)
     side_effect_packages = collect_side_effect_only_import_packages(tree)
-    guard_packages = {
-        binding.package
+    guard_packages: set[str] = {
+        package
         for binding in bindings
-        if binding.package is not None and binding.bound_name in guard_names
+        if (package := binding.package) is not None
+        if binding.bound_name in guard_names
     }
-    non_lazy_packages = {
-        binding.package
+    non_lazy_packages: set[str] = {
+        package
         for binding in bindings
-        if binding.package is not None and binding.bound_name in non_lazy_names
+        if (package := binding.package) is not None
+        if _is_non_lazy_binding(binding, non_lazy_names, runtime_attribute_paths)
     }
+    blocked_packages = (
+        side_effect_packages
+        | guard_packages
+        | non_lazy_packages
+        | non_lazy_names
+        | guard_names
+    )
+    policy = _RecommendationPolicy(
+        excluded_packages=excluded_packages,
+        blocked_packages=blocked_packages,
+        side_effect_packages=side_effect_packages,
+        guard_packages=guard_packages,
+        non_lazy_packages=non_lazy_packages,
+    )
 
     recommended: list[ImportBinding] = []
     seen_packages: set[str] = set()
@@ -352,32 +417,14 @@ def _collect_recommended_lazy_bindings(
         package = binding.package
         if package is None:
             continue
-        if package == "__future__":
-            continue
-        if package in excluded_packages:
-            continue
-        if (
-            package
-            in side_effect_packages
-            | guard_packages
-            | non_lazy_packages
-            | non_lazy_names
-            | guard_names
-            | seen_packages
-        ):
+        if policy.should_skip(package, seen_packages=seen_packages):
             continue
         recommended.append(binding)
         seen_packages.add(package)
 
         if "." in package and "{" not in package:
             root = package.split(".", maxsplit=1)[0]
-            if (
-                root not in seen_packages
-                and root not in excluded_packages
-                and root not in side_effect_packages
-                and root not in guard_packages
-                and root not in non_lazy_packages
-            ):
+            if policy.should_add_root(root, seen_packages=seen_packages):
                 recommended.append(
                     ImportBinding(
                         package=root,
@@ -431,6 +478,7 @@ def collect_missing_lazy_modules(
 def _check_binding_unnecessary(
     binding: ImportBinding,
     strict_names: set[str],
+    strict_attribute_paths: set[str],
     seen_packages: set[str],
     *,
     require_lazy_package: bool,
@@ -446,6 +494,16 @@ def _check_binding_unnecessary(
         return False
     if binding.bound_name not in strict_names:
         return False
+    if package in strict_attribute_paths:
+        return package not in seen_packages
+
+    root = package.split(".", maxsplit=1)[0]
+    if (
+        package != binding.bound_name
+        and not binding.is_aliased
+        and binding.bound_name == root
+    ):
+        return False
     return package not in seen_packages
 
 
@@ -455,6 +513,7 @@ def collect_unnecessary_lazy_imports(
     """Return lazy imports whose bound names are used at the strict module top level."""
     lazy_packages = collect_lazy_packages(tree)
     strict_names = collect_strictly_top_level_names(tree)
+    strict_attribute_paths = collect_strictly_top_level_attribute_paths(tree)
     unnecessary: list[tuple[str, int, int]] = []
     seen_packages: set[str] = set()
 
@@ -462,6 +521,7 @@ def collect_unnecessary_lazy_imports(
         if _check_binding_unnecessary(
             binding,
             strict_names,
+            strict_attribute_paths,
             seen_packages,
             require_lazy_package=True,
             lazy_packages=lazy_packages,
@@ -476,6 +536,7 @@ def collect_unnecessary_lazy_imports(
         if _check_binding_unnecessary(
             binding,
             strict_names,
+            strict_attribute_paths,
             seen_packages,
             require_lazy_package=False,
             lazy_packages=lazy_packages,

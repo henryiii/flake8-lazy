@@ -140,6 +140,18 @@ def fn() -> None:
     ]
 
 
+def test_recommended_excludes_dotted_import_used_at_top_level() -> None:
+    tree = ast.parse(
+        """
+import importlib.metadata
+
+__version__ = importlib.metadata.version("flake8-lazy")
+""",
+    )
+
+    assert collect_recommended_lazy_modules(tree) == []
+
+
 def test_collect_non_lazy_imports_detects_class_decorator_usage() -> None:
     tree = ast.parse(
         """
@@ -843,6 +855,36 @@ if __name__ == "__main__":
     assert result == []
 
 
+def test_collect_unnecessary_lazy_imports_ignores_unaliased_dotted_root_usage() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["rich.console"]
+import rich.console
+
+rich.traceback.install(suppress=[rich], show_locals=False, width=None)
+""",
+    )
+
+    result = collect_unnecessary_lazy_imports(tree)
+
+    assert result == []
+
+
+def test_collect_unnecessary_lazy_imports_flags_dotted_package_top_level() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["importlib.metadata"]
+import importlib.metadata
+
+__version__ = importlib.metadata.version("flake8-lazy")
+""",
+    )
+
+    result = collect_unnecessary_lazy_imports(tree)
+
+    assert result == [("importlib.metadata", 3, 0)]
+
+
 def test_collect_unnecessary_lazy_imports_ignores_enclosing_packages(
     tmp_path: Path,
 ) -> None:
@@ -897,6 +939,44 @@ if __name__ == "__main__":
 
     lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
     assert lzy103_errors == []
+
+
+def test_checker_does_not_emit_lzy401_for_unaliased_dotted_root_usage() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["rich.console"]
+import rich.console
+
+rich.traceback.install(suppress=[rich], show_locals=False, width=None)
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert lzy401_errors == []
+
+
+def test_checker_emits_lzy401_for_dotted_package_used_at_top_level() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["importlib.metadata"]
+import importlib.metadata
+
+__version__ = importlib.metadata.version("flake8-lazy")
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert len(lzy401_errors) == 1
+    assert (
+        lzy401_errors[0][2] == "LZY401 module 'importlib.metadata' is declared lazy"
+        " but accessed at the top level"
+    )
 
 
 def test_checker_emits_lzy402_for_enclosing_packages_declared_lazy(
