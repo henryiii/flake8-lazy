@@ -94,6 +94,7 @@ flake8-lazy inspects module-scope imports and module runtime usage.
 - Currently treats annotation-only usage as lazy-capable
   (`from __future__ import annotations` if not using 3.14+).
 - Treats usage inside `if typing.TYPE_CHECKING:` as type-only.
+- Handles static `sys.version_info` checks
 - Skips `from __future__ import ...`.
 - Requires exact module entries for nested imports.
 - Treats enclosing package names as non-lazy for a file. For example, in
