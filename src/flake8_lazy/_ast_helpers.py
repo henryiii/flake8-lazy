@@ -86,13 +86,13 @@ def _check_version_exclusion(
     """Check if a version comparison excludes the target version."""
     match op:
         case ast.Lt():
-            return not (target_version < comp_version)
+            return not target_version < comp_version
         case ast.LtE():
-            return not (target_version <= comp_version)
+            return not target_version <= comp_version
         case ast.Gt():
-            return not (target_version > comp_version)
+            return not target_version > comp_version
         case ast.GtE():
-            return not (target_version >= comp_version)
+            return not target_version >= comp_version
         case ast.Eq():
             return target_version != comp_version
         case _:
