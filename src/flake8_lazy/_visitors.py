@@ -11,9 +11,11 @@ from ._ast_helpers import (
     collect_loaded_names,
     is_lazy_import_node,
     is_type_checking_guard,
+    version_guard_excludes_315_plus,
 )
 
 __all__ = [
+    "collect_guarded_import_packages",
     "collect_non_lazy_imports",
     "collect_strictly_top_level_attribute_paths",
     "collect_strictly_top_level_names",
@@ -119,6 +121,84 @@ def collect_type_checking_guard_names(tree: ast.AST) -> set[str]:
     collector = _TypeCheckingGuardNameCollector()
     collector.visit(tree)
     return collector.names
+
+
+class _GuardedImportCollector(_TopLevelScopeVisitor):
+    """Collect packages that are imported only within runtime guards."""
+
+    __slots__ = ("packages",)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.packages: set[str] = set()
+        self._in_guard = False
+
+    def visit_If(self, node: ast.If) -> None:
+        if not self.in_top_level_scope:
+            self.generic_visit(node)
+            return
+
+        # Check if this is a runtime guard (TYPE_CHECKING or version check)
+        should_guard_body = False
+        should_guard_orelse = False
+
+        if is_type_checking_guard(node.test):
+            # TYPE_CHECKING guards protect both if and else blocks
+            should_guard_body = True
+            should_guard_orelse = True
+        elif isinstance(node.test, ast.Compare) and version_guard_excludes_315_plus(
+            node.test,
+        ):
+            # Version guards only protect the if-block
+            # The else-block has the opposite condition, so it allows 3.15+
+            should_guard_body = True
+            should_guard_orelse = False
+
+        # Visit if-block with appropriate guard status
+        if should_guard_body:
+            old_in_guard = self._in_guard
+            self._in_guard = True
+            for item in node.body:
+                self.visit(item)
+            self._in_guard = old_in_guard
+        else:
+            for item in node.body:
+                self.visit(item)
+
+        # Visit else-block with appropriate guard status
+        if should_guard_orelse:
+            old_in_guard = self._in_guard
+            self._in_guard = True
+            for item in node.orelse:
+                self.visit(item)
+            self._in_guard = old_in_guard
+        else:
+            for item in node.orelse:
+                self.visit(item)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        if self.in_top_level_scope and not is_lazy_import_node(node) and self._in_guard:
+            for alias in node.names:
+                self.packages.add(alias.name)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if (
+            self.in_top_level_scope
+            and not is_lazy_import_node(node)
+            and self._in_guard
+            and node.module is not None
+        ):
+            self.packages.add(node.module)
+
+
+def collect_guarded_import_packages(tree: ast.AST) -> set[str]:
+    """Return packages imported within runtime guards.
+
+    Includes TYPE_CHECKING and version checks that exclude 3.15+.
+    """
+    collector = _GuardedImportCollector()
+    collector.visit(tree)
+    return collector.packages
 
 
 def collect_top_level_imports(tree: ast.AST) -> list[ast.Import | ast.ImportFrom]:
