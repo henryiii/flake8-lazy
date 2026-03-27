@@ -15,6 +15,7 @@ __all__ = [
     "is_import_error_name",
     "is_lazy_import_node",
     "is_lazy_modules_target",
+    "is_runtime_guard",
     "is_suppress_import_error_call",
     "is_type_checking_guard",
     "lazy_modules_assignment_value",
@@ -24,6 +25,7 @@ __all__ = [
     "relative_import_package_name",
     "relative_parent_expression",
     "relative_parent_level",
+    "version_guard_excludes_315_plus",
 ]
 
 
@@ -37,6 +39,88 @@ def is_type_checking_guard(node: ast.AST) -> bool:
             return True
         case ast.Attribute(value=ast.Name(id="typing"), attr="TYPE_CHECKING"):
             return True
+        case _:
+            return False
+
+
+def is_runtime_guard(node: ast.AST) -> bool:
+    """Return True if ``node`` is a guard that protects code from runtime execution.
+
+    This includes TYPE_CHECKING and sys.version_info comparisons.
+    """
+    # Check for TYPE_CHECKING guards
+    if is_type_checking_guard(node):
+        return True
+
+    # Check for sys.version_info comparisons
+    match node:
+        case ast.Compare(
+            left=ast.Attribute(value=ast.Name(id="sys"), attr="version_info")
+        ):
+            return True
+        case _:
+            return False
+
+
+def _extract_version_tuple(comparator: ast.expr) -> tuple[int, ...] | None:
+    """Extract version tuple from a comparator node."""
+    match comparator:
+        case ast.Tuple(elts=elts):
+            version_parts = []
+            for elt in elts:
+                match elt:
+                    case ast.Constant(value=int() as val):
+                        version_parts.append(val)
+                    case _:
+                        return None
+            return tuple(version_parts)
+        case _:
+            return None
+
+
+def _check_version_exclusion(
+    op: ast.cmpop,
+    comp_version: tuple[int, ...],
+    target_version: tuple[int, ...],
+) -> bool:
+    """Check if a version comparison excludes the target version."""
+    match op:
+        case ast.Lt():
+            return not (target_version < comp_version)
+        case ast.LtE():
+            return not (target_version <= comp_version)
+        case ast.Gt():
+            return not (target_version > comp_version)
+        case ast.GtE():
+            return not (target_version >= comp_version)
+        case ast.Eq():
+            return target_version != comp_version
+        case _:
+            # NotEq always allows some versions
+            return False
+
+
+def version_guard_excludes_315_plus(node: ast.Compare) -> bool:
+    """Check if a sys.version_info guard excludes Python 3.15+.
+
+    Returns True if the guard condition would be False for Python 3.15
+    or later.
+    """
+    match node:
+        case ast.Compare(
+            left=ast.Attribute(value=ast.Name(id="sys"), attr="version_info"),
+            ops=ops,
+            comparators=comparators,
+        ) if len(ops) == 1 and len(comparators) == 1:
+            op = ops[0]
+            comparator = comparators[0]
+            comp_version = _extract_version_tuple(comparator)
+            if comp_version is None:
+                return False
+            try:
+                return _check_version_exclusion(op, comp_version, (3, 15))
+            except (AttributeError, ValueError):
+                return False
         case _:
             return False
 

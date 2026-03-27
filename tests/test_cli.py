@@ -131,8 +131,10 @@ def test_collect_recommended_lazy_modules_includes_intermediate_parents() -> Non
 
     recommended = collect_recommended_lazy_modules_for_file(path)
 
+    # importlib.abc is NOT recommended because it's guarded by
+    # sys.version_info < (3, 11) which excludes Python 3.15+
     assert "importlib" in recommended
-    assert "importlib.abc" in recommended
+    assert "importlib.abc" not in recommended
     assert "importlib.resources" in recommended
     assert "importlib.resources.abc" in recommended
 

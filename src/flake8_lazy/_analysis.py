@@ -31,6 +31,7 @@ from ._bindings import (
     collect_top_level_lazy_import_bindings,
 )
 from ._visitors import (
+    collect_guarded_import_packages,
     collect_non_lazy_imports,
     collect_strictly_top_level_attribute_paths,
     collect_strictly_top_level_names,
@@ -384,6 +385,7 @@ def _collect_recommended_lazy_bindings(
     runtime_attribute_paths = collect_top_level_runtime_attribute_paths(tree)
     guard_names = collect_type_checking_guard_names(tree)
     side_effect_packages = collect_side_effect_only_import_packages(tree)
+    guarded_packages = collect_guarded_import_packages(tree)
     guard_packages: set[str] = {
         package
         for binding in bindings
@@ -399,6 +401,7 @@ def _collect_recommended_lazy_bindings(
     blocked_packages = (
         side_effect_packages
         | guard_packages
+        | guarded_packages
         | non_lazy_packages
         | non_lazy_names
         | guard_names

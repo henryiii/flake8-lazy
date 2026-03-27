@@ -381,6 +381,107 @@ if TYPE_CHECKING:
     assert errors[0][2] == "LZY102 module 'numpy' should be listed in __lazy_modules__"
 
 
+def test_checker_ignores_sys_version_info_less_than_314_guard() -> None:
+    """Imports guarded by sys.version_info < (3, 14) are ignored.
+
+    They exclude Python 3.15+.
+    """
+    tree = ast.parse(
+        """
+import sys
+
+if sys.version_info < (3, 14):
+    from importlib.abc import Traversable
+else:
+    from importlib.resources.abc import Traversable
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    # Only importlib.resources and its submodules should be recommended.
+    # importlib.abc should NOT be recommended (guarded if-block excludes 3.15)
+    error_msgs = [e[2] for e in errors]
+    assert not any("importlib.abc" in msg for msg in error_msgs)
+    assert any("importlib.resources" in msg for msg in error_msgs)
+
+
+def test_checker_includes_sys_version_info_less_than_316_guard() -> None:
+    """Imports guarded by sys.version_info < (3, 16) are included.
+
+    They allow Python 3.15.
+    """
+    tree = ast.parse(
+        """
+import sys
+
+if sys.version_info < (3, 16):
+    import numpy
+else:
+    import pandas
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    # Both numpy and pandas should be recommended as they both execute in 3.15
+    assert len(errors) == 2
+    assert any("numpy" in e[2] for e in errors)
+    assert any("pandas" in e[2] for e in errors)
+
+
+def test_checker_includes_sys_version_info_gte_314_guard() -> None:
+    """Imports guarded by sys.version_info >= (3, 14) are included.
+
+    They allow Python 3.15.
+    """
+    tree = ast.parse(
+        """
+import sys
+
+if sys.version_info >= (3, 14):
+    import numpy
+else:
+    import pandas
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    # Both numpy and pandas should be recommended
+    assert len(errors) == 2
+    assert any("numpy" in e[2] for e in errors)
+    assert any("pandas" in e[2] for e in errors)
+
+
+def test_checker_ignores_sys_version_info_gte_316_guard() -> None:
+    """Imports guarded by sys.version_info >= (3, 16) are ignored.
+
+    They exclude Python 3.15.
+    """
+    tree = ast.parse(
+        """
+import sys
+
+if sys.version_info >= (3, 16):
+    import numpy
+else:
+    import pandas
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    # Only pandas should be recommended; numpy is guarded by version
+    # check that excludes 3.15
+    assert len(errors) == 1
+    assert "pandas" in errors[0][2]
+
+
 def test_checker_requires_explicit_nested_import_package() -> None:
     tree = ast.parse(
         """
