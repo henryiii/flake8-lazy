@@ -126,6 +126,17 @@ def test_collect_recommended_lazy_modules_for_repo_review_rich_children() -> Non
     assert "rich.traceback" not in recommended
 
 
+def test_collect_recommended_lazy_modules_includes_intermediate_parents() -> None:
+    path = Path(__file__).parent / "examples" / "repo_review" / "_compat.py.txt"
+
+    recommended = collect_recommended_lazy_modules_for_file(path)
+
+    assert "importlib" in recommended
+    assert "importlib.abc" in recommended
+    assert "importlib.resources" in recommended
+    assert "importlib.resources.abc" in recommended
+
+
 def test_collect_errors_for_file_skips_enclosing_package_diagnostics(
     tmp_path: Path,
 ) -> None:

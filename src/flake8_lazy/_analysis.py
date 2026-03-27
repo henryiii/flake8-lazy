@@ -423,17 +423,20 @@ def _collect_recommended_lazy_bindings(
         seen_packages.add(package)
 
         if "." in package and "{" not in package:
-            root = package.split(".", maxsplit=1)[0]
-            if policy.should_add_root(root, seen_packages=seen_packages):
-                recommended.append(
-                    ImportBinding(
-                        package=root,
-                        bound_name=root,
-                        lineno=binding.lineno,
-                        col_offset=binding.col_offset,
+            # Add all parent packages from root to immediate parent
+            parts = package.split(".")
+            for i in range(1, len(parts)):
+                parent = ".".join(parts[:i])
+                if policy.should_add_root(parent, seen_packages=seen_packages):
+                    recommended.append(
+                        ImportBinding(
+                            package=parent,
+                            bound_name=parent,
+                            lineno=binding.lineno,
+                            col_offset=binding.col_offset,
+                        )
                     )
-                )
-                seen_packages.add(root)
+                    seen_packages.add(parent)
 
     return recommended
 
