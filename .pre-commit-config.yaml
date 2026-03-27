@@ -108,3 +108,4 @@ repos:
     rev: v1.22.0
     hooks:
       - id: zizmor
+        args: [--persona=pedantic]
