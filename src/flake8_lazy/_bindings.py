@@ -30,6 +30,7 @@ class ImportBinding:
     bound_name: str
     lineno: int
     col_offset: int
+    is_aliased: bool = False
 
 
 def collect_import_bindings(
@@ -46,6 +47,7 @@ def collect_import_bindings(
                         bound_name=bound_name_for_import(alias, from_import=False),
                         lineno=lineno,
                         col_offset=col_offset,
+                        is_aliased=alias.asname is not None,
                     )
                     for alias in aliases
                 )
@@ -60,6 +62,7 @@ def collect_import_bindings(
                         bound_name=bound_name_for_import(alias, from_import=True),
                         lineno=lineno,
                         col_offset=col_offset,
+                        is_aliased=alias.asname is not None,
                     )
                     for alias in aliases
                     if alias.name != "*"
