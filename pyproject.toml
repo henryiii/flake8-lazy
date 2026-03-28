@@ -42,7 +42,7 @@ LZY = "flake8_lazy:LazyImportChecker"
 [project.urls]
 Homepage = "https://github.com/henryiii/flake8-lazy"
 "Bug Tracker" = "https://github.com/henryiii/flake8-lazy/issues"
-Discussions = "https://github.com/henryiii/flake8-lazy/discussions"
+Documentation = "https://flake8-lazy.readthedocs.io"
 Changelog = "https://github.com/henryiii/flake8-lazy/releases"
 
 
