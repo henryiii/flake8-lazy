@@ -30,12 +30,12 @@ from ._analysis import (
     collect_unused_lazy_modules,
 )
 
-__all__ = ["LazyImportChecker"]
+__all__ = ["ERROR_MESSAGES", "LazyImportChecker"]
 
 
 ERROR_MESSAGES = {
-    "LZY101": "stdlib module {package!r} should be listed in __lazy_modules__",
-    "LZY102": "module {package!r} should be listed in __lazy_modules__",
+    "LZY101": "stdlib module {module!r} should be listed in __lazy_modules__",
+    "LZY102": "module {module!r} should be listed in __lazy_modules__",
     "LZY201": "__lazy_modules__ should be sorted",
     "LZY204": "__lazy_modules__ should be assigned before importing modules it names",
     "LZY202": "module {module!r} is listed in __lazy_modules__ but never imported",
@@ -46,9 +46,9 @@ ERROR_MESSAGES = {
         "module {module!r} is declared lazy by both 'lazy' keyword and __lazy_modules__"
     ),
     "LZY303": "module {module!r} is imported both eagerly and lazily",
-    "LZY401": "module {package!r} is declared lazy but accessed at the top level",
+    "LZY401": "module {module!r} is declared lazy but accessed at the top level",
     "LZY402": (
-        "module {package!r} is an enclosing package for this file "
+        "module {module!r} is an enclosing package for this file "
         "and should not be declared lazy"
     ),
 }
@@ -76,12 +76,12 @@ class LazyImportChecker:
         self,
     ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
-        for package, lineno, col_offset in collect_missing_lazy_modules(
+        for module, lineno, col_offset in collect_missing_lazy_modules(
             self.tree,
             filename=self.filename,
         ):
-            code = _lazy_module_error_code(package)
-            message = ERROR_MESSAGES[code].format(package=package)
+            code = _lazy_module_error_code(module)
+            message = ERROR_MESSAGES[code].format(module=module)
             errors.append((lineno, col_offset, f"{code} {message}", type(self)))
         return errors
 
@@ -152,14 +152,14 @@ class LazyImportChecker:
         self,
     ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
-        for package, lineno, col_offset in collect_unnecessary_lazy_imports(self.tree):
-            message = ERROR_MESSAGES["LZY401"].format(package=package)
+        for module, lineno, col_offset in collect_unnecessary_lazy_imports(self.tree):
+            message = ERROR_MESSAGES["LZY401"].format(module=module)
             errors.append((lineno, col_offset, f"LZY401 {message}", type(self)))
-        for package, lineno, col_offset in collect_enclosing_lazy_modules(
+        for module, lineno, col_offset in collect_enclosing_lazy_modules(
             self.tree,
             filename=self.filename,
         ):
-            message = ERROR_MESSAGES["LZY402"].format(package=package)
+            message = ERROR_MESSAGES["LZY402"].format(module=module)
             errors.append((lineno, col_offset, f"LZY402 {message}", type(self)))
         return errors
 

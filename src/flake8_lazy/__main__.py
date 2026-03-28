@@ -4,6 +4,7 @@ __lazy_modules__ = [
     "argparse",
     "flake8_lazy._rewriter",
     "flake8_lazy.api",
+    "flake8_lazy.checker",
     "pathlib",
     "sys",
 ]
@@ -19,6 +20,7 @@ from flake8_lazy.api import (
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
+from flake8_lazy.checker import ERROR_MESSAGES
 
 __all__ = ["main"]
 
@@ -35,7 +37,15 @@ def _format_lazy_modules(path: Path, modules: list[str]) -> str:
 
 def main(argv: list[str] | None = None) -> None:
     """Run flake8-lazy checks directly from the command line."""
-    parser = argparse.ArgumentParser(allow_abbrev=False)
+    help_epilog = "\n".join(
+        (f"{code}: {msg.replace('{module!r} ', '')}")
+        for code, msg in ERROR_MESSAGES.items()
+    )
+    parser = argparse.ArgumentParser(
+        allow_abbrev=False,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=help_epilog,
+    )
     parser.add_argument("files", nargs="+", type=Path)
     parser.add_argument(
         "--version",
