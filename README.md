@@ -19,6 +19,20 @@ lazy import system.
 Error messages will mention `__lazy_modules__` since that is backward compatible
 with older Python versions, but the `lazy` keyword is supported too.
 
+## Quick run
+
+There's a standalone `flake8-lazy` runner. If you use uv or pipx, you can run it
+from anywhere without installation:
+
+```bash
+uvx flake8-lazy <filenames>
+# OR
+pipx run flake8-lazy <filenames>
+```
+
+Try `--format=lazy-modules` to get copy-paste lines or even `--apply` to have
+the tool update your lazy modules automatically!
+
 ## Install
 
 ```bash
@@ -28,15 +42,7 @@ python -m pip install flake8-lazy
 Usually you would include this in some sort of dependency-group in your project,
 e.g. `dev` or `lint`.
 
-flake8 will automatically discover the plugin. There's also a standalone
-`flake8-lazy` runner. If you use uv or pipx, you can run it from anywhere
-without installation:
-
-```bash
-uvx flake8-lazy <filenames>
-# OR
-pipx run flake8-lazy <filenames>
-```
+flake8 will automatically discover the plugin.
 
 ## Rule codes
 
