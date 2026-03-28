@@ -33,6 +33,27 @@ from ._analysis import (
 __all__ = ["LazyImportChecker"]
 
 
+ERROR_MESSAGES = {
+    "LZY101": "stdlib module {package!r} should be listed in __lazy_modules__",
+    "LZY102": "module {package!r} should be listed in __lazy_modules__",
+    "LZY201": "__lazy_modules__ should be sorted",
+    "LZY204": "__lazy_modules__ should be assigned before importing modules it names",
+    "LZY202": "module {module!r} is listed in __lazy_modules__ but never imported",
+    "LZY203": "module {module!r} is duplicated in __lazy_modules__",
+    "LZY205": "module {module!r} in __lazy_modules__ must be absolute",
+    "LZY301": "lazy import {module!r} inside suppress(ImportError) is misleading",
+    "LZY302": (
+        "module {module!r} is declared lazy by both 'lazy' keyword and __lazy_modules__"
+    ),
+    "LZY303": "module {module!r} is imported both eagerly and lazily",
+    "LZY401": "module {package!r} is declared lazy but accessed at the top level",
+    "LZY402": (
+        "module {package!r} is an enclosing package for this file "
+        "and should not be declared lazy"
+    ),
+}
+
+
 def _lazy_module_error_code(module: str) -> str:
     root_module = module.split(".", maxsplit=1)[0]
     if root_module in sys.stdlib_module_names:
@@ -60,18 +81,8 @@ class LazyImportChecker:
             filename=self.filename,
         ):
             code = _lazy_module_error_code(package)
-            stdlib = " stdlib" if code == "LZY101" else ""
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    (
-                        f"{code}{stdlib} module '{package}' should be listed in "
-                        "__lazy_modules__"
-                    ),
-                    type(self),
-                ),
-            )
+            message = ERROR_MESSAGES[code].format(package=package)
+            errors.append((lineno, col_offset, f"{code} {message}", type(self)))
         return errors
 
     def _build_lazy_module_validation_errors(
@@ -83,59 +94,35 @@ class LazyImportChecker:
                 (
                     lineno,
                     col_offset,
-                    "LZY201 __lazy_modules__ should be sorted",
+                    f"LZY201 {ERROR_MESSAGES['LZY201']}",
                     type(self),
-                ),
+                )
             )
 
         for module, lineno, col_offset in collect_unused_lazy_modules(
             self.tree,
             filename=self.filename,
         ):
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    (
-                        f"LZY202 module '{module}' is listed in __lazy_modules__"
-                        " but never imported"
-                    ),
-                    type(self),
-                ),
-            )
+            message = ERROR_MESSAGES["LZY202"].format(module=module)
+            errors.append((lineno, col_offset, f"LZY202 {message}", type(self)))
 
         for module, lineno, col_offset in collect_duplicate_lazy_modules(self.tree):
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    f"LZY203 module '{module}' is duplicated in __lazy_modules__",
-                    type(self),
-                ),
-            )
+            message = ERROR_MESSAGES["LZY203"].format(module=module)
+            errors.append((lineno, col_offset, f"LZY203 {message}", type(self)))
 
         for lineno, col_offset in collect_late_lazy_module_assignments(self.tree):
             errors.append(
                 (
                     lineno,
                     col_offset,
-                    (
-                        "LZY204 __lazy_modules__ should be assigned before"
-                        " importing modules it names"
-                    ),
+                    f"LZY204 {ERROR_MESSAGES['LZY204']}",
                     type(self),
-                ),
+                )
             )
 
         for module, lineno, col_offset in collect_invalid_lazy_module_names(self.tree):
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    f"LZY205 module '{module}' in __lazy_modules__ must be absolute",
-                    type(self),
-                ),
-            )
+            message = ERROR_MESSAGES["LZY205"].format(module=module)
+            errors.append((lineno, col_offset, f"LZY205 {message}", type(self)))
 
         return errors
 
@@ -146,42 +133,18 @@ class LazyImportChecker:
         for module, lineno, col_offset in collect_lazy_imports_in_suppress_blocks(
             self.tree
         ):
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    (
-                        f"LZY301 lazy import '{module}' inside suppress(ImportError)"
-                        " is misleading"
-                    ),
-                    type(self),
-                ),
-            )
+            message = ERROR_MESSAGES["LZY301"].format(module=module)
+            errors.append((lineno, col_offset, f"LZY301 {message}", type(self)))
 
         for module, lineno, col_offset in collect_redundant_lazy_declarations(
             self.tree
         ):
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    (
-                        f"LZY302 module '{module}' is declared lazy"
-                        " by both 'lazy' keyword and __lazy_modules__"
-                    ),
-                    type(self),
-                ),
-            )
+            message = ERROR_MESSAGES["LZY302"].format(module=module)
+            errors.append((lineno, col_offset, f"LZY302 {message}", type(self)))
 
         for module, lineno, col_offset in collect_mixed_lazy_eager_imports(self.tree):
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    f"LZY303 module '{module}' is imported both eagerly and lazily",
-                    type(self),
-                ),
-            )
+            message = ERROR_MESSAGES["LZY303"].format(module=module)
+            errors.append((lineno, col_offset, f"LZY303 {message}", type(self)))
 
         return errors
 
@@ -190,32 +153,14 @@ class LazyImportChecker:
     ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         for package, lineno, col_offset in collect_unnecessary_lazy_imports(self.tree):
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    (
-                        f"LZY401 module '{package}' is declared lazy"
-                        " but accessed at the top level"
-                    ),
-                    type(self),
-                ),
-            )
+            message = ERROR_MESSAGES["LZY401"].format(package=package)
+            errors.append((lineno, col_offset, f"LZY401 {message}", type(self)))
         for package, lineno, col_offset in collect_enclosing_lazy_modules(
             self.tree,
             filename=self.filename,
         ):
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    (
-                        f"LZY402 module '{package}' is an enclosing package"
-                        " for this file and should not be declared lazy"
-                    ),
-                    type(self),
-                ),
-            )
+            message = ERROR_MESSAGES["LZY402"].format(package=package)
+            errors.append((lineno, col_offset, f"LZY402 {message}", type(self)))
         return errors
 
     def run(self) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
