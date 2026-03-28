@@ -7,7 +7,9 @@
 [![PyPI platforms][pypi-platforms]][pypi-link]
 
 flake8-lazy is a flake8 plugin that finds imports which can be made lazy in
-Python 3.15 (following [PEP 810](https://peps.python.org/pep-0810/)).
+Python 3.15 (following [PEP 810](https://peps.python.org/pep-0810/)). See
+[the post here](https://iscinumpy.dev/post/flake8-lazy/) for more on the
+development of this tool!
 
 flake8-lazy helps keep import-time overhead low by detecting imports that can be
 declared as lazy in `__lazy_modules__`. For this package itself,
@@ -220,6 +222,24 @@ Bump the version:
 ```bash
 uv version <new_version>
 ```
+
+## FAQ
+
+### Why is this not in Ruff?
+
+It's really new, and it's a bit complex. Maybe someday it will be? :)
+
+### Why is there no config?
+
+I don't like flake8's config file choices, so I've tried to make it work out of
+the box. Probably will get some eventually, though, like a list of modules that
+can't be lazy imported, or a 'simple' mode that requires every module to be
+lazy.
+
+### It's missing something!
+
+Open an issue! If it's clear and detailed and in-scope, I might even be able to
+assign it to copilot!
 
 ## Acknowledgements
 
