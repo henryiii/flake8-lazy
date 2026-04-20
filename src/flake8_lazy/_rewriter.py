@@ -125,6 +125,7 @@ def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
     insertion_index = max(0, insertion_line - 1)
     block = [f"{assignment_line}{newline}"]
 
+    # Add a blank line after the assignment when the following line is non-empty.
     if insertion_index < len(lines):
         if lines[insertion_index].strip():
             block.append(newline)
@@ -133,6 +134,11 @@ def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
             block.append(newline)
     else:
         block.append(newline)
+
+    # Add a blank line before the assignment when the preceding line is non-empty
+    # (e.g. directly after a `from __future__ import annotations` statement).
+    if insertion_index > 0 and lines[insertion_index - 1].strip():
+        block.insert(0, newline)
 
     lines[insertion_index:insertion_index] = block
     return "".join(lines)

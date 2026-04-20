@@ -376,7 +376,33 @@ def test_main_apply_inserts_after_future_annotations_import(
     assert captured.err == ""
     assert path.read_text(encoding="utf-8") == (
         "from __future__ import annotations\n"
-        '__lazy_modules__ = ["requests"]\n\n'
+        "\n"
+        '__lazy_modules__ = ["requests"]\n'
+        "\n"
+        "import requests\n"
+    )
+
+
+def test_main_apply_inserts_blank_line_after_future_annotations_import_when_missing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from __future__ import annotations\nimport requests\n",
+        encoding="utf-8",
+    )
+
+    main(["--apply", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        "from __future__ import annotations\n"
+        "\n"
+        '__lazy_modules__ = ["requests"]\n'
+        "\n"
         "import requests\n"
     )
 
