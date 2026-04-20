@@ -75,3 +75,11 @@ You can build the docs only with:
 ```bash
 nox -s docs --non-interactive
 ```
+
+# Releasing
+
+Bump the version:
+
+```bash
+uv version <new_version>
+```
