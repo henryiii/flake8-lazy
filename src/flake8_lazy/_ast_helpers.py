@@ -18,6 +18,7 @@ __all__ = [
     "is_runtime_guard",
     "is_suppress_import_error_call",
     "is_type_checking_guard",
+    "lazy_module_container_elements",
     "lazy_modules_assignment_value",
     "package_for_import_from",
     "parse_lazy_module_list",
@@ -288,12 +289,42 @@ def lazy_modules_assignment_value(node: ast.AST) -> ast.AST | None:
             return None
 
 
-def parse_lazy_module_list(node: ast.AST) -> list[str] | None:
+_LAZY_MODULES_CALL_NAMES: frozenset[str] = frozenset(
+    {"list", "tuple", "set", "frozenset"}
+)
+
+
+def lazy_module_container_elements(node: ast.AST) -> list[ast.expr] | None:
+    """Return elements from a supported ``__lazy_modules__`` container, or None.
+
+    Recognised forms: ``[...]``, ``(...)``, ``{...}``, and
+    ``list/tuple/set/frozenset`` applied to any of those.
+    """
     match node:
-        case ast.List(elts=elements):
-            pass
+        case (
+            ast.List(elts=elements) | ast.Tuple(elts=elements) | ast.Set(elts=elements)
+        ):
+            return list(elements)
+        case ast.Call(func=ast.Name(id=name), args=[inner], keywords=[]) if (
+            name in _LAZY_MODULES_CALL_NAMES
+        ):
+            match inner:
+                case (
+                    ast.List(elts=elements)
+                    | ast.Tuple(elts=elements)
+                    | ast.Set(elts=elements)
+                ):
+                    return list(elements)
+                case _:
+                    return None
         case _:
             return None
+
+
+def parse_lazy_module_list(node: ast.AST) -> list[str] | None:
+    elements = lazy_module_container_elements(node)
+    if elements is None:
+        return None
 
     modules: list[str] = []
     for element in elements:

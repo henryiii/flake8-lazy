@@ -727,7 +727,39 @@ __lazy_modules__: List[str] = ["numpy"]
     )
 
 
-def test_checker_emits_lzy203_for_duplicate_lazy_module() -> None:
+@pytest.mark.parametrize(
+    "container",
+    [
+        '["numpy"]',
+        '("numpy",)',
+        '{"numpy"}',
+        'list(["numpy"])',
+        'list(("numpy",))',
+        'tuple(["numpy"])',
+        'tuple(("numpy",))',
+        'set(["numpy"])',
+        'set(("numpy",))',
+        'set({"numpy"})',
+        'frozenset(["numpy"])',
+        'frozenset(("numpy",))',
+        'frozenset({"numpy"})',
+    ],
+)
+def test_checker_recognises_all_lazy_modules_container_forms(container: str) -> None:
+    tree = ast.parse(
+        f"""
+__lazy_modules__ = {container}
+import numpy
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert not any(e[2].startswith("LZY102") for e in errors), (
+        f"LZY102 unexpectedly raised for container {container!r}"
+    )
+
     tree = ast.parse(
         """
 __lazy_modules__ = ["numpy", "numpy"]
