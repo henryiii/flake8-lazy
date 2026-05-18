@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-__lazy_modules__ = [
+__lazy_modules__ = {
     "ast",
     f"{__spec__.parent}._analysis",
     f"{__spec__.parent}.checker",
     "pathlib",
     "sys",
     "tokenize",
-]
+}
 
 import ast
 import sys
