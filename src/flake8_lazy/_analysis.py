@@ -20,6 +20,7 @@ from ._ast_helpers import (
     containing_package_prefixes,
     is_lazy_import_node,
     is_suppress_import_error_call,
+    lazy_module_container_elements,
     lazy_modules_assignment_value,
     package_for_import_from,
     parse_lazy_module_list,
@@ -143,27 +144,27 @@ def _iter_declared_lazy_module_entries(
         if value_node is None:
             continue
 
-        match value_node:
-            case ast.List(elts=elements):
-                for element in elements:
-                    match element:
-                        case ast.Constant(
-                            value=str() as value,
-                            lineno=lineno,
-                            col_offset=col_offset,
-                        ):
-                            entries.append((value, lineno, col_offset))
-                        case ast.JoinedStr(
-                            lineno=lineno,
-                            col_offset=col_offset,
-                        ):
-                            parsed_relative = parse_relative_lazy_module(element)
-                            if parsed_relative is not None:
-                                entries.append((parsed_relative, lineno, col_offset))
-                        case _:
-                            continue
-            case _:
-                continue
+        elements = lazy_module_container_elements(value_node)
+        if elements is None:
+            continue
+
+        for element in elements:
+            match element:
+                case ast.Constant(
+                    value=str() as value,
+                    lineno=lineno,
+                    col_offset=col_offset,
+                ):
+                    entries.append((value, lineno, col_offset))
+                case ast.JoinedStr(
+                    lineno=lineno,
+                    col_offset=col_offset,
+                ):
+                    parsed_relative = parse_relative_lazy_module(element)
+                    if parsed_relative is not None:
+                        entries.append((parsed_relative, lineno, col_offset))
+                case _:
+                    continue
 
     return entries
 

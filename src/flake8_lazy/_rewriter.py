@@ -7,7 +7,7 @@ import io
 import tokenize
 from typing import TYPE_CHECKING
 
-from ._ast_helpers import is_lazy_modules_target
+from ._ast_helpers import is_lazy_modules_target, lazy_modules_assignment_value
 
 __all__ = ["apply_lazy_modules"]
 
@@ -21,9 +21,39 @@ def _format_module_literal(module: str) -> str:
     return f'"{module}"'
 
 
-def _lazy_modules_assignment_line(modules: list[str]) -> str:
+_CONTAINER_KINDS: frozenset[str] = frozenset({"list", "tuple", "set", "frozenset"})
+
+
+def _detect_container_kind(node: ast.AST) -> str:
+    """Return the container kind of an existing ``__lazy_modules__`` value node."""
+    match node:
+        case ast.List():
+            return "list"
+        case ast.Tuple():
+            return "tuple"
+        case ast.Set():
+            return "set"
+        case ast.Call(func=ast.Name(id=name), keywords=[]) if name in _CONTAINER_KINDS:
+            return name
+        case _:
+            return "list"
+
+
+def _lazy_modules_assignment_line(modules: list[str], container: str = "list") -> str:
     joined_modules = ", ".join(_format_module_literal(module) for module in modules)
-    return f"__lazy_modules__ = [{joined_modules}]"
+    match container:
+        case "tuple":
+            # Single-element tuples require a trailing comma.
+            inner = (
+                f"({joined_modules},)" if len(modules) == 1 else f"({joined_modules})"
+            )
+        case "set":
+            inner = f"{{{joined_modules}}}"
+        case "frozenset":
+            inner = f"frozenset([{joined_modules}])"
+        case _:
+            inner = f"[{joined_modules}]"
+    return f"__lazy_modules__ = {inner}"
 
 
 def _is_lazy_modules_assignment(node: ast.stmt) -> bool:
@@ -92,6 +122,24 @@ def _insertion_line_for_lazy_modules(tree: ast.Module, source: str) -> int:
     return max(first_line, future_end_line + 1)
 
 
+def _build_insertion_block(
+    assignment_line: str,
+    newline: str,
+    lines: list[str],
+    insertion_index: int,
+) -> list[str]:
+    block = [f"{assignment_line}{newline}"]
+
+    next_line = lines[insertion_index] if insertion_index < len(lines) else None
+    if next_line is None or next_line.strip():
+        block.append(newline)
+
+    if insertion_index > 0 and lines[insertion_index - 1].strip():
+        block.insert(0, newline)
+
+    return block
+
+
 def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
     tree = ast.parse(source)
     newline = "\r\n" if "\r\n" in source else "\n"
@@ -108,7 +156,13 @@ def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
             del lines[statement.lineno - 1 : statement.end_lineno]
         return "".join(lines)
 
-    assignment_line = _lazy_modules_assignment_line(modules)
+    container = "list"
+    if assignments:
+        value = lazy_modules_assignment_value(assignments[0])
+        if value is not None:
+            container = _detect_container_kind(value)
+
+    assignment_line = _lazy_modules_assignment_line(modules, container)
 
     if assignments:
         first_assignment = assignments[0]
@@ -123,22 +177,7 @@ def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
 
     insertion_line = _insertion_line_for_lazy_modules(tree, source)
     insertion_index = max(0, insertion_line - 1)
-    block = [f"{assignment_line}{newline}"]
-
-    # Add a blank line after the assignment when the following line is non-empty.
-    if insertion_index < len(lines):
-        if lines[insertion_index].strip():
-            block.append(newline)
-    elif lines:
-        if lines[-1].strip():
-            block.append(newline)
-    else:
-        block.append(newline)
-
-    # Add a blank line before the assignment when the preceding line is non-empty
-    # (e.g. directly after a `from __future__ import annotations` statement).
-    if insertion_index > 0 and lines[insertion_index - 1].strip():
-        block.insert(0, newline)
+    block = _build_insertion_block(assignment_line, newline, lines, insertion_index)
 
     lines[insertion_index:insertion_index] = block
     return "".join(lines)
