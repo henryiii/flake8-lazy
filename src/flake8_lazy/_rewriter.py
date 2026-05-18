@@ -122,6 +122,24 @@ def _insertion_line_for_lazy_modules(tree: ast.Module, source: str) -> int:
     return max(first_line, future_end_line + 1)
 
 
+def _build_insertion_block(
+    assignment_line: str,
+    newline: str,
+    lines: list[str],
+    insertion_index: int,
+) -> list[str]:
+    block = [f"{assignment_line}{newline}"]
+
+    next_line = lines[insertion_index] if insertion_index < len(lines) else None
+    if next_line is None or next_line.strip():
+        block.append(newline)
+
+    if insertion_index > 0 and lines[insertion_index - 1].strip():
+        block.insert(0, newline)
+
+    return block
+
+
 def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
     tree = ast.parse(source)
     newline = "\r\n" if "\r\n" in source else "\n"
@@ -159,22 +177,7 @@ def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
 
     insertion_line = _insertion_line_for_lazy_modules(tree, source)
     insertion_index = max(0, insertion_line - 1)
-    block = [f"{assignment_line}{newline}"]
-
-    # Add a blank line after the assignment when the following line is non-empty.
-    if insertion_index < len(lines):
-        if lines[insertion_index].strip():
-            block.append(newline)
-    elif lines:
-        if lines[-1].strip():
-            block.append(newline)
-    else:
-        block.append(newline)
-
-    # Add a blank line before the assignment when the preceding line is non-empty
-    # (e.g. directly after a `from __future__ import annotations` statement).
-    if insertion_index > 0 and lines[insertion_index - 1].strip():
-        block.insert(0, newline)
+    block = _build_insertion_block(assignment_line, newline, lines, insertion_index)
 
     lines[insertion_index:insertion_index] = block
     return "".join(lines)
