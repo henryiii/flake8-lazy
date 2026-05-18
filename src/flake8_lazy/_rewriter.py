@@ -7,7 +7,7 @@ import io
 import tokenize
 from typing import TYPE_CHECKING
 
-from ._ast_helpers import is_lazy_modules_target
+from ._ast_helpers import is_lazy_modules_target, lazy_modules_assignment_value
 
 __all__ = ["apply_lazy_modules"]
 
@@ -21,9 +21,39 @@ def _format_module_literal(module: str) -> str:
     return f'"{module}"'
 
 
-def _lazy_modules_assignment_line(modules: list[str]) -> str:
+_CONTAINER_KINDS: frozenset[str] = frozenset({"list", "tuple", "set", "frozenset"})
+
+
+def _detect_container_kind(node: ast.AST) -> str:
+    """Return the container kind of an existing ``__lazy_modules__`` value node."""
+    match node:
+        case ast.List():
+            return "list"
+        case ast.Tuple():
+            return "tuple"
+        case ast.Set():
+            return "set"
+        case ast.Call(func=ast.Name(id=name), keywords=[]) if name in _CONTAINER_KINDS:
+            return name
+        case _:
+            return "list"
+
+
+def _lazy_modules_assignment_line(modules: list[str], container: str = "list") -> str:
     joined_modules = ", ".join(_format_module_literal(module) for module in modules)
-    return f"__lazy_modules__ = [{joined_modules}]"
+    match container:
+        case "tuple":
+            # Single-element tuples require a trailing comma.
+            inner = (
+                f"({joined_modules},)" if len(modules) == 1 else f"({joined_modules})"
+            )
+        case "set":
+            inner = f"{{{joined_modules}}}"
+        case "frozenset":
+            inner = f"frozenset([{joined_modules}])"
+        case _:
+            inner = f"[{joined_modules}]"
+    return f"__lazy_modules__ = {inner}"
 
 
 def _is_lazy_modules_assignment(node: ast.stmt) -> bool:
@@ -108,7 +138,13 @@ def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
             del lines[statement.lineno - 1 : statement.end_lineno]
         return "".join(lines)
 
-    assignment_line = _lazy_modules_assignment_line(modules)
+    container = "list"
+    if assignments:
+        value = lazy_modules_assignment_value(assignments[0])
+        if value is not None:
+            container = _detect_container_kind(value)
+
+    assignment_line = _lazy_modules_assignment_line(modules, container)
 
     if assignments:
         first_assignment = assignments[0]

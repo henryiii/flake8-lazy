@@ -336,6 +336,86 @@ def test_main_apply_replaces_existing_lazy_modules(
     )
 
 
+def test_main_apply_preserves_tuple_container(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ("unused",)\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ("numpy",)\nimport numpy\n'
+    )
+
+
+def test_main_apply_preserves_set_container(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = {"unused"}\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = {"numpy"}\nimport numpy\n'
+    )
+
+
+def test_main_apply_preserves_frozenset_container(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = frozenset(["unused"])\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = frozenset(["numpy"])\nimport numpy\n'
+    )
+
+
+def test_main_apply_preserves_tuple_with_multiple_modules(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ("unused",)\nimport numpy\nimport pandas\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ("numpy", "pandas")\nimport numpy\nimport pandas\n'
+    )
+
+
 def test_main_apply_inserts_after_comments_and_docstring(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
