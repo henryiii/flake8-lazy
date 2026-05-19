@@ -101,9 +101,7 @@ def main(argv: list[str] | None = None) -> None:
                 namespace.apply, declared_modules, recommended_modules
             ):
                 apply_lazy_modules(path, recommended_modules, mode=namespace.apply)
-                if namespace.apply == "native":
-                    # The rewritten file contains Python 3.15+ syntax; skip
-                    # re-parsing and error checks on older interpreters.
+                if namespace.apply == "native" and sys.version_info < (3, 15):
                     continue
                 recommended_modules = collect_recommended_lazy_modules_for_file(path)
                 declared_modules = collect_declared_lazy_modules_for_file(path)

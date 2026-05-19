@@ -231,9 +231,9 @@ def _collect_import_lines_to_lazify(
 def _rewrite_native_lazy_source(source: str, modules: list[str]) -> str:
     """Rewrite ``source`` by adding ``lazy`` keyword to qualifying imports.
 
-    Any existing ``__lazy_modules__`` assignments are removed.  Each
-    top-level import whose module is listed in ``modules`` receives a
-    ``lazy `` prefix.
+    Any existing ``__lazy_modules__`` assignments are removed.  A
+    top-level import statement receives a ``lazy `` prefix only if
+    *all* of its aliases map to packages listed in ``modules``.
     """
     tree = ast.parse(source)
     assert isinstance(tree, ast.Module)
@@ -271,8 +271,11 @@ def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") ->
             )
         case "native":
             updated_source = _rewrite_native_lazy_source(source, modules)
-        case _:  # "list"
+        case "list":
             updated_source = _rewrite_lazy_modules_source(
                 source, modules, forced_container="list"
             )
+        case _:
+            msg = f"unknown apply mode {mode!r}"
+            raise ValueError(msg)
     path.write_text(updated_source, encoding=encoding, newline="")
