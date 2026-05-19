@@ -140,7 +140,12 @@ def _build_insertion_block(
     return block
 
 
-def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
+def _rewrite_lazy_modules_source(
+    source: str,
+    modules: list[str],
+    *,
+    forced_container: str | None = None,
+) -> str:
     tree = ast.parse(source)
     newline = "\r\n" if "\r\n" in source else "\n"
     lines = source.splitlines(keepends=True)
@@ -161,6 +166,9 @@ def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
         value = lazy_modules_assignment_value(assignments[0])
         if value is not None:
             container = _detect_container_kind(value)
+
+    if forced_container is not None:
+        container = forced_container
 
     assignment_line = _lazy_modules_assignment_line(modules, container)
 
@@ -183,9 +191,15 @@ def _rewrite_lazy_modules_source(source: str, modules: list[str]) -> str:
     return "".join(lines)
 
 
-def apply_lazy_modules(path: Path, modules: list[str]) -> None:
+def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") -> None:
     raw_bytes = path.read_bytes()
     encoding, _ = tokenize.detect_encoding(io.BytesIO(raw_bytes).readline)
     source = raw_bytes.decode(encoding)
-    updated_source = _rewrite_lazy_modules_source(source, modules)
+    match mode:
+        case "set":
+            updated_source = _rewrite_lazy_modules_source(
+                source, modules, forced_container="set"
+            )
+        case _:
+            updated_source = _rewrite_lazy_modules_source(source, modules)
     path.write_text(updated_source, encoding=encoding, newline="")

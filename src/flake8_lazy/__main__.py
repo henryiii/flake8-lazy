@@ -60,18 +60,27 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--apply",
-        action="store_true",
-        help="rewrite files to use the recommended __lazy_modules__ declaration",
+        nargs="?",
+        const="list",
+        default=None,
+        metavar="MODE",
+        help="rewrite files to use the recommended lazy declarations; "
+        "MODE is list (default) or set",
     )
     namespace = parser.parse_args(list(argv) if argv is not None else None)
+
+    if namespace.apply is not None and namespace.apply not in {"list", "set"}:
+        parser.error(
+            f"--apply: invalid mode {namespace.apply!r}; choose from list, set"
+        )
 
     found_errors = False
     for path in namespace.files:
         try:
             recommended_modules = collect_recommended_lazy_modules_for_file(path)
             declared_modules = collect_declared_lazy_modules_for_file(path)
-            if namespace.apply and declared_modules != recommended_modules:
-                apply_lazy_modules(path, recommended_modules)
+            if namespace.apply is not None and declared_modules != recommended_modules:
+                apply_lazy_modules(path, recommended_modules, mode=namespace.apply)
                 recommended_modules = collect_recommended_lazy_modules_for_file(path)
                 declared_modules = collect_declared_lazy_modules_for_file(path)
             errors = collect_errors_for_file(path)

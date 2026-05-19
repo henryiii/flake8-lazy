@@ -326,7 +326,7 @@ def test_main_apply_replaces_existing_lazy_modules(
         encoding="utf-8",
     )
 
-    main(["--apply", str(path)])
+    main(["--apply=list", str(path)])
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -346,7 +346,7 @@ def test_main_apply_preserves_tuple_container(
         encoding="utf-8",
     )
 
-    main(["--apply", str(path)])
+    main(["--apply=list", str(path)])
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -366,7 +366,7 @@ def test_main_apply_preserves_set_container(
         encoding="utf-8",
     )
 
-    main(["--apply", str(path)])
+    main(["--apply=list", str(path)])
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -386,7 +386,7 @@ def test_main_apply_preserves_frozenset_container(
         encoding="utf-8",
     )
 
-    main(["--apply", str(path)])
+    main(["--apply=list", str(path)])
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -406,7 +406,7 @@ def test_main_apply_preserves_tuple_with_multiple_modules(
         encoding="utf-8",
     )
 
-    main(["--apply", str(path)])
+    main(["--apply=list", str(path)])
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -428,7 +428,7 @@ def test_main_apply_inserts_after_comments_and_docstring(
         encoding="utf-8",
     )
 
-    main(["--apply", str(path)])
+    main(["--apply=list", str(path)])
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -449,7 +449,7 @@ def test_main_apply_inserts_after_future_annotations_import(
         encoding="utf-8",
     )
 
-    main(["--apply", str(path)])
+    main(["--apply=list", str(path)])
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -473,7 +473,7 @@ def test_main_apply_inserts_blank_line_after_future_annotations_import_when_miss
         encoding="utf-8",
     )
 
-    main(["--apply", str(path)])
+    main(["--apply=list", str(path)])
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -532,7 +532,7 @@ def test_main_apply_removes_existing_lazy_modules_when_none_recommended(
         encoding="utf-8",
     )
 
-    main(["--apply", str(path)])
+    main(["--apply=list", str(path)])
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -550,9 +550,99 @@ def test_main_apply_leaves_file_unchanged_when_no_modules_and_no_existing(
     original = "def helper() -> None:\n    import numpy\n"
     path.write_text(original, encoding="utf-8")
 
-    main(["--apply", str(path)])
+    main(["--apply=list", str(path)])
 
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
     assert path.read_text(encoding="utf-8") == original
+
+
+def test_main_apply_list_mode_explicit_flag(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ["unused"]\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply=list", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ["numpy"]\nimport numpy\n'
+    )
+
+
+def test_main_apply_set_mode_writes_set_literal(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+
+    main(["--apply=set", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = {"numpy"}\n\nimport numpy\n'
+    )
+
+
+def test_main_apply_set_mode_overrides_existing_list(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ["unused"]\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply=set", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = {"numpy"}\nimport numpy\n'
+    )
+
+
+def test_main_apply_set_mode_overrides_existing_tuple(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ("numpy",)\nimport numpy\nimport pandas\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply=set", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = {"numpy", "pandas"}\nimport numpy\nimport pandas\n'
+    )
+
+
+def test_main_apply_invalid_mode_exits(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--apply=bad", str(path)])
+
+    assert excinfo.value.code == 2
