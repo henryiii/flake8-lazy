@@ -13,6 +13,7 @@ from flake8_lazy._analysis import (
 )
 from flake8_lazy._rewriter import apply_lazy_modules
 from flake8_lazy.api import (
+    _build_noqa_map,
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
@@ -672,3 +673,105 @@ def test_main_apply_native_removes_existing_lazy_modules_when_no_recommended(
     assert path.read_text(encoding="utf-8") == (
         "\ndef helper() -> None:\n    import numpy\n"
     )
+
+
+def test_build_noqa_map_bare_noqa() -> None:
+    noqa_map = _build_noqa_map("import numpy  # noqa\n")
+    assert noqa_map == {1: None}
+
+
+def test_build_noqa_map_noqa_with_single_code() -> None:
+    noqa_map = _build_noqa_map("import numpy  # noqa: LZY102\n")
+    assert noqa_map == {1: {"LZY102"}}
+
+
+def test_build_noqa_map_noqa_with_multiple_codes() -> None:
+    noqa_map = _build_noqa_map("import numpy  # noqa: LZY101, LZY102\n")
+    assert noqa_map == {1: {"LZY101", "LZY102"}}
+
+
+def test_build_noqa_map_noqa_case_insensitive() -> None:
+    noqa_map = _build_noqa_map("import numpy  # NOQA\n")
+    assert noqa_map == {1: None}
+
+
+def test_build_noqa_map_no_noqa() -> None:
+    noqa_map = _build_noqa_map("import numpy\n")
+    assert noqa_map == {}
+
+
+def test_collect_errors_suppressed_by_bare_noqa(tmp_path: Path) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy  # noqa\n", encoding="utf-8")
+
+    errors = collect_errors_for_file(path)
+
+    assert errors == []
+
+
+def test_collect_errors_suppressed_by_matching_code(tmp_path: Path) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy  # noqa: LZY102\n", encoding="utf-8")
+
+    errors = collect_errors_for_file(path)
+
+    assert errors == []
+
+
+def test_collect_errors_not_suppressed_by_different_code(tmp_path: Path) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy  # noqa: LZY101\n", encoding="utf-8")
+
+    errors = collect_errors_for_file(path)
+
+    assert errors == [
+        (1, 0, "LZY102 module 'numpy' should be listed in __lazy_modules__"),
+    ]
+
+
+def test_collect_errors_suppressed_by_one_of_multiple_codes(tmp_path: Path) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy  # noqa: LZY101, LZY102\n", encoding="utf-8")
+
+    errors = collect_errors_for_file(path)
+
+    assert errors == []
+
+
+def test_collect_errors_noqa_only_suppresses_its_own_line(tmp_path: Path) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy  # noqa\nimport pandas\n", encoding="utf-8")
+
+    errors = collect_errors_for_file(path)
+
+    assert errors == [
+        (2, 0, "LZY102 module 'pandas' should be listed in __lazy_modules__"),
+    ]
+
+
+def test_main_noqa_suppresses_output_and_exits_zero(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy  # noqa\n", encoding="utf-8")
+
+    main([str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_main_noqa_with_code_suppresses_output_and_exits_zero(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy  # noqa: LZY102\n", encoding="utf-8")
+
+    main([str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
