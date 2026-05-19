@@ -85,17 +85,23 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--apply",
         nargs="?",
-        const="list",
+        const="auto",
         default=None,
         metavar="MODE",
         help="rewrite files to use the recommended lazy declarations; "
-        "MODE is list (default), set, or native",
+        "MODE is auto (default), list, set, or native",
     )
     namespace = parser.parse_args(list(argv) if argv is not None else None)
 
-    if namespace.apply is not None and namespace.apply not in {"list", "set", "native"}:
+    if namespace.apply is not None and namespace.apply not in {
+        "auto",
+        "list",
+        "set",
+        "native",
+    }:
         parser.error(
-            f"--apply: invalid mode {namespace.apply!r}; choose from list, set, native"
+            f"--apply: invalid mode {namespace.apply!r}; "
+            "choose from auto, list, set, native"
         )
 
     found_errors = False

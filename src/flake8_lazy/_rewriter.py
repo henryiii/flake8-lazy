@@ -260,17 +260,21 @@ def _rewrite_native_lazy_source(source: str, modules: list[str]) -> str:
     return "".join(lines)
 
 
-def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") -> None:
+def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "auto") -> None:
     raw_bytes = path.read_bytes()
     encoding, _ = tokenize.detect_encoding(io.BytesIO(raw_bytes).readline)
     source = raw_bytes.decode(encoding)
     match mode:
+        case "list":
+            updated_source = _rewrite_lazy_modules_source(
+                source, modules, forced_container="list"
+            )
         case "set":
             updated_source = _rewrite_lazy_modules_source(
                 source, modules, forced_container="set"
             )
         case "native":
             updated_source = _rewrite_native_lazy_source(source, modules)
-        case _:
+        case _:  # "auto"
             updated_source = _rewrite_lazy_modules_source(source, modules)
     path.write_text(updated_source, encoding=encoding, newline="")
