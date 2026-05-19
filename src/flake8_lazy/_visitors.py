@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-__lazy_modules__ = [f"{__spec__.parent}._ast_helpers"]
+__lazy_modules__ = [
+    f"{__spec__.parent}._ast_helpers",
+    "flake8_lazy._compat",
+    "flake8_lazy._compat.typing",
+]
 
 import ast
 

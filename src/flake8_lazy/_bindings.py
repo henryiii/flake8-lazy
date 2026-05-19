@@ -6,6 +6,8 @@ __lazy_modules__ = [
     "ast",
     f"{__spec__.parent}._ast_helpers",
     f"{__spec__.parent}._visitors",
+    "flake8_lazy._compat",
+    "flake8_lazy._compat.typing",
 ]
 
 import ast
