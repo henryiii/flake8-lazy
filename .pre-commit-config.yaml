@@ -36,28 +36,35 @@ repos:
       - id: rst-inline-touching-normal
 
   - repo: https://github.com/rbubley/mirrors-prettier
-    rev: "v3.8.1"
+    rev: "v3.8.3"
     hooks:
       - id: prettier
         types_or: [yaml, markdown, html, css, scss, javascript, json]
         args: [--prose-wrap=always]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.15.6"
+    rev: "v0.15.13"
     hooks:
       - id: ruff-check
         args: ["--fix"]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: "v1.19.1"
+    rev: "v2.1.0"
     hooks:
       - id: mypy
         files: src|tests|noxfile.py
         args: []
-        additional_dependencies:
+        additional_dependencies: &type_deps
           - nox
           - pytest
+
+  - repo: https://github.com/facebook/pyrefly-pre-commit
+    rev: "1.0.0"
+    hooks:
+      - id: pyrefly-check
+        pass_filenames: false
+        additional_dependencies: *type_deps
 
   - repo: https://github.com/codespell-project/codespell
     rev: "v2.4.2"
@@ -86,7 +93,7 @@ repos:
         additional_dependencies: ["validate-pyproject-schema-store[all]"]
 
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.0"
+    rev: "0.37.2"
     hooks:
       - id: check-dependabot
       - id: check-github-workflows
@@ -100,12 +107,12 @@ repos:
         additional_dependencies: [uv_build<0.11]
 
   - repo: https://github.com/scientific-python/cookie
-    rev: 2026.03.02
+    rev: 2026.04.04
     hooks:
       - id: sp-repo-review
 
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.22.0
+    rev: v1.25.2
     hooks:
       - id: zizmor
         args: [--persona=pedantic]

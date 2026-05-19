@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
-__lazy_modules__ = [f"{__spec__.parent}._ast_helpers"]
+__lazy_modules__ = [
+    f"{__spec__.parent}._ast_helpers",
+    "flake8_lazy._compat",
+    "flake8_lazy._compat.typing",
+]
 
 import ast
+
+from flake8_lazy._compat.typing import assert_never
 
 from ._ast_helpers import (
     bound_name_for_import,
@@ -230,8 +236,8 @@ def collect_top_level_imported_names(tree: ast.AST) -> list[str]:
                     for alias in aliases
                     if alias.name != "*"
                 )
-            case _:
-                pass
+            case other:
+                assert_never(other)
     return names
 
 

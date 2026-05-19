@@ -6,10 +6,14 @@ __lazy_modules__ = [
     "ast",
     f"{__spec__.parent}._ast_helpers",
     f"{__spec__.parent}._visitors",
+    "flake8_lazy._compat",
+    "flake8_lazy._compat.typing",
 ]
 
 import ast
 from dataclasses import dataclass
+
+from flake8_lazy._compat.typing import assert_never
 
 from ._ast_helpers import bound_name_for_import, package_for_import_from
 from ._visitors import collect_top_level_imports, collect_top_level_lazy_imports
@@ -67,8 +71,8 @@ def collect_import_bindings(
                     for alias in aliases
                     if alias.name != "*"
                 )
-            case _:
-                pass
+            case other:
+                assert_never(other)
     return bindings
 
 
