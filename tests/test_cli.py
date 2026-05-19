@@ -636,7 +636,6 @@ def test_main_apply_set_mode_overrides_existing_tuple(
 
 
 def test_main_apply_invalid_mode_exits(
-    capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "mod.py"
@@ -646,3 +645,109 @@ def test_main_apply_invalid_mode_exits(
         main(["--apply=bad", str(path)])
 
     assert excinfo.value.code == 2
+
+
+def test_main_apply_native_adds_lazy_prefix_to_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+
+    main(["--apply=native", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == "lazy import numpy\n"
+
+
+def test_main_apply_native_adds_lazy_prefix_to_from_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("from pathlib import Path\n", encoding="utf-8")
+
+    main(["--apply=native", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == "lazy from pathlib import Path\n"
+
+
+def test_main_apply_native_removes_lazy_modules_assignment(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ["numpy"]\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply=native", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == "lazy import numpy\n"
+
+
+def test_main_apply_native_only_lazifies_recommended_imports(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    # pathlib is used at module level so it should NOT be lazified
+    path.write_text(
+        "import numpy\nimport pathlib\nBASE = pathlib.Path.home()\n",
+        encoding="utf-8",
+    )
+
+    main(["--apply=native", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        "lazy import numpy\nimport pathlib\nBASE = pathlib.Path.home()\n"
+    )
+
+
+def test_main_apply_native_handles_multiple_imports(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\nimport pandas\n", encoding="utf-8")
+
+    main(["--apply=native", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        "lazy import numpy\nlazy import pandas\n"
+    )
+
+
+def test_main_apply_native_removes_existing_lazy_modules_when_no_recommended(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ["numpy"]\n\ndef helper() -> None:\n    import numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply=native", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        "\ndef helper() -> None:\n    import numpy\n"
+    )

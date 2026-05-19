@@ -35,6 +35,30 @@ def _format_lazy_modules(path: Path, modules: list[str]) -> str:
     return f"{path}: __lazy_modules__ = [{joined_modules}]"
 
 
+def _report_file_errors(
+    path: Path,
+    errors: list[tuple[int, int, str]],
+    format_mode: str,
+) -> bool:
+    """Print errors for a single file; return True if any were found."""
+    found = False
+    for lineno, col_offset, message in errors:
+        if format_mode == "flake8":
+            sys.stdout.write(f"{path}:{lineno}:{col_offset}: {message}\n")
+        found = True
+    return found
+
+
+def _should_apply(
+    apply_mode: str,
+    declared_modules: list[str] | None,
+    recommended_modules: list[str],
+) -> bool:
+    if apply_mode == "native":
+        return bool(recommended_modules) or declared_modules is not None
+    return declared_modules != recommended_modules
+
+
 def main(argv: list[str] | None = None) -> None:
     """Run flake8-lazy checks directly from the command line."""
     help_epilog = "\n".join(
@@ -65,13 +89,13 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         metavar="MODE",
         help="rewrite files to use the recommended lazy declarations; "
-        "MODE is list (default) or set",
+        "MODE is list (default), set, or native",
     )
     namespace = parser.parse_args(list(argv) if argv is not None else None)
 
-    if namespace.apply is not None and namespace.apply not in {"list", "set"}:
+    if namespace.apply is not None and namespace.apply not in {"list", "set", "native"}:
         parser.error(
-            f"--apply: invalid mode {namespace.apply!r}; choose from list, set"
+            f"--apply: invalid mode {namespace.apply!r}; choose from list, set, native"
         )
 
     found_errors = False
@@ -79,8 +103,14 @@ def main(argv: list[str] | None = None) -> None:
         try:
             recommended_modules = collect_recommended_lazy_modules_for_file(path)
             declared_modules = collect_declared_lazy_modules_for_file(path)
-            if namespace.apply is not None and declared_modules != recommended_modules:
+            if namespace.apply is not None and _should_apply(
+                namespace.apply, declared_modules, recommended_modules
+            ):
                 apply_lazy_modules(path, recommended_modules, mode=namespace.apply)
+                if namespace.apply == "native":
+                    # The rewritten file contains Python 3.15+ syntax; skip
+                    # re-parsing and error checks on older interpreters.
+                    continue
                 recommended_modules = collect_recommended_lazy_modules_for_file(path)
                 declared_modules = collect_declared_lazy_modules_for_file(path)
             errors = collect_errors_for_file(path)
@@ -104,9 +134,7 @@ def main(argv: list[str] | None = None) -> None:
         ):
             sys.stdout.write(f"{_format_lazy_modules(path, recommended_modules)}\n")
 
-        for lineno, col_offset, message in errors:
-            if namespace.format == "flake8":
-                sys.stdout.write(f"{path}:{lineno}:{col_offset}: {message}\n")
+        if _report_file_errors(path, errors, namespace.format):
             found_errors = True
 
     if found_errors:

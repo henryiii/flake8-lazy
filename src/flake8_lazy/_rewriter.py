@@ -1,13 +1,24 @@
 from __future__ import annotations
 
-__lazy_modules__ = ["ast", f"{__spec__.parent}._ast_helpers", "io", "tokenize"]
+__lazy_modules__ = [
+    "ast",
+    f"{__spec__.parent}._ast_helpers",
+    f"{__spec__.parent}._visitors",
+    "io",
+    "tokenize",
+]
 
 import ast
 import io
 import tokenize
 from typing import TYPE_CHECKING
 
-from ._ast_helpers import is_lazy_modules_target, lazy_modules_assignment_value
+from ._ast_helpers import (
+    is_lazy_modules_target,
+    lazy_modules_assignment_value,
+    package_for_import_from,
+)
+from ._visitors import collect_top_level_imports
 
 __all__ = ["apply_lazy_modules"]
 
@@ -191,6 +202,64 @@ def _rewrite_lazy_modules_source(
     return "".join(lines)
 
 
+def _collect_import_lines_to_lazify(
+    tree: ast.Module, modules_set: set[str]
+) -> set[int]:
+    """Return 1-based line numbers of top-level imports to get a ``lazy`` prefix.
+
+    An import statement gets the prefix only if *all* of its aliases map to
+    packages that are in ``modules_set``.
+    """
+    lazy_lines: set[int] = set()
+    for node in collect_top_level_imports(tree):
+        match node:
+            case ast.Import(names=aliases, lineno=lineno):
+                packages = {alias.name for alias in aliases}
+            case ast.ImportFrom(lineno=lineno):
+                packages = set()
+                for alias in node.names:
+                    if alias.name == "*":
+                        packages.add("")
+                        break
+                    pkg = package_for_import_from(node, alias)
+                    packages.add(pkg if pkg is not None else "")
+        if packages and packages.issubset(modules_set):
+            lazy_lines.add(lineno)
+    return lazy_lines
+
+
+def _rewrite_native_lazy_source(source: str, modules: list[str]) -> str:
+    """Rewrite ``source`` by adding ``lazy`` keyword to qualifying imports.
+
+    Any existing ``__lazy_modules__`` assignments are removed.  Each
+    top-level import whose module is listed in ``modules`` receives a
+    ``lazy `` prefix.
+    """
+    tree = ast.parse(source)
+    assert isinstance(tree, ast.Module)
+    lines = list(source.splitlines(keepends=True))
+    modules_set = set(modules)
+
+    # Collect __lazy_modules__ assignment spans (1-based lineno, end_lineno).
+    assignments = [stmt for stmt in tree.body if _is_lazy_modules_assignment(stmt)]
+
+    # Collect import line numbers to prefix.
+    lazy_import_lines = _collect_import_lines_to_lazify(tree, modules_set)
+
+    # Apply deletions and prefixes from highest line to lowest to keep indices stable.
+    for lineno in sorted(lazy_import_lines, reverse=True):
+        idx = lineno - 1
+        line = lines[idx]
+        stripped = line.lstrip()
+        indent = line[: len(line) - len(stripped)]
+        lines[idx] = f"{indent}lazy {stripped}"
+
+    for stmt in reversed(assignments):
+        del lines[stmt.lineno - 1 : stmt.end_lineno]
+
+    return "".join(lines)
+
+
 def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") -> None:
     raw_bytes = path.read_bytes()
     encoding, _ = tokenize.detect_encoding(io.BytesIO(raw_bytes).readline)
@@ -200,6 +269,8 @@ def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") ->
             updated_source = _rewrite_lazy_modules_source(
                 source, modules, forced_container="set"
             )
+        case "native":
+            updated_source = _rewrite_native_lazy_source(source, modules)
         case _:
             updated_source = _rewrite_lazy_modules_source(source, modules)
     path.write_text(updated_source, encoding=encoding, newline="")
