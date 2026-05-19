@@ -6,6 +6,8 @@ __lazy_modules__ = [f"{__spec__.parent}._ast_helpers"]
 
 import ast
 
+from flake8_lazy._compat.typing import assert_never
+
 from ._ast_helpers import (
     bound_name_for_import,
     collect_loaded_names,
@@ -230,8 +232,8 @@ def collect_top_level_imported_names(tree: ast.AST) -> list[str]:
                     for alias in aliases
                     if alias.name != "*"
                 )
-            case _:
-                pass
+            case other:
+                assert_never(other)
     return names
 
 
