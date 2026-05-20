@@ -1,4 +1,7 @@
 rules:
+  concurrency-limits:
+    ignore:
+      - copilot-setup-steps.yml
   secrets-outside-env:
     ignore:
       - ci.yml:86

@@ -1,9 +1,5 @@
 name: "Copilot Setup Steps"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions: {}
 
 on:
