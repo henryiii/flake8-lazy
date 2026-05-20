@@ -34,7 +34,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v8.1.0
 
-      - uses: j178/prek-action@v2
+      - uses: j178/prek-action@v2.0.3
 
       - name: Run Pylint
         run: uvx nox -s pylint -- --output-format=github

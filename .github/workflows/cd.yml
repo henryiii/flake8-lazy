@@ -31,7 +31,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: hynek/build-and-inspect-python-package@v2.17.0
+      - uses: hynek/build-and-inspect-python-package@v2.18.0
 
   publish:
     needs: [dist]
