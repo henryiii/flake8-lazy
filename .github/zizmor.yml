@@ -1,7 +1,4 @@
 rules:
-  unpinned-uses:
-    disable: true
-
-  concurrency-limits:
+  secrets-outside-env:
     ignore:
-      - copilot-setup-steps.yml
+      - ci.yml:86

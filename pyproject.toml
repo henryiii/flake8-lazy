@@ -60,6 +60,9 @@ docs = [
     "zensical>=0.0.20",
 ]
 
+[tool.uv]
+exclude-newer = "7 days"
+
 [tool.uv.build-backend]
 source-include = [
   "tests/*.py",
