@@ -18,8 +18,10 @@ from flake8_lazy._rewriter import apply_lazy_modules
 from flake8_lazy.api import (
     collect_declared_lazy_modules_for_file,
     collect_errors_for_file,
+    collect_native_lazy_modules_for_file,
     collect_recommended_lazy_modules_for_file,
     has_dynamic_lazy_modules_for_file,
+    has_native_lazy_imports_for_file,
 )
 from flake8_lazy.checker import ERROR_MESSAGES
 
@@ -56,14 +58,11 @@ def _should_apply(
     recommended_modules: list[str],
     *,
     is_dynamic: bool = False,
+    has_native_lazy: bool = False,
 ) -> bool:
-    if apply_mode == "native":
-        return bool(recommended_modules) or declared_modules is not None
-    if apply_mode == "dynamic":
-        if is_dynamic:
-            return False
-        return bool(recommended_modules) or declared_modules is not None
-    return declared_modules != recommended_modules
+    if apply_mode == "dynamic" and is_dynamic:
+        return False
+    return bool(recommended_modules) or declared_modules is not None or has_native_lazy
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -109,13 +108,25 @@ def main(argv: list[str] | None = None) -> None:
                 if namespace.apply == "dynamic"
                 else False
             )
+            has_native_lazy = (
+                has_native_lazy_imports_for_file(path)
+                if namespace.apply in {"list", "set", "dynamic"}
+                else False
+            )
             if namespace.apply is not None and _should_apply(
                 namespace.apply,
                 declared_modules,
                 recommended_modules,
                 is_dynamic=is_dynamic,
+                has_native_lazy=has_native_lazy,
             ):
-                apply_lazy_modules(path, recommended_modules, mode=namespace.apply)
+                effective_modules = recommended_modules
+                if has_native_lazy and namespace.apply in {"list", "set"}:
+                    native_modules = collect_native_lazy_modules_for_file(path)
+                    effective_modules = sorted(
+                        set(recommended_modules) | set(native_modules)
+                    )
+                apply_lazy_modules(path, effective_modules, mode=namespace.apply)
                 if namespace.apply == "native" and sys.version_info < (3, 15):
                     continue
                 recommended_modules = collect_recommended_lazy_modules_for_file(path)

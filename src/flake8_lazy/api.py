@@ -19,16 +19,20 @@ from pathlib import Path
 
 from ._analysis import (
     collect_declared_lazy_modules,
+    collect_native_lazy_modules,
     collect_recommended_lazy_modules,
     has_dynamic_lazy_modules,
+    has_native_lazy_imports,
 )
 from .checker import LazyImportChecker
 
 __all__ = [
     "collect_declared_lazy_modules_for_file",
     "collect_errors_for_file",
+    "collect_native_lazy_modules_for_file",
     "collect_recommended_lazy_modules_for_file",
     "has_dynamic_lazy_modules_for_file",
+    "has_native_lazy_imports_for_file",
 ]
 
 # Pattern matching inline noqa suppression comments, optionally followed by a
@@ -84,6 +88,12 @@ def collect_recommended_lazy_modules_for_file(path: str | Path) -> list[str]:
     return collect_recommended_lazy_modules(tree, filename=item)
 
 
+def collect_native_lazy_modules_for_file(path: str | Path) -> list[str]:
+    """Return a sorted list of packages declared via native ``lazy import`` syntax."""
+    _item, tree, _source = _parse_file(path)
+    return collect_native_lazy_modules(tree)
+
+
 def collect_declared_lazy_modules_for_file(path: str | Path) -> list[str] | None:
     """Return the last static ``__lazy_modules__`` declaration for a file."""
     _item, tree, _source = _parse_file(path)
@@ -94,6 +104,12 @@ def has_dynamic_lazy_modules_for_file(path: str | Path) -> bool:
     """Return True if the file has a non-static (dynamic) ``__lazy_modules__`` value."""
     _item, tree, _source = _parse_file(path)
     return has_dynamic_lazy_modules(tree)
+
+
+def has_native_lazy_imports_for_file(path: str | Path) -> bool:
+    """Return True if the file contains any natively-lazy imports (Python 3.15+)."""
+    _item, tree, _source = _parse_file(path)
+    return has_native_lazy_imports(tree)
 
 
 def _parse_file(path: str | Path) -> tuple[Path, ast.AST, str]:

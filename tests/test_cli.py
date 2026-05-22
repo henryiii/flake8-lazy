@@ -557,6 +557,119 @@ def test_main_apply_set_mode_overrides_existing_tuple(
     )
 
 
+def test_main_apply_set_mode_overrides_existing_correct_list(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Content is already correct but container type is list — must still convert.
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ["numpy"]\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply=set", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = {"numpy"}\nimport numpy\n'
+    )
+
+
+def test_main_apply_list_mode_overrides_existing_correct_set(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Content is already correct but container type is set — must still convert.
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = {"numpy"}\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply=list", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ["numpy"]\nimport numpy\n'
+    )
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_main_apply_list_mode_converts_native_lazy_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("lazy import numpy\n", encoding="utf-8")
+
+    main(["--apply=list", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ["numpy"]\n\nimport numpy\n'
+    )
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_main_apply_set_mode_converts_native_lazy_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("lazy import numpy\n", encoding="utf-8")
+
+    main(["--apply=set", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = {"numpy"}\n\nimport numpy\n'
+    )
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_main_apply_dynamic_mode_converts_native_lazy_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("lazy import numpy\n", encoding="utf-8")
+
+    main(["--apply=dynamic", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == (
+        "class AllLazy:\n"
+        "    @staticmethod\n"
+        "    def __contains__(_: str) -> bool:\n"
+        "        return True\n"
+        "\n"
+        "\n"
+        "__lazy_modules__ = AllLazy()\n"
+        "\n"
+        "import numpy\n"
+    )
+
+
 def test_main_apply_invalid_mode_exits(
     tmp_path: Path,
 ) -> None:
