@@ -28,6 +28,7 @@ from ._analysis import (
     collect_unnecessary_lazy_imports,
     collect_unsorted_lazy_modules,
     collect_unused_lazy_modules,
+    has_dynamic_lazy_modules,
 )
 
 __all__ = ["ERROR_MESSAGES", "LazyImportChecker"]
@@ -88,6 +89,8 @@ class LazyImportChecker:
     def _build_lazy_module_validation_errors(
         self,
     ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
+        if has_dynamic_lazy_modules(self.tree):
+            return []
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         for lineno, col_offset in collect_unsorted_lazy_modules(self.tree):
             errors.append(

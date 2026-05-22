@@ -57,6 +57,7 @@ __all__ = [
     "collect_unnecessary_lazy_imports",
     "collect_unsorted_lazy_modules",
     "collect_unused_lazy_modules",
+    "has_dynamic_lazy_modules",
 ]
 
 
@@ -199,6 +200,24 @@ def collect_declared_lazy_modules(tree: ast.AST) -> list[str] | None:
         declared = modules
 
     return declared
+
+
+def has_dynamic_lazy_modules(tree: ast.AST) -> bool:
+    """Return True if ``__lazy_modules__`` is assigned a non-static (dynamic) value.
+
+    A dynamic ``__lazy_modules__`` (e.g. a custom object instead of a list/tuple/set)
+    is treated as "all modules are declared lazy", so no LZY1xx/LZY2xx errors are
+    emitted.
+    """
+    if not isinstance(tree, ast.Module):
+        return False
+    for node in tree.body:
+        value_node = lazy_modules_assignment_value(node)
+        if value_node is None:
+            continue
+        if lazy_module_container_elements(value_node) is None:
+            return True
+    return False
 
 
 def collect_lazy_packages(tree: ast.AST) -> set[str]:
@@ -468,6 +487,8 @@ def collect_missing_lazy_modules(
     filename: str | Path | None = None,
 ) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_modules__``."""
+    if has_dynamic_lazy_modules(tree):
+        return []
     lazy_modules = collect_lazy_packages(tree)
     excluded_packages = containing_package_prefixes(filename)
     missing: list[tuple[str, int, int]] = []

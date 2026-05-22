@@ -775,3 +775,102 @@ def test_main_noqa_with_code_suppresses_output_and_exits_zero(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
+
+
+def test_main_apply_dynamic_inserts_alllazy_class(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+
+    main(["--apply=dynamic", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    result = path.read_text(encoding="utf-8")
+    assert "class AllLazy:" in result
+    assert "__contains__" in result
+    assert "__lazy_modules__ = AllLazy()" in result
+    assert "import numpy" in result
+
+
+def test_main_apply_dynamic_replaces_existing_list(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ["numpy"]\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    main(["--apply=dynamic", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    result = path.read_text(encoding="utf-8")
+    assert "__lazy_modules__ = AllLazy()" in result
+    assert '["numpy"]' not in result
+
+
+def test_main_apply_dynamic_is_noop_when_already_dynamic(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    original = (
+        "class AllLazy:\n"
+        "    @staticmethod\n"
+        "    def __contains__(_: str) -> bool:\n"
+        "        return True\n"
+        "\n"
+        "\n"
+        "__lazy_modules__ = AllLazy()\n"
+        "import numpy\n"
+    )
+    path = tmp_path / "mod.py"
+    path.write_text(original, encoding="utf-8")
+
+    main(["--apply=dynamic", str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == original
+
+
+def test_main_apply_dynamic_produces_no_errors(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+
+    main(["--apply=dynamic", str(path)])
+    # Re-run checker on the rewritten file — should produce no errors.
+    errors = collect_errors_for_file(path)
+
+    assert errors == []
+
+
+def test_checker_produces_no_errors_for_dynamic_lazy_modules(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "class AllLazy:\n"
+        "    @staticmethod\n"
+        "    def __contains__(_: str) -> bool:\n"
+        "        return True\n"
+        "\n"
+        "\n"
+        "__lazy_modules__ = AllLazy()\n"
+        "import numpy\n"
+        "import pandas\n",
+        encoding="utf-8",
+    )
+
+    errors = collect_errors_for_file(path)
+
+    assert errors == []

@@ -12,6 +12,7 @@ from flake8_lazy._analysis import (
     collect_recommended_lazy_modules,
     collect_side_effect_only_import_packages,
     collect_unnecessary_lazy_imports,
+    has_dynamic_lazy_modules,
 )
 from flake8_lazy._visitors import (
     collect_non_lazy_imports,
@@ -1524,3 +1525,47 @@ lazy from numpy import random
         lzy303_errors[0][2]
         == "LZY303 module 'numpy' is imported both eagerly and lazily"
     )
+
+
+def test_has_dynamic_lazy_modules_false_for_list() -> None:
+    tree = ast.parse('__lazy_modules__ = ["numpy"]\nimport numpy\n')
+    assert not has_dynamic_lazy_modules(tree)
+
+
+def test_has_dynamic_lazy_modules_false_when_absent() -> None:
+    tree = ast.parse("import numpy\n")
+    assert not has_dynamic_lazy_modules(tree)
+
+
+def test_has_dynamic_lazy_modules_true_for_call() -> None:
+    tree = ast.parse("__lazy_modules__ = AllLazy()\nimport numpy\n")
+    assert has_dynamic_lazy_modules(tree)
+
+
+def test_has_dynamic_lazy_modules_true_for_name() -> None:
+    tree = ast.parse("__lazy_modules__ = SOME_CONSTANT\nimport numpy\n")
+    assert has_dynamic_lazy_modules(tree)
+
+
+def test_checker_suppresses_lzy102_for_dynamic_lazy_modules() -> None:
+    tree = ast.parse(
+        "__lazy_modules__ = AllLazy()\nimport numpy\nimport pandas\n",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy10x = [e for e in errors if e[2].startswith(("LZY101", "LZY102"))]
+    assert lzy10x == []
+
+
+def test_checker_suppresses_lzy2xx_for_dynamic_lazy_modules() -> None:
+    tree = ast.parse(
+        '__lazy_modules__ = AllLazy()\n__lazy_modules__ = ["numpy"]\nimport numpy\n',
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy2xx = [e for e in errors if e[2].startswith("LZY2")]
+    assert lzy2xx == []

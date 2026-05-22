@@ -30,8 +30,9 @@ uvx flake8-lazy <filenames>
 pipx run flake8-lazy <filenames>
 ```
 
-Try `--format=lazy-modules` to get copy-paste lines or even `--apply` to have
-the tool update your lazy modules automatically!
+Try `--format=lazy-modules` to get copy-paste lines or even `--apply=list` to
+have the tool update your lazy modules automatically! For maximum laziness, try
+`--apply=dynamic`.
 
 ## Install
 
@@ -166,16 +167,18 @@ file when it differs from the file's current static `__lazy_modules__`
 declaration. The command still exits with status code `1` if the file has any
 diagnostics.
 
-To rewrite files in place with the recommended declaration, use `--apply`:
+To rewrite files in place with the recommended declaration, use `--apply=list`:
 
 ```bash
-flake8-lazy --apply path/to/file.py another_file.py
+flake8-lazy --apply=list path/to/file.py another_file.py
 ```
 
-`--apply` replaces an existing top-level `__lazy_modules__` assignment when
+`--apply=list` replaces an existing top-level `__lazy_modules__` assignment when
 present. If there is no assignment yet, one is inserted near the top of the file
 after leading comments/docstrings (and after `from __future__ import ...` lines,
-to keep valid Python syntax).
+to keep valid Python syntax). You can also use `--apply=set` (slower
+construction, faster access), `--apply=native` (3.15+ syntax), or
+`--apply=dynamic` (a custom object that makes every import lazy).
 
 The command exits with status code `1` if any error is found.
 
@@ -191,7 +194,20 @@ __lazy_modules__ = [
 ]
 ```
 
-Dynamic values are intentionally ignored for now.
+Dynamic values (i.e. a custom object assigned to `__lazy_modules__`) are also
+supported. If flake8-lazy detects a non-static assignment it treats the file as
+fully covered and suppresses all LZY1xx/LZY2xx diagnostics. Use
+`--apply=dynamic` to have the tool write a simple catch-all object:
+
+```python
+class AllLazy:
+    @staticmethod
+    def __contains__(_: str) -> bool:
+        return True
+
+
+__lazy_modules__ = AllLazy()
+```
 
 ## Local development
 
