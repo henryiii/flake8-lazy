@@ -46,12 +46,24 @@ pre-commit install # Will install a pre-commit hook into the git repo
 You can also/alternatively run `pre-commit run` (changes only) or
 `pre-commit run --all-files` to check even without installing the hook.
 
+# Linting
+
+Run linting:
+
+```bash
+nox -s lint
+# or
+prek -a
+```
+
 # Testing
 
 Use pytest to run the unit checks:
 
 ```bash
 uv run pytest
+# or
+nox -s tests
 ```
 
 # Coverage
@@ -64,16 +76,16 @@ uv run pytest --cov=flake8-lazy
 
 # Building docs
 
-You can build and serve the docs using:
-
-```bash
-nox -s docs
-```
-
 You can build the docs only with:
 
 ```bash
 nox -s docs --non-interactive
+```
+
+Serve docs locally:
+
+```bash
+nox -s docs
 ```
 
 # Releasing

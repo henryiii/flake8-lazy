@@ -110,6 +110,9 @@ __lazy_modules__ = [
 ]
 ```
 
+You can also use sets; sets are slower to construct, but faster to check -
+around 2 items is enough to make sets faster.
+
 Dynamic values (i.e. a custom object assigned to `__lazy_modules__`) are also
 supported. If flake8-lazy detects a non-static assignment it treats the file as
 fully covered and suppresses all LZY1xx/LZY2xx diagnostics. Use
@@ -151,17 +154,15 @@ uvx flake8-lazy path/to/file.py another_file.py
 
 The default output format matches flake8-style diagnostics:
 
-```text
+```console
+$ flake8-lazy path/to/file.py
 path/to/file.py:12:0: LZY102 module 'numpy' should be listed in __lazy_modules__
 ```
 
 You can also ask for a copy-pasteable recommendation instead:
 
-```bash
-flake8-lazy --format lazy-modules path/to/file.py
-```
-
-```text
+```console
+$ flake8-lazy --format lazy-modules path/to/file.py
 path/to/file.py: __lazy_modules__ = ["numpy", "pandas"]
 ```
 
@@ -176,39 +177,8 @@ exits with status code `1` if any error is found.
 
 ## Local development
 
-Run tests:
-
-```bash
-nox -s tests
-# or
-uv run pytest
-```
-
-Run linting:
-
-```bash
-nox -s lint
-# or
-prek -a
-```
-
-Build docs:
-
-```bash
-nox -s docs --non-interactive
-```
-
-Serve docs locally:
-
-```bash
-nox -s docs
-```
-
-Bump the version:
-
-```bash
-uv version <new_version>
-```
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for local development
+instructions.
 
 ## FAQ
 
