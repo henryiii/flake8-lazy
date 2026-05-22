@@ -45,6 +45,9 @@ e.g. `dev` or `lint`.
 
 flake8 will automatically discover the plugin.
 
+See the [full documentation](https://flake8-lazy.readthedocs.io/) for details,
+examples, and the standalone CLI runner.
+
 ## Rule codes
 
 ### 1xx: Missing lazy declarations
@@ -95,6 +98,33 @@ In this example, `requests` is only used inside `main`, so it can be lazy. The
 checker expects it in `__lazy_modules__` and emits `LZY102` until you add it.
 Running `--help` will not import requests, resulting in a more responsive app!
 
+## Authoring `__lazy_modules__`
+
+Use a static, sorted list of strings:
+
+```python
+__lazy_modules__ = [
+    "argparse",
+    "numpy",
+    "pathlib",
+]
+```
+
+Dynamic values (i.e. a custom object assigned to `__lazy_modules__`) are also
+supported. If flake8-lazy detects a non-static assignment it treats the file as
+fully covered and suppresses all LZY1xx/LZY2xx diagnostics. Use
+`--apply=dynamic` to have the tool write a simple catch-all object:
+
+```python
+class AllLazy:
+    @staticmethod
+    def __contains__(_: str) -> bool:
+        return True
+
+
+__lazy_modules__ = AllLazy()
+```
+
 ## How detection works
 
 flake8-lazy inspects module-scope imports and module runtime usage.
@@ -108,33 +138,6 @@ flake8-lazy inspects module-scope imports and module runtime usage.
 - Requires exact module entries for nested imports.
 - Treats enclosing package names as non-lazy for a file. For example, in
   `a/b/c.py`, `a` and `a.b` should not be listed as lazy.
-
-Nested import note:
-
-```python
-import email.header
-
-__lazy_modules__ = ["email"]  # Not enough
-```
-
-This emits `LZY101`; the required entry is `"email.header"`. PEP 810 requires
-full module names.
-
-Missing relative imports use `f"{__spec__.parent}.name"`.
-
-Enclosing package note:
-
-```python
-# file: a/b/c.py
-__lazy_modules__ = ["a", "a.b", "requests"]
-
-# Python 3.15+ also applies
-# lazy import a
-# lazy import a.b
-```
-
-This emits `LZY402` for `a` and `a.b`. Those are enclosing packages for the
-current file, so declaring them lazy is unnecessary and can be removed.
 
 ## CLI
 
@@ -162,52 +165,14 @@ flake8-lazy --format lazy-modules path/to/file.py
 path/to/file.py: __lazy_modules__ = ["numpy", "pandas"]
 ```
 
-This prints the sorted `__lazy_modules__` value the checker recommends for each
-file when it differs from the file's current static `__lazy_modules__`
-declaration. The command still exits with status code `1` if the file has any
-diagnostics.
-
-To rewrite files in place with the recommended declaration, use `--apply=list`:
+To rewrite files in place with the recommended declaration, use `--apply`:
 
 ```bash
 flake8-lazy --apply=list path/to/file.py another_file.py
 ```
 
-`--apply=list` replaces an existing top-level `__lazy_modules__` assignment when
-present. If there is no assignment yet, one is inserted near the top of the file
-after leading comments/docstrings (and after `from __future__ import ...` lines,
-to keep valid Python syntax). You can also use `--apply=set` (slower
-construction, faster access), `--apply=native` (3.15+ syntax), or
-`--apply=dynamic` (a custom object that makes every import lazy).
-
-The command exits with status code `1` if any error is found.
-
-## Authoring `__lazy_modules__`
-
-Use a static, sorted list of strings:
-
-```python
-__lazy_modules__ = [
-    "argparse",
-    "numpy",
-    "pathlib",
-]
-```
-
-Dynamic values (i.e. a custom object assigned to `__lazy_modules__`) are also
-supported. If flake8-lazy detects a non-static assignment it treats the file as
-fully covered and suppresses all LZY1xx/LZY2xx diagnostics. Use
-`--apply=dynamic` to have the tool write a simple catch-all object:
-
-```python
-class AllLazy:
-    @staticmethod
-    def __contains__(_: str) -> bool:
-        return True
-
-
-__lazy_modules__ = AllLazy()
-```
+Available modes: `list`, `set`, `native` (3.15+ syntax), `dynamic`. The command
+exits with status code `1` if any error is found.
 
 ## Local development
 
