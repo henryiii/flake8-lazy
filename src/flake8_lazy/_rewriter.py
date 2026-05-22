@@ -260,11 +260,10 @@ def _rewrite_native_lazy_source(source: str, modules: list[str]) -> str:
     return "".join(lines)
 
 
-def _rewrite_dynamic_lazy_source(source: str, modules: list[str]) -> str:
+def _rewrite_dynamic_lazy_source(source: str) -> str:
     """Rewrite ``source`` with a dynamic ``AllLazy`` object for ``__lazy_modules__``.
 
-    When ``modules`` is empty any existing ``__lazy_modules__`` assignment is
-    removed.  Otherwise the assignment is replaced (or inserted) with::
+    The assignment is replaced (or inserted) with::
 
         class AllLazy:
             @staticmethod
@@ -273,6 +272,10 @@ def _rewrite_dynamic_lazy_source(source: str, modules: list[str]) -> str:
 
 
         __lazy_modules__ = AllLazy()
+
+    Unlike the static modes, dynamic mode always writes the ``AllLazy`` block
+    regardless of whether ``modules`` is non-empty — the caller has explicitly
+    requested dynamic coverage.
     """
     tree = ast.parse(source)
     assert isinstance(tree, ast.Module)
@@ -280,11 +283,6 @@ def _rewrite_dynamic_lazy_source(source: str, modules: list[str]) -> str:
     lines = list(source.splitlines(keepends=True))
 
     assignments = [stmt for stmt in tree.body if _is_lazy_modules_assignment(stmt)]
-
-    if not modules:
-        for stmt in reversed(assignments):
-            del lines[stmt.lineno - 1 : stmt.end_lineno]
-        return "".join(lines)
 
     alllazy_block = [
         f"class AllLazy:{newline}",
@@ -332,7 +330,7 @@ def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") ->
         case "native":
             updated_source = _rewrite_native_lazy_source(source, modules)
         case "dynamic":
-            updated_source = _rewrite_dynamic_lazy_source(source, modules)
+            updated_source = _rewrite_dynamic_lazy_source(source)
         case "list":
             updated_source = _rewrite_lazy_modules_source(
                 source, modules, forced_container="list"

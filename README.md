@@ -167,7 +167,7 @@ file when it differs from the file's current static `__lazy_modules__`
 declaration. The command still exits with status code `1` if the file has any
 diagnostics.
 
-To rewrite files in place with the recommended declaration, use `--apply-list`:
+To rewrite files in place with the recommended declaration, use `--apply=list`:
 
 ```bash
 flake8-lazy --apply=list path/to/file.py another_file.py

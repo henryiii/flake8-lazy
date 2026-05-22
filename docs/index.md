@@ -306,10 +306,10 @@ This prints the sorted `__lazy_modules__` value the checker recommends for each
 file when it differs from the file's current static `__lazy_modules__`
 declaration, while keeping the same exit-status behavior.
 
-To rewrite files in place with the recommended declaration, use `--apply`:
+To rewrite files in place with the recommended declaration, use `--apply=list`:
 
 ```bash
-flake8-lazy --apply path/to/file.py another_file.py
+flake8-lazy --apply=list path/to/file.py another_file.py
 ```
 
 `--apply` replaces an existing top-level `__lazy_modules__` assignment when
