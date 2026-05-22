@@ -54,3 +54,18 @@ toggle.name = "Switch to system preference"
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/henryiii/flake8-lazy"
+
+[[nav]]
+"Get Started" = "index.md"
+
+[[nav]]
+"Rules" = "rules.md"
+
+[[nav]]
+"Examples" = "examples.md"
+
+[[nav]]
+"CLI" = "cli.md"
+
+[[nav]]
+"How It Works" = "how-it-works.md"
