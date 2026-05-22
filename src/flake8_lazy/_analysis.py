@@ -52,6 +52,7 @@ __all__ = [
     "collect_lazy_packages",
     "collect_missing_lazy_modules",
     "collect_mixed_lazy_eager_imports",
+    "collect_native_lazy_modules",
     "collect_recommended_lazy_modules",
     "collect_redundant_lazy_declarations",
     "collect_side_effect_only_import_packages",
@@ -229,6 +230,19 @@ def has_native_lazy_imports(tree: ast.AST) -> bool:
     does not exist and the AST cannot contain such nodes.
     """
     return bool(collect_top_level_lazy_imports(tree))
+
+
+def collect_native_lazy_modules(tree: ast.AST) -> list[str]:
+    """Return a sorted list of package names declared via native ``lazy import`` syntax.
+
+    On Python < 3.15 this always returns an empty list.
+    """
+    packages = [
+        binding.package
+        for binding in collect_top_level_lazy_import_bindings(tree)
+        if binding.package is not None
+    ]
+    return sorted(set(packages))
 
 
 def collect_lazy_packages(tree: ast.AST) -> set[str]:
