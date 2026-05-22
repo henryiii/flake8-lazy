@@ -163,8 +163,12 @@ def _remove_native_lazy_prefixes(tree: ast.Module, lines: list[str]) -> None:
             line = lines[idx]
             stripped = line.lstrip()
             indent = line[: len(line) - len(stripped)]
-            if stripped.startswith("lazy "):
-                lines[idx] = f"{indent}{stripped[5:]}"
+            if (
+                stripped.startswith("lazy")
+                and len(stripped) > 4
+                and stripped[4].isspace()
+            ):
+                lines[idx] = f"{indent}{stripped[4:].lstrip()}"
 
 
 def _rewrite_lazy_modules_source(

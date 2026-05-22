@@ -37,6 +37,7 @@ from ._visitors import (
     collect_strictly_top_level_attribute_paths,
     collect_strictly_top_level_names,
     collect_top_level_imports,
+    collect_top_level_lazy_imports,
     collect_top_level_runtime_attribute_paths,
     collect_type_checking_guard_names,
 )
@@ -58,6 +59,7 @@ __all__ = [
     "collect_unsorted_lazy_modules",
     "collect_unused_lazy_modules",
     "has_dynamic_lazy_modules",
+    "has_native_lazy_imports",
 ]
 
 
@@ -218,6 +220,15 @@ def has_dynamic_lazy_modules(tree: ast.AST) -> bool:
         if lazy_module_container_elements(value_node) is None:
             return True
     return False
+
+
+def has_native_lazy_imports(tree: ast.AST) -> bool:
+    """Return True if the module contains any natively-lazy imports (Python 3.15+).
+
+    On Python < 3.15 this always returns False because ``lazy import`` syntax
+    does not exist and the AST cannot contain such nodes.
+    """
+    return bool(collect_top_level_lazy_imports(tree))
 
 
 def collect_lazy_packages(tree: ast.AST) -> set[str]:
