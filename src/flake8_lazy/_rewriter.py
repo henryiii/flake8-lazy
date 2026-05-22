@@ -260,6 +260,66 @@ def _rewrite_native_lazy_source(source: str, modules: list[str]) -> str:
     return "".join(lines)
 
 
+def _rewrite_dynamic_lazy_source(source: str, modules: list[str]) -> str:
+    """Rewrite ``source`` with a dynamic ``AllLazy`` object for ``__lazy_modules__``.
+
+    When ``modules`` is empty any existing ``__lazy_modules__`` assignment is
+    removed.  Otherwise the assignment is replaced (or inserted) with::
+
+        class AllLazy:
+            @staticmethod
+            def __contains__(_: str) -> bool:
+                return True
+
+
+        __lazy_modules__ = AllLazy()
+    """
+    tree = ast.parse(source)
+    assert isinstance(tree, ast.Module)
+    newline = "\r\n" if "\r\n" in source else "\n"
+    lines = list(source.splitlines(keepends=True))
+
+    assignments = [stmt for stmt in tree.body if _is_lazy_modules_assignment(stmt)]
+
+    if not modules:
+        for stmt in reversed(assignments):
+            del lines[stmt.lineno - 1 : stmt.end_lineno]
+        return "".join(lines)
+
+    alllazy_block = [
+        f"class AllLazy:{newline}",
+        f"    @staticmethod{newline}",
+        f"    def __contains__(_: str) -> bool:{newline}",
+        f"        return True{newline}",
+        newline,
+        newline,
+        f"__lazy_modules__ = AllLazy(){newline}",
+    ]
+
+    if assignments:
+        # Remove extra assignments from the end first (indices are stable going
+        # backwards), then replace the first one with the AllLazy block.
+        for stmt in reversed(assignments[1:]):
+            del lines[stmt.lineno - 1 : stmt.end_lineno]
+
+        first = assignments[0]
+        lines[first.lineno - 1 : first.end_lineno] = alllazy_block
+        return "".join(lines)
+
+    insertion_line = _insertion_line_for_lazy_modules(tree, source)
+    insertion_index = max(0, insertion_line - 1)
+
+    block = list(alllazy_block)
+    next_line = lines[insertion_index] if insertion_index < len(lines) else None
+    if next_line is None or next_line.strip():
+        block.append(newline)
+    if insertion_index > 0 and lines[insertion_index - 1].strip():
+        block.insert(0, newline)
+
+    lines[insertion_index:insertion_index] = block
+    return "".join(lines)
+
+
 def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") -> None:
     raw_bytes = path.read_bytes()
     encoding, _ = tokenize.detect_encoding(io.BytesIO(raw_bytes).readline)
@@ -271,6 +331,8 @@ def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") ->
             )
         case "native":
             updated_source = _rewrite_native_lazy_source(source, modules)
+        case "dynamic":
+            updated_source = _rewrite_dynamic_lazy_source(source, modules)
         case "list":
             updated_source = _rewrite_lazy_modules_source(
                 source, modules, forced_container="list"

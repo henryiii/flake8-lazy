@@ -317,6 +317,31 @@ present. If there is no assignment yet, one is inserted near the top of the file
 after leading comments/docstrings (and after `from __future__ import ...` lines,
 to keep valid Python syntax).
 
+The available modes are:
+
+| Mode      | Output                                              |
+| --------- | --------------------------------------------------- |
+| `list`    | `__lazy_modules__ = ["a", "b"]`                     |
+| `set`     | `__lazy_modules__ = {"a", "b"}` (faster membership) |
+| `native`  | `lazy import a` / `lazy from b import ...` (3.15+)  |
+| `dynamic` | `AllLazy` class that always returns `True` for `in` |
+
+The `dynamic` mode inserts:
+
+```python
+class AllLazy:
+    @staticmethod
+    def __contains__(_: str) -> bool:
+        return True
+
+
+__lazy_modules__ = AllLazy()
+```
+
+This is the shortest way to declare every import as lazy without enumerating
+them. It is idempotent: running `--apply=dynamic` on a file that already has a
+dynamic `__lazy_modules__` is a no-op.
+
 The command exits with status `1` if any diagnostics are produced.
 
 ## Acknowledgements

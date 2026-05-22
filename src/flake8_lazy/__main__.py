@@ -19,6 +19,7 @@ from flake8_lazy.api import (
     collect_declared_lazy_modules_for_file,
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
+    has_dynamic_lazy_modules_for_file,
 )
 from flake8_lazy.checker import ERROR_MESSAGES
 
@@ -53,8 +54,14 @@ def _should_apply(
     apply_mode: str,
     declared_modules: list[str] | None,
     recommended_modules: list[str],
+    *,
+    is_dynamic: bool = False,
 ) -> bool:
     if apply_mode == "native":
+        return bool(recommended_modules) or declared_modules is not None
+    if apply_mode == "dynamic":
+        if is_dynamic:
+            return False
         return bool(recommended_modules) or declared_modules is not None
     return declared_modules != recommended_modules
 
@@ -84,11 +91,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--apply",
-        choices=("list", "set", "native"),
+        choices=("list", "set", "native", "dynamic"),
         default=None,
         metavar="MODE",
         help="rewrite files to use the recommended lazy declarations; "
-        "MODE is list, set, or native",
+        "MODE is list, set, native, or dynamic",
     )
     namespace = parser.parse_args(list(argv) if argv is not None else None)
 
@@ -97,8 +104,16 @@ def main(argv: list[str] | None = None) -> None:
         try:
             recommended_modules = collect_recommended_lazy_modules_for_file(path)
             declared_modules = collect_declared_lazy_modules_for_file(path)
+            is_dynamic = (
+                has_dynamic_lazy_modules_for_file(path)
+                if namespace.apply == "dynamic"
+                else False
+            )
             if namespace.apply is not None and _should_apply(
-                namespace.apply, declared_modules, recommended_modules
+                namespace.apply,
+                declared_modules,
+                recommended_modules,
+                is_dynamic=is_dynamic,
             ):
                 apply_lazy_modules(path, recommended_modules, mode=namespace.apply)
                 if namespace.apply == "native" and sys.version_info < (3, 15):
