@@ -18,7 +18,7 @@ from ._ast_helpers import (
     lazy_modules_assignment_value,
     package_for_import_from,
 )
-from ._visitors import collect_top_level_imports
+from ._visitors import collect_top_level_imports, collect_top_level_lazy_imports
 
 __all__ = ["apply_lazy_modules"]
 
@@ -151,6 +151,22 @@ def _build_insertion_block(
     return block
 
 
+def _remove_native_lazy_prefixes(tree: ast.Module, lines: list[str]) -> None:
+    """Strip the ``lazy`` keyword prefix from natively-lazy imports (Python 3.15+).
+
+    On Python < 3.15 ``collect_top_level_lazy_imports`` returns an empty list,
+    so this is always a no-op on those versions.
+    """
+    for node in collect_top_level_lazy_imports(tree):
+        idx = node.lineno - 1
+        if 0 <= idx < len(lines):
+            line = lines[idx]
+            stripped = line.lstrip()
+            indent = line[: len(line) - len(stripped)]
+            if stripped.startswith("lazy "):
+                lines[idx] = f"{indent}{stripped[5:]}"
+
+
 def _rewrite_lazy_modules_source(
     source: str,
     modules: list[str],
@@ -158,8 +174,11 @@ def _rewrite_lazy_modules_source(
     forced_container: str | None = None,
 ) -> str:
     tree = ast.parse(source)
+    assert isinstance(tree, ast.Module)
     newline = "\r\n" if "\r\n" in source else "\n"
     lines = source.splitlines(keepends=True)
+
+    _remove_native_lazy_prefixes(tree, lines)
 
     assignments = [
         statement for statement in tree.body if _is_lazy_modules_assignment(statement)
@@ -282,6 +301,8 @@ def _rewrite_dynamic_lazy_source(source: str) -> str:
     newline = "\r\n" if "\r\n" in source else "\n"
     lines = list(source.splitlines(keepends=True))
 
+    _remove_native_lazy_prefixes(tree, lines)
+
     assignments = [stmt for stmt in tree.body if _is_lazy_modules_assignment(stmt)]
 
     alllazy_block = [
@@ -338,4 +359,5 @@ def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") ->
         case _:
             msg = f"unknown apply mode {mode!r}"
             raise ValueError(msg)
-    path.write_text(updated_source, encoding=encoding, newline="")
+    if updated_source != source:
+        path.write_text(updated_source, encoding=encoding, newline="")

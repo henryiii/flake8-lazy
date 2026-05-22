@@ -57,13 +57,9 @@ def _should_apply(
     *,
     is_dynamic: bool = False,
 ) -> bool:
-    if apply_mode == "native":
-        return bool(recommended_modules) or declared_modules is not None
-    if apply_mode == "dynamic":
-        if is_dynamic:
-            return False
-        return bool(recommended_modules) or declared_modules is not None
-    return declared_modules != recommended_modules
+    if apply_mode == "dynamic" and is_dynamic:
+        return False
+    return bool(recommended_modules) or declared_modules is not None
 
 
 def main(argv: list[str] | None = None) -> None:
