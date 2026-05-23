@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-__lazy_modules__ = [
-    f"{__spec__.parent}._analysis",
-    "importlib",
-    "importlib.metadata",
-    "sys",
-]
+__lazy_modules__ = [f"{__spec__.parent}._analysis", "importlib", "importlib.metadata"]
 
 import importlib.metadata
 import sys

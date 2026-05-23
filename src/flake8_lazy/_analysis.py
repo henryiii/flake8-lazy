@@ -4,6 +4,7 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "ast",
+    f"{__spec__.parent}._always_imported",
     f"{__spec__.parent}._ast_helpers",
     f"{__spec__.parent}._bindings",
     f"{__spec__.parent}._visitors",
@@ -16,6 +17,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
+from ._always_imported import ALWAYS_IMPORTED
 from ._ast_helpers import (
     containing_package_prefixes,
     is_lazy_import_node,
@@ -450,6 +452,7 @@ def _collect_recommended_lazy_bindings(
         | non_lazy_packages
         | non_lazy_names
         | guard_names
+        | ALWAYS_IMPORTED
     )
     policy = _RecommendationPolicy(
         excluded_packages=excluded_packages,

@@ -7,7 +7,6 @@ __lazy_modules__ = [
     f"{__spec__.parent}._analysis",
     f"{__spec__.parent}.checker",
     "pathlib",
-    "sys",
     "tokenize",
 ]
 

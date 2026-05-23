@@ -6,7 +6,6 @@ __lazy_modules__ = [
     "flake8_lazy.api",
     "flake8_lazy.checker",
     "pathlib",
-    "sys",
 ]
 
 import argparse

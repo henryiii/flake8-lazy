@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__lazy_modules__ = ["ast", "pathlib", "sys"]
+__lazy_modules__ = ["ast", "pathlib"]
 
 import ast
 import sys
