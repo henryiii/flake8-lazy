@@ -422,13 +422,11 @@ def _collect_recommended_lazy_bindings(
     tree: ast.AST,
     *,
     excluded_packages: set[str] | None = None,
-    always_imported: frozenset[str] | None = None,
+    always_imported: frozenset[str] = ALWAYS_IMPORTED_DEFAULT,
 ) -> list[ImportBinding]:
     """Return module-scope imports that should appear in ``__lazy_modules__``."""
     if excluded_packages is None:
         excluded_packages = set()
-    if always_imported is None:
-        always_imported = ALWAYS_IMPORTED_DEFAULT
 
     bindings = collect_top_level_import_bindings(tree)
     non_lazy_names = set(collect_non_lazy_imports(tree))
@@ -499,7 +497,7 @@ def collect_recommended_lazy_modules(
     tree: ast.AST,
     filename: str | Path | None = None,
     *,
-    always_imported: frozenset[str] | None = None,
+    always_imported: frozenset[str] = ALWAYS_IMPORTED_DEFAULT,
 ) -> list[str]:
     """Return a sorted ``__lazy_modules__`` recommendation for ``tree``."""
     excluded_packages = containing_package_prefixes(filename)
@@ -520,7 +518,7 @@ def collect_missing_lazy_modules(
     tree: ast.AST,
     filename: str | Path | None = None,
     *,
-    always_imported: frozenset[str] | None = None,
+    always_imported: frozenset[str] = ALWAYS_IMPORTED_DEFAULT,
 ) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_modules__``."""
     if has_dynamic_lazy_modules(tree):

@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 import pytest
 
 from flake8_lazy import LazyImportChecker
+from flake8_lazy._always_imported import (
+    ALWAYS_IMPORTED_DEFAULT,
+    ALWAYS_IMPORTED_MINIMAL,
+)
 from flake8_lazy._analysis import (
     collect_lazy_packages,
     collect_recommended_lazy_modules,
@@ -1569,3 +1573,57 @@ def test_checker_suppresses_lzy2xx_for_dynamic_lazy_modules() -> None:
 
     lzy2xx = [e for e in errors if e[2].startswith("LZY2")]
     assert lzy2xx == []
+
+
+def test_checker_does_not_flag_always_imported_module_lzy101() -> None:
+    # 'sys' and 'time' are in ALWAYS_IMPORTED_DEFAULT; they should never be
+    # recommended as lazy imports regardless of how they are used.
+    tree = ast.parse(
+        """
+import sys
+import time
+
+def fn() -> None:
+    sys.exit(0)
+    time.sleep(1)
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy10x = [e for e in errors if e[2].startswith(("LZY101", "LZY102"))]
+    assert lzy10x == []
+
+
+def test_collect_recommended_excludes_always_imported_modules() -> None:
+    tree = ast.parse(
+        """
+import sys
+import time
+import numpy
+""",
+    )
+
+    # With the default preset, sys and time are excluded; only numpy is recommended.
+    recommended_default = collect_recommended_lazy_modules(
+        tree, always_imported=ALWAYS_IMPORTED_DEFAULT
+    )
+    assert "sys" not in recommended_default
+    assert "time" not in recommended_default
+    assert "numpy" in recommended_default
+
+    # With no filtering (empty frozenset), sys and time are also candidates.
+    recommended_none = collect_recommended_lazy_modules(
+        tree, always_imported=frozenset()
+    )
+    assert "sys" in recommended_none
+    assert "time" in recommended_none
+    assert "numpy" in recommended_none
+
+    # With minimal preset, sys and time are also excluded.
+    recommended_minimal = collect_recommended_lazy_modules(
+        tree, always_imported=ALWAYS_IMPORTED_MINIMAL
+    )
+    assert "sys" not in recommended_minimal
+    assert "time" not in recommended_minimal

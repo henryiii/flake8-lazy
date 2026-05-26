@@ -222,8 +222,13 @@ class LazyImportChecker:
             errors.append((lineno, col_offset, f"LZY402 {message}", type(self)))
         return errors
 
-    def run(self) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
-        always_imported = IMPORT_PRESETS[type(self).import_preset]
+    def run(
+        self,
+        *,
+        always_imported: frozenset[str] | None = None,
+    ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
+        if always_imported is None:
+            always_imported = IMPORT_PRESETS[type(self).import_preset]
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         errors.extend(
             self._build_missing_lazy_module_errors(always_imported=always_imported)

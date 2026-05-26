@@ -1,13 +1,21 @@
-"""Modules that Python always imports at startup.
+"""Modules that Python imports at startup under specific configurations.
 
-These modules are unconditionally present in ``sys.modules`` before any user
-code runs.  Declaring them in ``__lazy_modules__`` has no effect and is
-therefore not recommended.
+Declaring these modules in ``__lazy_modules__`` has no effect because they are
+already present in ``sys.modules`` before user code runs, so they are skipped
+from lazy-import recommendations.
 
-The sets below were generated with ``scripts/list_always_imported.py`` using
+Two preset sets are provided, corresponding to different Python startup modes:
+
+* ``ALWAYS_IMPORTED_MINIMAL`` — modules present when Python starts in isolated
+  + no-site mode (``python -IS``).  A small core set: ``sys``, ``time``,
+  ``codecs``, etc.
+* ``ALWAYS_IMPORTED_DEFAULT`` — modules present during a normal Python startup
+  (``python -I``, with site initialisation).  Includes ``os``, ``abc``,
+  ``site``, and more.
+
+The sets were generated with ``scripts/list_always_imported.py`` using
 CPython 3.15 on Unix.  Platform-specific names (e.g. ``posix`` on POSIX,
-``nt`` on Windows) are included for both platforms so the sets are useful on
-all supported operating systems.
+``nt`` on Windows) are included for both platforms.
 """
 
 from __future__ import annotations

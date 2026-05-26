@@ -72,14 +72,12 @@ def collect_errors_for_file(
         msg = f"invalid import_preset {import_preset!r}; choose from: {valid}"
         raise ValueError(msg)
     item, tree, source = _parse_file(path)
-    # Temporarily configure the checker class so run() uses the right preset.
-    prev_preset = LazyImportChecker.import_preset
-    LazyImportChecker.import_preset = import_preset
-    try:
-        checker = LazyImportChecker(tree=tree, filename=str(item))
-        errors = [(line, col, message) for line, col, message, _c in checker.run()]
-    finally:
-        LazyImportChecker.import_preset = prev_preset
+    always_imported = IMPORT_PRESETS[import_preset]
+    checker = LazyImportChecker(tree=tree, filename=str(item))
+    errors = [
+        (line, col, message)
+        for line, col, message, _c in checker.run(always_imported=always_imported)
+    ]
     if not errors:
         return []
     noqa_map = _build_noqa_map(source)
