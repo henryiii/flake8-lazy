@@ -84,7 +84,7 @@ class LazyImportChecker:
     __slots__ = ("filename", "tree")
 
     # Class-level option, set by parse_options when running under flake8.
-    import_preset: str = "minimal"
+    import_preset: str = "default"
 
     def __init__(self, tree: ast.AST, filename: str) -> None:
         self.tree = tree
@@ -95,7 +95,7 @@ class LazyImportChecker:
         """Register ``--lazy-import-preset`` with flake8's option manager."""
         option_manager.add_option(
             "--lazy-import-preset",
-            default="minimal",
+            default="default",
             parse_from_config=True,
             dest="lazy_import_preset",
             type=str,
@@ -105,8 +105,8 @@ class LazyImportChecker:
                 "lazy-import recommendations. "
                 "PRESET is one of: "
                 "none (no filtering), "
-                "minimal (python -IS startup modules, default), "
-                "default (normal python startup modules including site). "
+                "default (normal python startup modules including site, default), "
+                "minimal (python -IS startup modules). "
                 "[%(default)s]"
             ),
         )

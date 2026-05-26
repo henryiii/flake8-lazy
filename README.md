@@ -188,10 +188,9 @@ It's really new, and it's a bit complex. Maybe someday it will be? :)
 
 ### Why is there no config?
 
-I don't like flake8's config file choices, so I've tried to make it work out of
-the box. Probably will get some eventually, though, like a list of modules that
-can't be lazy imported, or a 'simple' mode that requires every module to be
-lazy.
+There is now a small config surface for the startup-import preset via
+`--lazy-import-preset`. The default follows normal Python startup, with
+`minimal` and `none` available as opt-ins.
 
 ### It's missing something!
 

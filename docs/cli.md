@@ -81,15 +81,15 @@ Declaring such modules in `__lazy_modules__` has no effect, so flake8-lazy skips
 them from its recommendations by default. You can control which set of modules
 is excluded via `--lazy-import-preset`:
 
-| Preset    | Modules excluded from recommendations                                          |
-| --------- | ------------------------------------------------------------------------------ |
-| `minimal` | Modules imported when Python starts in isolated mode (`-IS`). Default.         |
-| `default` | Modules imported during a normal Python startup (includes `os`, `site`, etc.). |
-| `none`    | No exclusions — all imported modules are candidates.                           |
+| Preset    | Modules excluded from recommendations                                                   |
+| --------- | --------------------------------------------------------------------------------------- |
+| `default` | Modules imported during a normal Python startup (includes `os`, `site`, etc.). Default. |
+| `minimal` | Modules imported when Python starts in isolated mode (`-IS`).                           |
+| `none`    | No exclusions — all imported modules are candidates.                                    |
 
 ```bash
-# Use normal-startup set (larger exclusion list)
-flake8-lazy --lazy-import-preset=default path/to/file.py
+# Use the smaller isolated-startup set
+flake8-lazy --lazy-import-preset=minimal path/to/file.py
 
 # Recommend lazy imports for every module, even always-imported ones
 flake8-lazy --lazy-import-preset=none path/to/file.py

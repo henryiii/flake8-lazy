@@ -64,7 +64,7 @@ def _build_noqa_map(source: str) -> dict[int, set[str] | None]:
 
 
 def collect_errors_for_file(
-    path: str | Path, *, import_preset: str = "minimal"
+    path: str | Path, *, import_preset: str = "default"
 ) -> list[tuple[int, int, str]]:
     """Return checker errors for a single Python file, respecting noqa comments."""
     if import_preset not in IMPORT_PRESETS:
@@ -96,7 +96,7 @@ def collect_errors_for_file(
 
 
 def collect_recommended_lazy_modules_for_file(
-    path: str | Path, *, import_preset: str = "minimal"
+    path: str | Path, *, import_preset: str = "default"
 ) -> list[str]:
     """Return a sorted ``__lazy_modules__`` recommendation for a file."""
     if import_preset not in IMPORT_PRESETS:

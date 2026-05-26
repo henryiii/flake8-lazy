@@ -90,12 +90,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--lazy-import-preset",
         choices=("none", "minimal", "default"),
-        default="minimal",
+        default="default",
         dest="import_preset",
         metavar="PRESET",
         help=(
             "set of modules to treat as always-imported and skip from "
-            "recommendations; PRESET is none, minimal (default), or default"
+            "recommendations; PRESET is none, minimal, or default (default)"
         ),
     )
     parser.add_argument(

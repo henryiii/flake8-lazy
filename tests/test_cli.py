@@ -1006,14 +1006,14 @@ def test_collect_errors_for_file_preset_none_flags_always_imported(
     assert any("sys" in msg for _, _, msg in errors)
 
 
-def test_collect_errors_for_file_preset_minimal_skips_always_imported(
+def test_collect_errors_for_file_preset_default_skips_always_imported(
     tmp_path: Path,
 ) -> None:
-    """With preset=minimal (default), always-imported modules are not flagged."""
+    """With the default preset, always-imported modules are not flagged."""
     path = tmp_path / "mod.py"
     path.write_text("import sys\n", encoding="utf-8")
 
-    errors = collect_errors_for_file(path, import_preset="minimal")
+    errors = collect_errors_for_file(path)
 
     assert errors == []
 
@@ -1044,14 +1044,14 @@ def test_collect_recommended_preset_none_includes_always_imported(
     assert "sys" in mods
 
 
-def test_collect_recommended_preset_minimal_excludes_always_imported(
+def test_collect_recommended_preset_default_excludes_always_imported(
     tmp_path: Path,
 ) -> None:
-    """With preset=minimal, always-imported modules are not recommended."""
+    """With the default preset, always-imported modules are not recommended."""
     path = tmp_path / "mod.py"
     path.write_text("import sys\n", encoding="utf-8")
 
-    mods = collect_recommended_lazy_modules_for_file(path, import_preset="minimal")
+    mods = collect_recommended_lazy_modules_for_file(path)
 
     assert "sys" not in mods
 
@@ -1065,14 +1065,14 @@ def test_main_import_preset_none_flags_always_imported(tmp_path: Path) -> None:
         main(["--lazy-import-preset=none", str(path)])
 
 
-def test_main_import_preset_minimal_skips_always_imported(
+def test_main_import_preset_default_skips_always_imported(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """--lazy-import-preset=minimal suppresses errors for always-imported modules."""
+    """--lazy-import-preset=default suppresses errors for always-imported modules."""
     path = tmp_path / "mod.py"
     path.write_text("import sys\n", encoding="utf-8")
 
-    main(["--lazy-import-preset=minimal", str(path)])  # should not raise
+    main([str(path)])  # should not raise
 
     captured = capsys.readouterr()
     assert captured.out == ""
