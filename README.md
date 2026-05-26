@@ -186,12 +186,6 @@ instructions.
 
 It's really new, and it's a bit complex. Maybe someday it will be? :)
 
-### Why is there no config?
-
-There is now a small config surface for the startup-import preset via
-`--lazy-import-preset`. The default follows normal Python startup, with
-`minimal` and `none` available as opt-ins.
-
 ### It's missing something!
 
 Open an issue! If it's clear and detailed and in-scope, I might even be able to
