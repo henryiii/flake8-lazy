@@ -4,6 +4,7 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "ast",
+    f"{__spec__.parent}._always_imported",
     f"{__spec__.parent}._analysis",
     f"{__spec__.parent}.checker",
     "pathlib",
@@ -16,6 +17,7 @@ import sys
 import tokenize
 from pathlib import Path
 
+from ._always_imported import IMPORT_PRESETS
 from ._analysis import (
     collect_declared_lazy_modules,
     collect_native_lazy_modules,
@@ -61,11 +63,23 @@ def _build_noqa_map(source: str) -> dict[int, set[str] | None]:
     return noqa_map
 
 
-def collect_errors_for_file(path: str | Path) -> list[tuple[int, int, str]]:
+def collect_errors_for_file(
+    path: str | Path, *, import_preset: str = "minimal"
+) -> list[tuple[int, int, str]]:
     """Return checker errors for a single Python file, respecting noqa comments."""
+    if import_preset not in IMPORT_PRESETS:
+        valid = ", ".join(sorted(IMPORT_PRESETS))
+        msg = f"invalid import_preset {import_preset!r}; choose from: {valid}"
+        raise ValueError(msg)
     item, tree, source = _parse_file(path)
-    checker = LazyImportChecker(tree=tree, filename=str(item))
-    errors = [(line, col, message) for line, col, message, _c in checker.run()]
+    # Temporarily configure the checker class so run() uses the right preset.
+    prev_preset = LazyImportChecker.import_preset
+    LazyImportChecker.import_preset = import_preset
+    try:
+        checker = LazyImportChecker(tree=tree, filename=str(item))
+        errors = [(line, col, message) for line, col, message, _c in checker.run()]
+    finally:
+        LazyImportChecker.import_preset = prev_preset
     if not errors:
         return []
     noqa_map = _build_noqa_map(source)
@@ -81,10 +95,19 @@ def collect_errors_for_file(path: str | Path) -> list[tuple[int, int, str]]:
     return result
 
 
-def collect_recommended_lazy_modules_for_file(path: str | Path) -> list[str]:
+def collect_recommended_lazy_modules_for_file(
+    path: str | Path, *, import_preset: str = "minimal"
+) -> list[str]:
     """Return a sorted ``__lazy_modules__`` recommendation for a file."""
+    if import_preset not in IMPORT_PRESETS:
+        valid = ", ".join(sorted(IMPORT_PRESETS))
+        msg = f"invalid import_preset {import_preset!r}; choose from: {valid}"
+        raise ValueError(msg)
+    always_imported = IMPORT_PRESETS[import_preset]
     item, tree, _source = _parse_file(path)
-    return collect_recommended_lazy_modules(tree, filename=item)
+    return collect_recommended_lazy_modules(
+        tree, filename=item, always_imported=always_imported
+    )
 
 
 def collect_native_lazy_modules_for_file(path: str | Path) -> list[str]:

@@ -88,6 +88,17 @@ def main(argv: list[str] | None = None) -> None:
         help="output style for results",
     )
     parser.add_argument(
+        "--import-preset",
+        choices=("none", "minimal", "default"),
+        default="minimal",
+        dest="import_preset",
+        metavar="PRESET",
+        help=(
+            "set of modules to treat as always-imported and skip from "
+            "recommendations; PRESET is none, minimal (default), or default"
+        ),
+    )
+    parser.add_argument(
         "--apply",
         choices=("list", "set", "native", "dynamic"),
         default=None,
@@ -100,7 +111,9 @@ def main(argv: list[str] | None = None) -> None:
     found_errors = False
     for path in namespace.files:
         try:
-            recommended_modules = collect_recommended_lazy_modules_for_file(path)
+            recommended_modules = collect_recommended_lazy_modules_for_file(
+                path, import_preset=namespace.import_preset
+            )
             declared_modules = collect_declared_lazy_modules_for_file(path)
             is_dynamic = (
                 has_dynamic_lazy_modules_for_file(path)
@@ -128,9 +141,13 @@ def main(argv: list[str] | None = None) -> None:
                 apply_lazy_modules(path, effective_modules, mode=namespace.apply)
                 if namespace.apply == "native" and sys.version_info < (3, 15):
                     continue
-                recommended_modules = collect_recommended_lazy_modules_for_file(path)
+                recommended_modules = collect_recommended_lazy_modules_for_file(
+                    path, import_preset=namespace.import_preset
+                )
                 declared_modules = collect_declared_lazy_modules_for_file(path)
-            errors = collect_errors_for_file(path)
+            errors = collect_errors_for_file(
+                path, import_preset=namespace.import_preset
+            )
         except OSError as exc:
             sys.stderr.write(f"{path}:0:0: LZY000 failed to read file ({exc})\n")
             found_errors = True
