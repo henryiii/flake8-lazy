@@ -92,12 +92,12 @@ class LazyImportChecker:
 
     @classmethod
     def add_options(cls, option_manager: _OptionManager) -> None:
-        """Register ``--import-preset`` with flake8's option manager."""
+        """Register ``--lazy-import-preset`` with flake8's option manager."""
         option_manager.add_option(
-            "--import-preset",
+            "--lazy-import-preset",
             default="minimal",
             parse_from_config=True,
-            dest="import_preset",
+            dest="lazy_import_preset",
             type=str,
             metavar="PRESET",
             help=(
@@ -119,10 +119,10 @@ class LazyImportChecker:
         _args: list[str],
     ) -> None:
         """Read parsed flake8 options and store the chosen preset."""
-        preset = options.import_preset
+        preset = options.lazy_import_preset
         if preset not in IMPORT_PRESETS:
             valid = ", ".join(sorted(IMPORT_PRESETS))
-            msg = f"invalid --import-preset value {preset!r}; choose from: {valid}"
+            msg = f"invalid --lazy-import-preset value {preset!r}; choose from: {valid}"
             raise ValueError(msg)
         cls.import_preset = preset
 

@@ -1057,22 +1057,22 @@ def test_collect_recommended_preset_minimal_excludes_always_imported(
 
 
 def test_main_import_preset_none_flags_always_imported(tmp_path: Path) -> None:
-    """--import-preset=none causes the CLI to flag always-imported stdlib modules."""
+    """``--lazy-import-preset=none`` flags always-imported stdlib modules."""
     path = tmp_path / "mod.py"
     path.write_text("import sys\n", encoding="utf-8")
 
     with pytest.raises(SystemExit, match="1"):
-        main(["--import-preset=none", str(path)])
+        main(["--lazy-import-preset=none", str(path)])
 
 
 def test_main_import_preset_minimal_skips_always_imported(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """--import-preset=minimal suppresses errors for always-imported modules."""
+    """--lazy-import-preset=minimal suppresses errors for always-imported modules."""
     path = tmp_path / "mod.py"
     path.write_text("import sys\n", encoding="utf-8")
 
-    main(["--import-preset=minimal", str(path)])  # should not raise
+    main(["--lazy-import-preset=minimal", str(path)])  # should not raise
 
     captured = capsys.readouterr()
     assert captured.out == ""

@@ -88,7 +88,7 @@ def main(argv: list[str] | None = None) -> None:
         help="output style for results",
     )
     parser.add_argument(
-        "--import-preset",
+        "--lazy-import-preset",
         choices=("none", "minimal", "default"),
         default="minimal",
         dest="import_preset",
