@@ -4,7 +4,6 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "ast",
-    f"{__spec__.parent}._always_imported",
     f"{__spec__.parent}._ast_helpers",
     f"{__spec__.parent}._bindings",
     f"{__spec__.parent}._visitors",
