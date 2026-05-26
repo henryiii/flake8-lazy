@@ -1,27 +1,27 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """List modules that are always imported by Python at startup.
 
 Run this script with the desired Python interpreter to get the list of
-modules that are always loaded at startup under a given set of flags.
-These modules never benefit from being declared in ``__lazy_modules__``.
+modules that are always loaded at startup.  These modules never benefit
+from being declared in ``__lazy_modules__``.
 
 Two modes correspond to the two built-in presets:
 
-* **minimal** (``-IS``): Python in isolated + no-site mode.  Only a small
-  core set of modules is loaded (``sys``, ``time``, ``codecs``, …).
-  Use the output to regenerate ``ALWAYS_IMPORTED_MINIMAL`` in
+* **default** (no flags): Python in isolated mode (``-I``) with normal site
+  initialisation.  Modules such as ``os``, ``abc``, and ``site`` are loaded.
+  Use the output to regenerate ``ALWAYS_IMPORTED_DEFAULT`` in
   ``src/flake8_lazy/_always_imported.py``.
 
-* **default** (``-I``): Python in isolated mode with site initialisation.
-  Additional modules such as ``os``, ``abc``, and ``site`` are loaded.
-  Use the output to regenerate ``ALWAYS_IMPORTED_DEFAULT``.
+* **minimal** (``-S``): Python in isolated + no-site mode (``-IS``).  Only a
+  small core set of modules is loaded (``sys``, ``time``, ``codecs``, …).
+  Use the output to regenerate ``ALWAYS_IMPORTED_MINIMAL``.
 
 Usage:
-    # minimal preset (python -IS)
-    python scripts/list_always_imported.py
+    # default preset  (python -I)
+    uv run --python 3.15 python scripts/list_always_imported.py
 
-    # default preset (python -I, with site)
-    python scripts/list_always_imported.py --site
+    # minimal preset  (python -IS)
+    uv run --python 3.15 python scripts/list_always_imported.py -S
 """
 
 from __future__ import annotations
@@ -38,14 +38,15 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
-        "--site",
+        "-S",
+        dest="no_site",
         action="store_true",
-        help="include site-packages initialisation (omits -S flag); "
-        "use to generate ALWAYS_IMPORTED_DEFAULT",
+        help="skip site-packages initialisation (passes -S to Python); "
+        "use to generate ALWAYS_IMPORTED_MINIMAL",
     )
     args = parser.parse_args()
 
-    flags = ["-I"] if args.site else ["-IS"]
+    flags = ["-IS"] if args.no_site else ["-I"]
 
     with tempfile.NamedTemporaryFile(suffix=".py", delete=False) as f:
         tmpfile = Path(f.name)

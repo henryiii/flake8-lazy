@@ -12,8 +12,8 @@ all supported operating systems.
 
 from __future__ import annotations
 
-# Generated with: python scripts/list_always_imported.py -IS  (CPython 3.15, Linux)
-# Modules present when Python starts in isolated mode (python -IS).
+# Generated with: uv run --python 3.15 python scripts/list_always_imported.py -S
+# (CPython 3.15, Linux) — python -IS startup modules.
 ALWAYS_IMPORTED_MINIMAL: frozenset[str] = frozenset(
     {
         "builtins",
@@ -31,8 +31,8 @@ ALWAYS_IMPORTED_MINIMAL: frozenset[str] = frozenset(
     }
 )
 
-# Generated with: python scripts/list_always_imported.py  (CPython 3.15, Linux)
-# Modules present on normal Python startup (including site-packages initialisation).
+# Generated with: uv run --python 3.15 python scripts/list_always_imported.py
+# (CPython 3.15, Linux) — modules present on normal Python startup (including site).
 ALWAYS_IMPORTED_DEFAULT: frozenset[str] = frozenset(
     {
         "abc",
