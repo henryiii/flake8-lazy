@@ -186,13 +186,6 @@ instructions.
 
 It's really new, and it's a bit complex. Maybe someday it will be? :)
 
-### Why is there no config?
-
-I don't like flake8's config file choices, so I've tried to make it work out of
-the box. Probably will get some eventually, though, like a list of modules that
-can't be lazy imported, or a 'simple' mode that requires every module to be
-lazy.
-
 ### It's missing something!
 
 Open an issue! If it's clear and detailed and in-scope, I might even be able to

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 __lazy_modules__ = [
+    f"{__spec__.parent}._always_imported",
     f"{__spec__.parent}._analysis",
     "importlib",
     "importlib.metadata",
-    "sys",
 ]
 
 import importlib.metadata
@@ -14,8 +14,22 @@ import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import argparse
     import ast
+    from typing import Protocol
 
+    class _OptionManager(Protocol):
+        """Minimal protocol for flake8's OptionManager."""
+
+        def add_option(
+            self,
+            *args: str,
+            parse_from_config: bool = ...,
+            **kwargs: object,
+        ) -> None: ...
+
+
+from ._always_imported import IMPORT_PRESETS
 from ._analysis import (
     collect_duplicate_lazy_modules,
     collect_enclosing_lazy_modules,
@@ -69,17 +83,59 @@ class LazyImportChecker:
     version = importlib.metadata.version("flake8-lazy")
     __slots__ = ("filename", "tree")
 
+    # Class-level option, set by parse_options when running under flake8.
+    import_preset: str = "default"
+
     def __init__(self, tree: ast.AST, filename: str) -> None:
         self.tree = tree
         self.filename = filename
 
+    @classmethod
+    def add_options(cls, option_manager: _OptionManager) -> None:
+        """Register ``--lazy-import-preset`` with flake8's option manager."""
+        option_manager.add_option(
+            "--lazy-import-preset",
+            default="default",
+            parse_from_config=True,
+            dest="lazy_import_preset",
+            type=str,
+            metavar="PRESET",
+            help=(
+                "Set of modules to treat as always-imported and skip from "
+                "lazy-import recommendations. "
+                "PRESET is one of: "
+                "none (no filtering), "
+                "default (normal python startup modules including site, default), "
+                "minimal (python -IS startup modules). "
+                "[%(default)s]"
+            ),
+        )
+
+    @classmethod
+    def parse_options(
+        cls,
+        _option_manager: _OptionManager,
+        options: argparse.Namespace,
+        _args: list[str],
+    ) -> None:
+        """Read parsed flake8 options and store the chosen preset."""
+        preset = options.lazy_import_preset
+        if preset not in IMPORT_PRESETS:
+            valid = ", ".join(sorted(IMPORT_PRESETS))
+            msg = f"invalid --lazy-import-preset value {preset!r}; choose from: {valid}"
+            raise ValueError(msg)
+        cls.import_preset = preset
+
     def _build_missing_lazy_module_errors(
         self,
+        *,
+        always_imported: frozenset[str],
     ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         for module, lineno, col_offset in collect_missing_lazy_modules(
             self.tree,
             filename=self.filename,
+            always_imported=always_imported,
         ):
             code = _lazy_module_error_code(module)
             message = ERROR_MESSAGES[code].format(module=module)
@@ -166,9 +222,17 @@ class LazyImportChecker:
             errors.append((lineno, col_offset, f"LZY402 {message}", type(self)))
         return errors
 
-    def run(self) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
+    def run(
+        self,
+        *,
+        always_imported: frozenset[str] | None = None,
+    ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
+        if always_imported is None:
+            always_imported = IMPORT_PRESETS[type(self).import_preset]
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
-        errors.extend(self._build_missing_lazy_module_errors())
+        errors.extend(
+            self._build_missing_lazy_module_errors(always_imported=always_imported)
+        )
         errors.extend(self._build_lazy_module_validation_errors())
         errors.extend(self._build_lazy_keyword_errors())
         errors.extend(self._build_semantic_lazy_errors())

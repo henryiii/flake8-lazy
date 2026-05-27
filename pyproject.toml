@@ -67,6 +67,7 @@ exclude-newer = "7 days"
 source-include = [
   "tests/*.py",
   "tests/examples/*/*.txt",
+  "scripts/*.py",
 ]
 source-exclude = [
   "*.swp",

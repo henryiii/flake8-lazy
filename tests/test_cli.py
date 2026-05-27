@@ -987,3 +987,92 @@ def test_checker_produces_no_errors_for_dynamic_lazy_modules(
     errors = collect_errors_for_file(path)
 
     assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# import_preset tests
+# ---------------------------------------------------------------------------
+
+
+def test_collect_errors_for_file_preset_none_flags_always_imported(
+    tmp_path: Path,
+) -> None:
+    """With preset=none, even always-imported stdlib modules are flagged."""
+    path = tmp_path / "mod.py"
+    path.write_text("import sys\n", encoding="utf-8")
+
+    errors = collect_errors_for_file(path, import_preset="none")
+
+    assert any("sys" in msg for _, _, msg in errors)
+
+
+def test_collect_errors_for_file_preset_default_skips_always_imported(
+    tmp_path: Path,
+) -> None:
+    """With the default preset, always-imported modules are not flagged."""
+    path = tmp_path / "mod.py"
+    path.write_text("import sys\n", encoding="utf-8")
+
+    errors = collect_errors_for_file(path)
+
+    assert errors == []
+
+
+def test_collect_errors_for_file_preset_default_skips_more_modules(
+    tmp_path: Path,
+) -> None:
+    """With preset=default, site-startup modules like os are also not flagged."""
+    path = tmp_path / "mod.py"
+    path.write_text("import os\n", encoding="utf-8")
+
+    errors_minimal = collect_errors_for_file(path, import_preset="minimal")
+    errors_default = collect_errors_for_file(path, import_preset="default")
+
+    assert any("os" in msg for _, _, msg in errors_minimal)
+    assert errors_default == []
+
+
+def test_collect_recommended_preset_none_includes_always_imported(
+    tmp_path: Path,
+) -> None:
+    """With preset=none, always-imported modules appear in recommendations."""
+    path = tmp_path / "mod.py"
+    path.write_text("import sys\n", encoding="utf-8")
+
+    mods = collect_recommended_lazy_modules_for_file(path, import_preset="none")
+
+    assert "sys" in mods
+
+
+def test_collect_recommended_preset_default_excludes_always_imported(
+    tmp_path: Path,
+) -> None:
+    """With the default preset, always-imported modules are not recommended."""
+    path = tmp_path / "mod.py"
+    path.write_text("import sys\n", encoding="utf-8")
+
+    mods = collect_recommended_lazy_modules_for_file(path)
+
+    assert "sys" not in mods
+
+
+def test_main_import_preset_none_flags_always_imported(tmp_path: Path) -> None:
+    """``--lazy-import-preset=none`` flags always-imported stdlib modules."""
+    path = tmp_path / "mod.py"
+    path.write_text("import sys\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="1"):
+        main(["--lazy-import-preset=none", str(path)])
+
+
+def test_main_import_preset_default_skips_always_imported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """--lazy-import-preset=default suppresses errors for always-imported modules."""
+    path = tmp_path / "mod.py"
+    path.write_text("import sys\n", encoding="utf-8")
+
+    main([str(path)])  # should not raise
+
+    captured = capsys.readouterr()
+    assert captured.out == ""

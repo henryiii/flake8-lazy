@@ -73,3 +73,31 @@ them. It is idempotent: running `--apply=dynamic` on a file that already has a
 dynamic `__lazy_modules__` is a no-op.
 
 The command exits with status `1` if any diagnostics are produced.
+
+## Configuring always-imported modules with `--lazy-import-preset`
+
+Some modules are always loaded before any user code runs (e.g. `sys`, `time`).
+Declaring such modules in `__lazy_modules__` has no effect, so flake8-lazy skips
+them from its recommendations by default. You can control which set of modules
+is excluded via `--lazy-import-preset`:
+
+| Preset    | Modules excluded from recommendations                                                   |
+| --------- | --------------------------------------------------------------------------------------- |
+| `default` | Modules imported during a normal Python startup (includes `os`, `site`, etc.). Default. |
+| `minimal` | Modules imported when Python starts in isolated mode (`-IS`).                           |
+| `none`    | No exclusions — all imported modules are candidates.                                    |
+
+```bash
+# Use the smaller isolated-startup set
+flake8-lazy --lazy-import-preset=minimal path/to/file.py
+
+# Recommend lazy imports for every module, even always-imported ones
+flake8-lazy --lazy-import-preset=none path/to/file.py
+```
+
+When using flake8 directly, set the option in your `.flake8` or `setup.cfg`:
+
+```ini
+[flake8]
+lazy-import-preset = default
+```

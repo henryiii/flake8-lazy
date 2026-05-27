@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
+from ._always_imported import ALWAYS_IMPORTED_DEFAULT
 from ._ast_helpers import (
     containing_package_prefixes,
     is_lazy_import_node,
@@ -420,6 +421,7 @@ def _collect_recommended_lazy_bindings(
     tree: ast.AST,
     *,
     excluded_packages: set[str] | None = None,
+    always_imported: frozenset[str] = ALWAYS_IMPORTED_DEFAULT,
 ) -> list[ImportBinding]:
     """Return module-scope imports that should appear in ``__lazy_modules__``."""
     if excluded_packages is None:
@@ -450,6 +452,7 @@ def _collect_recommended_lazy_bindings(
         | non_lazy_packages
         | non_lazy_names
         | guard_names
+        | always_imported
     )
     policy = _RecommendationPolicy(
         excluded_packages=excluded_packages,
@@ -492,6 +495,8 @@ def _collect_recommended_lazy_bindings(
 def collect_recommended_lazy_modules(
     tree: ast.AST,
     filename: str | Path | None = None,
+    *,
+    always_imported: frozenset[str] = ALWAYS_IMPORTED_DEFAULT,
 ) -> list[str]:
     """Return a sorted ``__lazy_modules__`` recommendation for ``tree``."""
     excluded_packages = containing_package_prefixes(filename)
@@ -499,6 +504,7 @@ def collect_recommended_lazy_modules(
     for binding in _collect_recommended_lazy_bindings(
         tree,
         excluded_packages=excluded_packages,
+        always_imported=always_imported,
     ):
         package = binding.package
         if package is None:
@@ -510,6 +516,8 @@ def collect_recommended_lazy_modules(
 def collect_missing_lazy_modules(
     tree: ast.AST,
     filename: str | Path | None = None,
+    *,
+    always_imported: frozenset[str] = ALWAYS_IMPORTED_DEFAULT,
 ) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_modules__``."""
     if has_dynamic_lazy_modules(tree):
@@ -520,6 +528,7 @@ def collect_missing_lazy_modules(
     for binding in _collect_recommended_lazy_bindings(
         tree,
         excluded_packages=excluded_packages,
+        always_imported=always_imported,
     ):
         package = binding.package
         if package is None or package in lazy_modules:
