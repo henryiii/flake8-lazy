@@ -99,6 +99,16 @@ def main(argv: list[str] | None = None) -> None:
         ),
     )
     parser.add_argument(
+        "--lazy-exclude-modules",
+        default="",
+        dest="exclude_modules",
+        metavar="MODULES",
+        help=(
+            "comma-separated list of modules to exclude from lazy-import "
+            "recommendations (treated as always-imported)"
+        ),
+    )
+    parser.add_argument(
         "--apply",
         choices=("list", "set", "native", "dynamic"),
         default=None,
@@ -107,12 +117,17 @@ def main(argv: list[str] | None = None) -> None:
         "MODE is list, set, native, or dynamic",
     )
     namespace = parser.parse_args(list(argv) if argv is not None else None)
+    exclude_modules = frozenset(
+        m.strip() for m in (namespace.exclude_modules or "").split(",") if m.strip()
+    )
 
     found_errors = False
     for path in namespace.files:
         try:
             recommended_modules = collect_recommended_lazy_modules_for_file(
-                path, import_preset=namespace.import_preset
+                path,
+                import_preset=namespace.import_preset,
+                exclude_modules=exclude_modules,
             )
             declared_modules = collect_declared_lazy_modules_for_file(path)
             is_dynamic = (
@@ -142,11 +157,15 @@ def main(argv: list[str] | None = None) -> None:
                 if namespace.apply == "native" and sys.version_info < (3, 15):
                     continue
                 recommended_modules = collect_recommended_lazy_modules_for_file(
-                    path, import_preset=namespace.import_preset
+                    path,
+                    import_preset=namespace.import_preset,
+                    exclude_modules=exclude_modules,
                 )
                 declared_modules = collect_declared_lazy_modules_for_file(path)
             errors = collect_errors_for_file(
-                path, import_preset=namespace.import_preset
+                path,
+                import_preset=namespace.import_preset,
+                exclude_modules=exclude_modules,
             )
         except OSError as exc:
             sys.stderr.write(f"{path}:0:0: LZY000 failed to read file ({exc})\n")

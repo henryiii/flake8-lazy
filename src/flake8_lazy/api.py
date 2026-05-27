@@ -64,7 +64,10 @@ def _build_noqa_map(source: str) -> dict[int, set[str] | None]:
 
 
 def collect_errors_for_file(
-    path: str | Path, *, import_preset: str = "default"
+    path: str | Path,
+    *,
+    import_preset: str = "default",
+    exclude_modules: frozenset[str] = frozenset(),
 ) -> list[tuple[int, int, str]]:
     """Return checker errors for a single Python file, respecting noqa comments."""
     if import_preset not in IMPORT_PRESETS:
@@ -72,7 +75,7 @@ def collect_errors_for_file(
         msg = f"invalid import_preset {import_preset!r}; choose from: {valid}"
         raise ValueError(msg)
     item, tree, source = _parse_file(path)
-    always_imported = IMPORT_PRESETS[import_preset]
+    always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
     checker = LazyImportChecker(tree=tree, filename=str(item))
     errors = [
         (line, col, message)
@@ -94,14 +97,17 @@ def collect_errors_for_file(
 
 
 def collect_recommended_lazy_modules_for_file(
-    path: str | Path, *, import_preset: str = "default"
+    path: str | Path,
+    *,
+    import_preset: str = "default",
+    exclude_modules: frozenset[str] = frozenset(),
 ) -> list[str]:
     """Return a sorted ``__lazy_modules__`` recommendation for a file."""
     if import_preset not in IMPORT_PRESETS:
         valid = ", ".join(sorted(IMPORT_PRESETS))
         msg = f"invalid import_preset {import_preset!r}; choose from: {valid}"
         raise ValueError(msg)
-    always_imported = IMPORT_PRESETS[import_preset]
+    always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
     item, tree, _source = _parse_file(path)
     return collect_recommended_lazy_modules(
         tree, filename=item, always_imported=always_imported

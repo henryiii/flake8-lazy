@@ -101,3 +101,23 @@ When using flake8 directly, set the option in your `.flake8` or `setup.cfg`:
 [flake8]
 lazy-import-preset = default
 ```
+
+## Excluding specific modules with `--lazy-exclude-modules`
+
+To exclude individual modules from lazy-import recommendations — for example,
+modules that your project always imports at startup, or that must stay eager for
+correctness — use `--lazy-exclude-modules` with a comma-separated list:
+
+```bash
+flake8-lazy --lazy-exclude-modules=numpy,pandas path/to/file.py
+```
+
+Modules listed here are treated as always-imported and will not be flagged
+(LZY101/LZY102) or included in `--format lazy-modules` recommendations.
+
+When using flake8 directly, add the option to your `.flake8` or `setup.cfg`:
+
+```ini
+[flake8]
+lazy-exclude-modules = numpy,pandas
+```

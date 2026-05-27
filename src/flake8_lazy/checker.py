@@ -83,8 +83,9 @@ class LazyImportChecker:
     version = importlib.metadata.version("flake8-lazy")
     __slots__ = ("filename", "tree")
 
-    # Class-level option, set by parse_options when running under flake8.
+    # Class-level options, set by parse_options when running under flake8.
     import_preset: str = "default"
+    exclude_modules: frozenset[str] = frozenset()
 
     def __init__(self, tree: ast.AST, filename: str) -> None:
         self.tree = tree
@@ -92,7 +93,7 @@ class LazyImportChecker:
 
     @classmethod
     def add_options(cls, option_manager: _OptionManager) -> None:
-        """Register ``--lazy-import-preset`` with flake8's option manager."""
+        """Register lazy-import options with flake8's option manager."""
         option_manager.add_option(
             "--lazy-import-preset",
             default="default",
@@ -110,6 +111,20 @@ class LazyImportChecker:
                 "[%(default)s]"
             ),
         )
+        option_manager.add_option(
+            "--lazy-exclude-modules",
+            default="",
+            parse_from_config=True,
+            dest="lazy_exclude_modules",
+            type=str,
+            metavar="MODULES",
+            help=(
+                "Comma-separated list of module names to exclude from "
+                "lazy-import recommendations. These modules are treated as "
+                "always-imported and will not be flagged or recommended for "
+                "lazy declarations. [%(default)s]"
+            ),
+        )
 
     @classmethod
     def parse_options(
@@ -118,13 +133,15 @@ class LazyImportChecker:
         options: argparse.Namespace,
         _args: list[str],
     ) -> None:
-        """Read parsed flake8 options and store the chosen preset."""
+        """Read parsed flake8 options and store preset and non-lazy modules."""
         preset = options.lazy_import_preset
         if preset not in IMPORT_PRESETS:
             valid = ", ".join(sorted(IMPORT_PRESETS))
             msg = f"invalid --lazy-import-preset value {preset!r}; choose from: {valid}"
             raise ValueError(msg)
         cls.import_preset = preset
+        raw = options.lazy_exclude_modules or ""
+        cls.exclude_modules = frozenset(m.strip() for m in raw.split(",") if m.strip())
 
     def _build_missing_lazy_module_errors(
         self,
@@ -226,9 +243,13 @@ class LazyImportChecker:
         self,
         *,
         always_imported: frozenset[str] | None = None,
+        exclude_modules: frozenset[str] | None = None,
     ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
         if always_imported is None:
             always_imported = IMPORT_PRESETS[type(self).import_preset]
+        if exclude_modules is None:
+            exclude_modules = type(self).exclude_modules
+        always_imported = always_imported | exclude_modules
         errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
         errors.extend(
             self._build_missing_lazy_module_errors(always_imported=always_imported)
