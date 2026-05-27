@@ -1627,3 +1627,32 @@ import numpy
     )
     assert "sys" not in recommended_minimal
     assert "time" not in recommended_minimal
+
+
+# ---------------------------------------------------------------------------
+# exclude_modules tests
+# ---------------------------------------------------------------------------
+
+
+def test_checker_run_exclude_modules_excludes_module() -> None:
+    """Modules in exclude_modules are not flagged as missing from __lazy_modules__."""
+    tree = ast.parse("import numpy\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors_without = checker.run(exclude_modules=frozenset())
+    errors_with = checker.run(exclude_modules=frozenset({"numpy"}))
+
+    assert any("numpy" in e[2] for e in errors_without)
+    assert not any("numpy" in e[2] for e in errors_with)
+
+
+def test_checker_run_exclude_modules_does_not_affect_other_modules() -> None:
+    """Other modules are still flagged even when exclude_modules is set."""
+    tree = ast.parse("import numpy\nimport pandas\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = checker.run(exclude_modules=frozenset({"numpy"}))
+
+    modules = [e[2] for e in errors]
+    assert not any("numpy" in m for m in modules)
+    assert any("pandas" in m for m in modules)

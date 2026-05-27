@@ -1076,3 +1076,65 @@ def test_main_import_preset_default_skips_always_imported(
 
     captured = capsys.readouterr()
     assert captured.out == ""
+
+
+# ---------------------------------------------------------------------------
+# exclude_modules tests
+# ---------------------------------------------------------------------------
+
+
+def test_collect_errors_exclude_modules_skips_listed_module(
+    tmp_path: Path,
+) -> None:
+    """Modules in exclude_modules are not flagged even if they are importable."""
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+
+    errors_without = collect_errors_for_file(path)
+    errors_with = collect_errors_for_file(path, exclude_modules=frozenset({"numpy"}))
+
+    assert any("numpy" in msg for _, _, msg in errors_without)
+    assert errors_with == []
+
+
+def test_collect_recommended_exclude_modules_excludes_listed_module(
+    tmp_path: Path,
+) -> None:
+    """Modules in exclude_modules are excluded from recommendations."""
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\nimport pandas\n", encoding="utf-8")
+
+    mods_without = collect_recommended_lazy_modules_for_file(path)
+    mods_with = collect_recommended_lazy_modules_for_file(
+        path, exclude_modules=frozenset({"numpy"})
+    )
+
+    assert "numpy" in mods_without
+    assert "numpy" not in mods_with
+    assert "pandas" in mods_with
+
+
+def test_main_exclude_modules_skips_listed_module(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--lazy-exclude-modules`` suppresses errors for listed modules."""
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+
+    main(["--lazy-exclude-modules=numpy", str(path)])  # should not raise
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+
+
+def test_main_exclude_modules_comma_separated(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--lazy-exclude-modules`` accepts a comma-separated list."""
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\nimport pandas\n", encoding="utf-8")
+
+    main(["--lazy-exclude-modules=numpy,pandas", str(path)])  # should not raise
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
