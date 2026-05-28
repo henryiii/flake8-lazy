@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 from ._always_imported import ALWAYS_IMPORTED_DEFAULT
@@ -644,22 +645,35 @@ def collect_enclosing_lazy_modules(
     return enclosing_lazy_modules
 
 
-def collect_redundant_lazy_declarations(tree: ast.AST) -> list[tuple[str, int, int]]:
-    """Return (module, lineno, col_offset) for ``lazy`` imports in __lazy_modules__."""
-    lazy_packages = collect_lazy_packages(tree)
-    if not lazy_packages:
-        return []
-
+def _collect_unique_lazy_binding_packages(
+    tree: ast.AST,
+    *,
+    include_package: Callable[[str], bool],
+) -> list[tuple[str, int, int]]:
     result: list[tuple[str, int, int]] = []
     seen: set[str] = set()
     for binding in collect_top_level_lazy_import_bindings(tree):
         package = binding.package
         if package is None:
             continue
-        if package in lazy_packages and package not in seen:
-            result.append((package, binding.lineno, binding.col_offset))
-            seen.add(package)
+        if package in seen:
+            continue
+        if not include_package(package):
+            continue
+        result.append((package, binding.lineno, binding.col_offset))
+        seen.add(package)
     return result
+
+
+def collect_redundant_lazy_declarations(tree: ast.AST) -> list[tuple[str, int, int]]:
+    """Return (module, lineno, col_offset) for ``lazy`` imports in __lazy_modules__."""
+    lazy_packages = collect_lazy_packages(tree)
+    if not lazy_packages:
+        return []
+    return _collect_unique_lazy_binding_packages(
+        tree,
+        include_package=lazy_packages.__contains__,
+    )
 
 
 def collect_mixed_lazy_eager_imports(tree: ast.AST) -> list[tuple[str, int, int]]:
@@ -674,14 +688,7 @@ def collect_mixed_lazy_eager_imports(tree: ast.AST) -> list[tuple[str, int, int]
     }
     if not eager_packages:
         return []
-
-    result: list[tuple[str, int, int]] = []
-    seen: set[str] = set()
-    for binding in collect_top_level_lazy_import_bindings(tree):
-        package = binding.package
-        if package is None:
-            continue
-        if package in eager_packages and package not in seen:
-            result.append((package, binding.lineno, binding.col_offset))
-            seen.add(package)
-    return result
+    return _collect_unique_lazy_binding_packages(
+        tree,
+        include_package=eager_packages.__contains__,
+    )
