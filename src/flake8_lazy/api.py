@@ -65,30 +65,50 @@ def _process_single_file(
     include_errors: bool,
 ) -> tuple[Path, _FileAnalysis]:
     """Analyze a single file for parallel execution."""
-    declared_modules = collect_declared_lazy_modules_for_file(path)
-    is_dynamic = apply_mode == "dynamic" and has_dynamic_lazy_modules_for_file(path)
+    item, tree, source = _parse_file(path)
+
+    declared_modules = collect_declared_lazy_modules(tree)
+    is_dynamic = apply_mode == "dynamic" and has_dynamic_lazy_modules(tree)
     has_native_lazy = apply_mode in {
         "list",
         "set",
         "dynamic",
-    } and has_native_lazy_imports_for_file(path)
+    } and has_native_lazy_imports(tree)
     native_modules: list[str] = []
     if has_native_lazy and apply_mode in {"list", "set"}:
-        native_modules = collect_native_lazy_modules_for_file(path)
-    errors = (
-        collect_errors_for_file(
-            path,
-            import_preset=import_preset,
-            exclude_modules=exclude_modules,
-        )
-        if include_errors
-        else []
+        native_modules = collect_native_lazy_modules(tree)
+
+    if include_errors:
+        always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
+        checker = LazyImportChecker(tree=tree, filename=str(item))
+        errors: list[tuple[int, int, str]] = [
+            (line, col, message)
+            for line, col, message, _c in checker.run(
+                always_imported=always_imported,
+            )
+        ]
+        if errors:
+            noqa_map = _build_noqa_map(source)
+            if noqa_map:
+                filtered: list[tuple[int, int, str]] = []
+                for line, col, message in errors:
+                    codes = noqa_map.get(line)
+                    if codes is None and line in noqa_map:
+                        continue
+                    if codes is not None and message.split()[0] in codes:
+                        continue
+                    filtered.append((line, col, message))
+                errors = filtered
+    else:
+        errors = []
+
+    always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
+    recommended_modules = collect_recommended_lazy_modules(
+        tree,
+        filename=item,
+        always_imported=always_imported,
     )
-    recommended_modules = collect_recommended_lazy_modules_for_file(
-        path,
-        import_preset=import_preset,
-        exclude_modules=exclude_modules,
-    )
+
     return path, _FileAnalysis(
         recommended_modules=recommended_modules,
         declared_modules=declared_modules,
