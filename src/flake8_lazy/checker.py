@@ -5,6 +5,7 @@ from __future__ import annotations
 __lazy_modules__ = [
     f"{__spec__.parent}._always_imported",
     f"{__spec__.parent}._analysis",
+    f"{__spec__.parent}._options",
     "importlib",
     "importlib.metadata",
 ]
@@ -43,6 +44,11 @@ from ._analysis import (
     collect_unsorted_lazy_modules,
     collect_unused_lazy_modules,
     has_dynamic_lazy_modules,
+)
+from ._options import (
+    DEFAULT_EXCLUDE_MODULES,
+    DEFAULT_IMPORT_PRESET,
+    parse_exclude_modules,
 )
 
 __all__ = ["ERROR_MESSAGES", "LazyImportChecker"]
@@ -84,7 +90,7 @@ class LazyImportChecker:
     __slots__ = ("filename", "tree")
 
     # Class-level options, set by parse_options when running under flake8.
-    import_preset: str = "default"
+    import_preset: str = DEFAULT_IMPORT_PRESET
     exclude_modules: frozenset[str] = frozenset()
 
     def __init__(self, tree: ast.AST, filename: str) -> None:
@@ -96,7 +102,7 @@ class LazyImportChecker:
         """Register lazy-import options with flake8's option manager."""
         option_manager.add_option(
             "--lazy-import-preset",
-            default="default",
+            default=DEFAULT_IMPORT_PRESET,
             parse_from_config=True,
             dest="lazy_import_preset",
             type=str,
@@ -113,7 +119,7 @@ class LazyImportChecker:
         )
         option_manager.add_option(
             "--lazy-exclude-modules",
-            default="",
+            default=DEFAULT_EXCLUDE_MODULES,
             parse_from_config=True,
             dest="lazy_exclude_modules",
             type=str,
@@ -140,8 +146,7 @@ class LazyImportChecker:
             msg = f"invalid --lazy-import-preset value {preset!r}; choose from: {valid}"
             raise ValueError(msg)
         cls.import_preset = preset
-        raw = options.lazy_exclude_modules or ""
-        cls.exclude_modules = frozenset(m.strip() for m in raw.split(",") if m.strip())
+        cls.exclude_modules = parse_exclude_modules(options.lazy_exclude_modules)
 
     def _build_missing_lazy_module_errors(
         self,

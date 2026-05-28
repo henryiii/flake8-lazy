@@ -19,6 +19,19 @@ from flake8_lazy.api import (
 )
 
 
+def _assert_no_output(capsys: pytest.CaptureFixture[str]) -> None:
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def _run_main_and_assert_no_output(
+    args: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    main(args)
+    _assert_no_output(capsys)
+
+
 def test_collect_errors_for_file(tmp_path: Path) -> None:
     path = tmp_path / "mod.py"
     path.write_text("import numpy\n", encoding="utf-8")
@@ -279,11 +292,7 @@ def test_main_outputs_lazy_modules_format_for_clean_file(
         encoding="utf-8",
     )
 
-    main(["--format", "lazy-modules", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--format", "lazy-modules", str(path)], capsys)
 
 
 def test_main_outputs_lazy_modules_format_skips_empty_recommendation(
@@ -293,11 +302,7 @@ def test_main_outputs_lazy_modules_format_skips_empty_recommendation(
     path = tmp_path / "mod.py"
     path.write_text("import pathlib\nBASE = pathlib.Path.home()\n", encoding="utf-8")
 
-    main(["--format", "lazy-modules", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--format", "lazy-modules", str(path)], capsys)
 
 
 def test_main_passes_when_file_is_configured(
@@ -310,11 +315,7 @@ def test_main_passes_when_file_is_configured(
         encoding="utf-8",
     )
 
-    main([str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output([str(path)], capsys)
 
 
 def test_main_apply_replaces_existing_lazy_modules(
@@ -327,11 +328,7 @@ def test_main_apply_replaces_existing_lazy_modules(
         encoding="utf-8",
     )
 
-    main(["--apply=list", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = ["numpy"]\nimport numpy\n'
     )
@@ -349,11 +346,7 @@ def test_main_apply_inserts_after_comments_and_docstring(
         encoding="utf-8",
     )
 
-    main(["--apply=list", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         '# SPDX-License-Identifier: BSD-3-Clause\n"""Module docs."""\n\n'
         '__lazy_modules__ = ["pandas"]\n\nimport pandas\n'
@@ -370,11 +363,7 @@ def test_main_apply_inserts_after_future_annotations_import(
         encoding="utf-8",
     )
 
-    main(["--apply=list", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         "from __future__ import annotations\n"
         "\n"
@@ -394,11 +383,7 @@ def test_main_apply_inserts_blank_line_after_future_annotations_import_when_miss
         encoding="utf-8",
     )
 
-    main(["--apply=list", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         "from __future__ import annotations\n"
         "\n"
@@ -453,11 +438,7 @@ def test_main_apply_removes_existing_lazy_modules_when_none_recommended(
         encoding="utf-8",
     )
 
-    main(["--apply=list", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         "\ndef helper() -> None:\n    import numpy\n"
     )
@@ -471,11 +452,7 @@ def test_main_apply_leaves_file_unchanged_when_no_modules_and_no_existing(
     original = "def helper() -> None:\n    import numpy\n"
     path.write_text(original, encoding="utf-8")
 
-    main(["--apply=list", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == original
 
 
@@ -490,11 +467,7 @@ def test_main_apply_list_mode_explicit_flag(
         encoding="utf-8",
     )
 
-    main(["--apply=list", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = ["numpy"]\nimport numpy\n'
     )
@@ -507,11 +480,7 @@ def test_main_apply_set_mode_writes_set_literal(
     path = tmp_path / "mod.py"
     path.write_text("import numpy\n", encoding="utf-8")
 
-    main(["--apply=set", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=set", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = {"numpy"}\n\nimport numpy\n'
     )
@@ -527,11 +496,7 @@ def test_main_apply_set_mode_overrides_existing_list(
         encoding="utf-8",
     )
 
-    main(["--apply=set", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=set", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = {"numpy"}\nimport numpy\n'
     )
@@ -547,11 +512,7 @@ def test_main_apply_set_mode_overrides_existing_tuple(
         encoding="utf-8",
     )
 
-    main(["--apply=set", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=set", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = {"numpy", "pandas"}\nimport numpy\nimport pandas\n'
     )
@@ -568,11 +529,7 @@ def test_main_apply_set_mode_overrides_existing_correct_list(
         encoding="utf-8",
     )
 
-    main(["--apply=set", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=set", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = {"numpy"}\nimport numpy\n'
     )
@@ -589,11 +546,7 @@ def test_main_apply_list_mode_overrides_existing_correct_set(
         encoding="utf-8",
     )
 
-    main(["--apply=list", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = ["numpy"]\nimport numpy\n'
     )
@@ -610,11 +563,7 @@ def test_main_apply_list_mode_converts_native_lazy_import(
     path = tmp_path / "mod.py"
     path.write_text("lazy import numpy\n", encoding="utf-8")
 
-    main(["--apply=list", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = ["numpy"]\n\nimport numpy\n'
     )
@@ -631,11 +580,7 @@ def test_main_apply_set_mode_converts_native_lazy_import(
     path = tmp_path / "mod.py"
     path.write_text("lazy import numpy\n", encoding="utf-8")
 
-    main(["--apply=set", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=set", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = {"numpy"}\n\nimport numpy\n'
     )
@@ -652,11 +597,7 @@ def test_main_apply_dynamic_mode_converts_native_lazy_import(
     path = tmp_path / "mod.py"
     path.write_text("lazy import numpy\n", encoding="utf-8")
 
-    main(["--apply=dynamic", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=dynamic", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         "class AllLazy:\n"
         "    @staticmethod\n"
@@ -689,11 +630,7 @@ def test_main_apply_native_adds_lazy_prefix_to_import(
     path = tmp_path / "mod.py"
     path.write_text("import numpy\n", encoding="utf-8")
 
-    main(["--apply=native", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=native", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == "lazy import numpy\n"
 
 
@@ -704,11 +641,7 @@ def test_main_apply_native_adds_lazy_prefix_to_from_import(
     path = tmp_path / "mod.py"
     path.write_text("from pathlib import Path\n", encoding="utf-8")
 
-    main(["--apply=native", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=native", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == "lazy from pathlib import Path\n"
 
 
@@ -722,11 +655,7 @@ def test_main_apply_native_removes_lazy_modules_assignment(
         encoding="utf-8",
     )
 
-    main(["--apply=native", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=native", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == "lazy import numpy\n"
 
 
@@ -741,11 +670,7 @@ def test_main_apply_native_only_lazifies_recommended_imports(
         encoding="utf-8",
     )
 
-    main(["--apply=native", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=native", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         "lazy import numpy\nimport pathlib\nBASE = pathlib.Path.home()\n"
     )
@@ -758,11 +683,7 @@ def test_main_apply_native_handles_multiple_imports(
     path = tmp_path / "mod.py"
     path.write_text("import numpy\nimport pandas\n", encoding="utf-8")
 
-    main(["--apply=native", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=native", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         "lazy import numpy\nlazy import pandas\n"
     )
@@ -778,11 +699,7 @@ def test_main_apply_native_removes_existing_lazy_modules_when_no_recommended(
         encoding="utf-8",
     )
 
-    main(["--apply=native", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=native", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
         "\ndef helper() -> None:\n    import numpy\n"
     )
@@ -869,11 +786,7 @@ def test_main_noqa_suppresses_output_and_exits_zero(
     path = tmp_path / "mod.py"
     path.write_text("import numpy  # noqa\n", encoding="utf-8")
 
-    main([str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output([str(path)], capsys)
 
 
 def test_main_noqa_with_code_suppresses_output_and_exits_zero(
@@ -883,11 +796,7 @@ def test_main_noqa_with_code_suppresses_output_and_exits_zero(
     path = tmp_path / "mod.py"
     path.write_text("import numpy  # noqa: LZY102\n", encoding="utf-8")
 
-    main([str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output([str(path)], capsys)
 
 
 def test_main_apply_dynamic_inserts_alllazy_class(
@@ -897,11 +806,7 @@ def test_main_apply_dynamic_inserts_alllazy_class(
     path = tmp_path / "mod.py"
     path.write_text("import numpy\n", encoding="utf-8")
 
-    main(["--apply=dynamic", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=dynamic", str(path)], capsys)
     result = path.read_text(encoding="utf-8")
     assert "class AllLazy:" in result
     assert "__contains__" in result
@@ -919,11 +824,7 @@ def test_main_apply_dynamic_replaces_existing_list(
         encoding="utf-8",
     )
 
-    main(["--apply=dynamic", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=dynamic", str(path)], capsys)
     result = path.read_text(encoding="utf-8")
     assert "__lazy_modules__ = AllLazy()" in result
     assert '["numpy"]' not in result
@@ -946,11 +847,7 @@ def test_main_apply_dynamic_is_noop_when_already_dynamic(
     path = tmp_path / "mod.py"
     path.write_text(original, encoding="utf-8")
 
-    main(["--apply=dynamic", str(path)])
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    _run_main_and_assert_no_output(["--apply=dynamic", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == original
 
 
@@ -1072,10 +969,7 @@ def test_main_import_preset_default_skips_always_imported(
     path = tmp_path / "mod.py"
     path.write_text("import sys\n", encoding="utf-8")
 
-    main([str(path)])  # should not raise
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
+    _run_main_and_assert_no_output([str(path)], capsys)
 
 
 # ---------------------------------------------------------------------------
@@ -1121,10 +1015,7 @@ def test_main_exclude_modules_skips_listed_module(
     path = tmp_path / "mod.py"
     path.write_text("import numpy\n", encoding="utf-8")
 
-    main(["--lazy-exclude-modules=numpy", str(path)])  # should not raise
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
+    _run_main_and_assert_no_output(["--lazy-exclude-modules=numpy", str(path)], capsys)
 
 
 def test_main_exclude_modules_comma_separated(
@@ -1134,7 +1025,6 @@ def test_main_exclude_modules_comma_separated(
     path = tmp_path / "mod.py"
     path.write_text("import numpy\nimport pandas\n", encoding="utf-8")
 
-    main(["--lazy-exclude-modules=numpy,pandas", str(path)])  # should not raise
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
+    _run_main_and_assert_no_output(
+        ["--lazy-exclude-modules=numpy,pandas", str(path)], capsys
+    )

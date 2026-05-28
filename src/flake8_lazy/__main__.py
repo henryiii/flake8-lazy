@@ -2,6 +2,7 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "argparse",
+    "flake8_lazy._options",
     "flake8_lazy._rewriter",
     "flake8_lazy.api",
     "flake8_lazy.checker",
@@ -10,9 +11,16 @@ __lazy_modules__ = [
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from flake8_lazy import __version__
+from flake8_lazy._options import (
+    DEFAULT_EXCLUDE_MODULES,
+    DEFAULT_IMPORT_PRESET,
+    IMPORT_PRESET_CHOICES,
+    parse_exclude_modules,
+)
 from flake8_lazy._rewriter import apply_lazy_modules
 from flake8_lazy.api import (
     collect_declared_lazy_modules_for_file,
@@ -25,6 +33,16 @@ from flake8_lazy.api import (
 from flake8_lazy.checker import ERROR_MESSAGES
 
 __all__ = ["main"]
+
+
+@dataclass(frozen=True, slots=True)
+class _FileAnalysis:
+    recommended_modules: list[str]
+    declared_modules: list[str] | None
+    native_modules: list[str]
+    is_dynamic: bool
+    has_native_lazy: bool
+    errors: list[tuple[int, int, str]]
 
 
 def _format_lazy_modules(path: Path, modules: list[str]) -> str:
@@ -64,6 +82,48 @@ def _should_apply(
     return bool(recommended_modules) or declared_modules is not None or has_native_lazy
 
 
+def _analyze_file(
+    path: Path,
+    *,
+    import_preset: str,
+    exclude_modules: frozenset[str],
+    apply_mode: str | None,
+    include_errors: bool,
+) -> _FileAnalysis:
+    recommended_modules = collect_recommended_lazy_modules_for_file(
+        path,
+        import_preset=import_preset,
+        exclude_modules=exclude_modules,
+    )
+    declared_modules = collect_declared_lazy_modules_for_file(path)
+    is_dynamic = apply_mode == "dynamic" and has_dynamic_lazy_modules_for_file(path)
+    has_native_lazy = apply_mode in {
+        "list",
+        "set",
+        "dynamic",
+    } and has_native_lazy_imports_for_file(path)
+    native_modules: list[str] = []
+    if has_native_lazy and apply_mode in {"list", "set"}:
+        native_modules = collect_native_lazy_modules_for_file(path)
+    errors = (
+        collect_errors_for_file(
+            path,
+            import_preset=import_preset,
+            exclude_modules=exclude_modules,
+        )
+        if include_errors
+        else []
+    )
+    return _FileAnalysis(
+        recommended_modules=recommended_modules,
+        declared_modules=declared_modules,
+        native_modules=native_modules,
+        is_dynamic=is_dynamic,
+        has_native_lazy=has_native_lazy,
+        errors=errors,
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     """Run flake8-lazy checks directly from the command line."""
     help_epilog = "\n".join(
@@ -89,8 +149,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--lazy-import-preset",
-        choices=("none", "minimal", "default"),
-        default="default",
+        choices=IMPORT_PRESET_CHOICES,
+        default=DEFAULT_IMPORT_PRESET,
         dest="import_preset",
         metavar="PRESET",
         help=(
@@ -100,7 +160,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--lazy-exclude-modules",
-        default="",
+        default=DEFAULT_EXCLUDE_MODULES,
         dest="exclude_modules",
         metavar="MODULES",
         help=(
@@ -117,56 +177,41 @@ def main(argv: list[str] | None = None) -> None:
         "MODE is list, set, native, or dynamic",
     )
     namespace = parser.parse_args(list(argv) if argv is not None else None)
-    exclude_modules = frozenset(
-        m.strip() for m in (namespace.exclude_modules or "").split(",") if m.strip()
-    )
+    exclude_modules = parse_exclude_modules(namespace.exclude_modules)
 
     found_errors = False
     for path in namespace.files:
         try:
-            recommended_modules = collect_recommended_lazy_modules_for_file(
+            analysis = _analyze_file(
                 path,
                 import_preset=namespace.import_preset,
                 exclude_modules=exclude_modules,
-            )
-            declared_modules = collect_declared_lazy_modules_for_file(path)
-            is_dynamic = (
-                has_dynamic_lazy_modules_for_file(path)
-                if namespace.apply == "dynamic"
-                else False
-            )
-            has_native_lazy = (
-                has_native_lazy_imports_for_file(path)
-                if namespace.apply in {"list", "set", "dynamic"}
-                else False
+                apply_mode=namespace.apply,
+                include_errors=namespace.apply is None,
             )
             if namespace.apply is not None and _should_apply(
                 namespace.apply,
-                declared_modules,
-                recommended_modules,
-                is_dynamic=is_dynamic,
-                has_native_lazy=has_native_lazy,
+                analysis.declared_modules,
+                analysis.recommended_modules,
+                is_dynamic=analysis.is_dynamic,
+                has_native_lazy=analysis.has_native_lazy,
             ):
-                effective_modules = recommended_modules
-                if has_native_lazy and namespace.apply in {"list", "set"}:
-                    native_modules = collect_native_lazy_modules_for_file(path)
+                effective_modules = analysis.recommended_modules
+                if analysis.native_modules:
                     effective_modules = sorted(
-                        set(recommended_modules) | set(native_modules)
+                        set(analysis.recommended_modules) | set(analysis.native_modules)
                     )
                 apply_lazy_modules(path, effective_modules, mode=namespace.apply)
                 if namespace.apply == "native" and sys.version_info < (3, 15):
                     continue
-                recommended_modules = collect_recommended_lazy_modules_for_file(
+                analysis = _analyze_file(
                     path,
                     import_preset=namespace.import_preset,
                     exclude_modules=exclude_modules,
+                    apply_mode=namespace.apply,
+                    include_errors=True,
                 )
-                declared_modules = collect_declared_lazy_modules_for_file(path)
-            errors = collect_errors_for_file(
-                path,
-                import_preset=namespace.import_preset,
-                exclude_modules=exclude_modules,
-            )
+            errors = analysis.errors
         except OSError as exc:
             sys.stderr.write(f"{path}:0:0: LZY000 failed to read file ({exc})\n")
             found_errors = True
@@ -182,10 +227,12 @@ def main(argv: list[str] | None = None) -> None:
 
         if (
             namespace.format == "lazy-modules"
-            and recommended_modules
-            and declared_modules != recommended_modules
+            and analysis.recommended_modules
+            and analysis.declared_modules != analysis.recommended_modules
         ):
-            sys.stdout.write(f"{_format_lazy_modules(path, recommended_modules)}\n")
+            sys.stdout.write(
+                f"{_format_lazy_modules(path, analysis.recommended_modules)}\n"
+            )
 
         if _report_file_errors(path, errors, namespace.format):
             found_errors = True

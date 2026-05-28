@@ -134,21 +134,21 @@ def _insertion_line_for_lazy_modules(tree: ast.Module, source: str) -> int:
 
 
 def _build_insertion_block(
-    assignment_line: str,
+    block: list[str],
     newline: str,
     lines: list[str],
     insertion_index: int,
 ) -> list[str]:
-    block = [f"{assignment_line}{newline}"]
+    insertion_block = list(block)
 
     next_line = lines[insertion_index] if insertion_index < len(lines) else None
     if next_line is None or next_line.strip():
-        block.append(newline)
+        insertion_block.append(newline)
 
     if insertion_index > 0 and lines[insertion_index - 1].strip():
-        block.insert(0, newline)
+        insertion_block.insert(0, newline)
 
-    return block
+    return insertion_block
 
 
 def _remove_native_lazy_prefixes(tree: ast.Module, lines: list[str]) -> None:
@@ -219,7 +219,12 @@ def _rewrite_lazy_modules_source(
 
     insertion_line = _insertion_line_for_lazy_modules(tree, source)
     insertion_index = max(0, insertion_line - 1)
-    block = _build_insertion_block(assignment_line, newline, lines, insertion_index)
+    block = _build_insertion_block(
+        [f"{assignment_line}{newline}"],
+        newline,
+        lines,
+        insertion_index,
+    )
 
     lines[insertion_index:insertion_index] = block
     return "".join(lines)
@@ -332,12 +337,7 @@ def _rewrite_dynamic_lazy_source(source: str) -> str:
     insertion_line = _insertion_line_for_lazy_modules(tree, source)
     insertion_index = max(0, insertion_line - 1)
 
-    block = list(alllazy_block)
-    next_line = lines[insertion_index] if insertion_index < len(lines) else None
-    if next_line is None or next_line.strip():
-        block.append(newline)
-    if insertion_index > 0 and lines[insertion_index - 1].strip():
-        block.insert(0, newline)
+    block = _build_insertion_block(alllazy_block, newline, lines, insertion_index)
 
     lines[insertion_index:insertion_index] = block
     return "".join(lines)
