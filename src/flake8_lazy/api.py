@@ -61,37 +61,43 @@ def _process_single_file(
     path: Path,
     import_preset: str,
     exclude_modules: frozenset[str],
-) -> tuple[Path, _FileAnalysis | None, BaseException | None]:
+    *,
+    apply_mode: str | None,
+    include_errors: bool,
+) -> tuple[Path, _FileAnalysis]:
     """Analyze a single file for parallel execution."""
-    try:
-        declared_modules = collect_declared_lazy_modules_for_file(path)
-        is_dynamic = has_dynamic_lazy_modules_for_file(path)
-        has_native_lazy = has_native_lazy_imports_for_file(path)
-        native_modules: list[str] = []
-        if has_native_lazy:
-            native_modules = collect_native_lazy_modules_for_file(path)
-        errors = collect_errors_for_file(
+    declared_modules = collect_declared_lazy_modules_for_file(path)
+    is_dynamic = apply_mode == "dynamic" and has_dynamic_lazy_modules_for_file(path)
+    has_native_lazy = apply_mode in {
+        "list",
+        "set",
+        "dynamic",
+    } and has_native_lazy_imports_for_file(path)
+    native_modules: list[str] = []
+    if has_native_lazy and apply_mode in {"list", "set"}:
+        native_modules = collect_native_lazy_modules_for_file(path)
+    errors = (
+        collect_errors_for_file(
             path,
             import_preset=import_preset,
             exclude_modules=exclude_modules,
         )
-        recommended_modules = collect_recommended_lazy_modules_for_file(
-            path,
-            import_preset=import_preset,
-            exclude_modules=exclude_modules,
-        )
-        analysis = _FileAnalysis(
-            recommended_modules=recommended_modules,
-            declared_modules=declared_modules,
-            native_modules=native_modules,
-            is_dynamic=is_dynamic,
-            has_native_lazy=has_native_lazy,
-            errors=errors,
-        )
-    except BaseException as exc:  # noqa: BLE001
-        return path, None, exc
-    else:
-        return path, analysis, None
+        if include_errors
+        else []
+    )
+    recommended_modules = collect_recommended_lazy_modules_for_file(
+        path,
+        import_preset=import_preset,
+        exclude_modules=exclude_modules,
+    )
+    return path, _FileAnalysis(
+        recommended_modules=recommended_modules,
+        declared_modules=declared_modules,
+        native_modules=native_modules,
+        is_dynamic=is_dynamic,
+        has_native_lazy=has_native_lazy,
+        errors=errors,
+    )
 
 
 def _deduplicate_paths(paths: list[Path]) -> list[Path]:
@@ -99,7 +105,7 @@ def _deduplicate_paths(paths: list[Path]) -> list[Path]:
     seen: set[Path] = set()
     result: list[Path] = []
     for p in paths:
-        resolved = p.resolve()
+        resolved = p.resolve(strict=False)
         if resolved not in seen:
             seen.add(resolved)
             result.append(p)
@@ -210,13 +216,13 @@ def clear_parse_cache() -> None:
 
 def _parse_file(path: str | Path) -> tuple[Path, ast.AST, str]:
     """Read and parse a Python file with filename-aware syntax errors."""
-    item = Path(path)
+    item = Path(path).resolve(strict=False)
     return _parse_file_cached(item)
 
 
 @lru_cache(maxsize=512)
 def _parse_file_cached(item: Path) -> tuple[Path, ast.AST, str]:
-    """Cached version; item must be a resolved Path."""
+    """Cached version for a canonicalized path."""
     try:
         with tokenize.open(item) as f:
             source = f.read()

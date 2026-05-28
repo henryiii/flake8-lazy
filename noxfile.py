@@ -76,7 +76,7 @@ def cpython(session: nox.Session) -> None:
             urllib.request.urlretrieve(url, tarball)  # noqa: S310
         session.log("Extracting CPython source...")
         with tarfile.open(tarball, "r:gz") as tf:
-            tf.extractall(path=DIR / ".nox")  # noqa: S202
+            tf.extractall(path=DIR / ".nox", filter="data")
         extracted = DIR / ".nox" / "Python-3.15.0b1"
         extracted.rename(cpython_dir)
 

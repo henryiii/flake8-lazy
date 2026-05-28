@@ -28,12 +28,6 @@ from flake8_lazy.api import (
     _FileAnalysis,
     _process_single_file,
     clear_parse_cache,
-    collect_declared_lazy_modules_for_file,
-    collect_errors_for_file,
-    collect_native_lazy_modules_for_file,
-    collect_recommended_lazy_modules_for_file,
-    has_dynamic_lazy_modules_for_file,
-    has_native_lazy_imports_for_file,
 )
 from flake8_lazy.checker import ERROR_MESSAGES
 
@@ -48,38 +42,14 @@ def _analyze_file(
     apply_mode: str | None,
     include_errors: bool,
 ) -> _FileAnalysis:
-    recommended_modules = collect_recommended_lazy_modules_for_file(
+    _path, analysis = _process_single_file(
         path,
         import_preset=import_preset,
         exclude_modules=exclude_modules,
+        apply_mode=apply_mode,
+        include_errors=include_errors,
     )
-    declared_modules = collect_declared_lazy_modules_for_file(path)
-    is_dynamic = apply_mode == "dynamic" and has_dynamic_lazy_modules_for_file(path)
-    has_native_lazy = apply_mode in {
-        "list",
-        "set",
-        "dynamic",
-    } and has_native_lazy_imports_for_file(path)
-    native_modules: list[str] = []
-    if has_native_lazy and apply_mode in {"list", "set"}:
-        native_modules = collect_native_lazy_modules_for_file(path)
-    errors = (
-        collect_errors_for_file(
-            path,
-            import_preset=import_preset,
-            exclude_modules=exclude_modules,
-        )
-        if include_errors
-        else []
-    )
-    return _FileAnalysis(
-        recommended_modules=recommended_modules,
-        declared_modules=declared_modules,
-        native_modules=native_modules,
-        is_dynamic=is_dynamic,
-        has_native_lazy=has_native_lazy,
-        errors=errors,
-    )
+    return analysis
 
 
 def _format_lazy_modules(path: Path, modules: list[str]) -> str:
@@ -121,12 +91,16 @@ def _should_apply(
 
 def _parse_jobs(value: str) -> int:
     if value.lower() == "auto":
-        return -1
+        return 0
     try:
-        return int(value)
+        jobs = int(value)
     except ValueError:
         msg = f"invalid int value: {value!r}"
         raise argparse.ArgumentTypeError(msg) from None
+    if jobs <= 0:
+        msg = "jobs must be a positive integer or 'auto'"
+        raise argparse.ArgumentTypeError(msg)
+    return jobs
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -185,7 +159,7 @@ def main(argv: list[str] | None = None) -> None:
         "-j",
         "--jobs",
         type=_parse_jobs,
-        default=-1,
+        default=0,
         metavar="N",
         help="number of parallel processes (default: auto)",
     )
@@ -194,7 +168,7 @@ def main(argv: list[str] | None = None) -> None:
 
     paths = _deduplicate_paths(namespace.files)
     jobs = namespace.jobs
-    if jobs <= 0:
+    if jobs == 0:
         jobs = os.cpu_count() or 1
 
     found_errors = _run_parallel(
@@ -216,7 +190,7 @@ def _run_sequential(
 ) -> bool:
     found_errors = False
     for path in paths:
-        exc: BaseException | None = None
+        exc: Exception | None = None
         analysis: _FileAnalysis | None = None
         try:
             analysis = _analyze_file(
@@ -267,7 +241,7 @@ def _emit_output(
     *,
     namespace: argparse.Namespace,
     analysis: _FileAnalysis | None = None,
-    exc: BaseException | None = None,
+    exc: Exception | None = None,
 ) -> bool:
     """Emit output (errors or lazy-modules) for one file; return True if errors."""
     found_errors = False
@@ -305,12 +279,12 @@ def _emit_output(
 def _apply_rewrites(
     paths: list[Path],
     results: dict[Path, _FileAnalysis],
-    errors_by_path: dict[Path, BaseException],
+    errors_by_path: dict[Path, Exception],
     *,
     apply_mode: str,
     import_preset: str,
     exclude_modules: frozenset[str],
-) -> tuple[dict[Path, _FileAnalysis], dict[Path, BaseException], bool]:
+) -> tuple[dict[Path, _FileAnalysis], dict[Path, Exception], bool]:
     """Apply rewrites sequentially in argument order."""
     found_errors = False
     for path in paths:
@@ -346,7 +320,7 @@ def _apply_rewrites(
                     apply_mode=apply_mode,
                     include_errors=True,
                 )
-            except OSError as exc:
+            except (OSError, SyntaxError) as exc:
                 errors_by_path[path] = exc
                 found_errors = True
     return results, errors_by_path, found_errors
@@ -361,7 +335,7 @@ def _run_parallel(
 ) -> bool:
     found_errors = False
     results: dict[Path, _FileAnalysis] = {}
-    errors_by_path: dict[Path, BaseException] = {}
+    errors_by_path: dict[Path, Exception] = {}
 
     max_workers = min(jobs, len(paths), os.cpu_count() or 1)
     if max_workers <= 1:
@@ -378,16 +352,20 @@ def _run_parallel(
                 path,
                 namespace.import_preset,
                 exclude_modules,
+                apply_mode=namespace.apply,
+                include_errors=namespace.apply is None,
             ): path
             for path in paths
         }
         for future in as_completed(futures):
-            path, analysis, exc = future.result()
-            if exc is not None:
+            path = futures[future]
+            try:
+                result_path, analysis = future.result()
+            except (OSError, SyntaxError) as exc:
                 errors_by_path[path] = exc
                 found_errors = True
-            elif analysis is not None:
-                results[path] = analysis
+                continue
+            results[result_path] = analysis
 
     # Apply mode: rewrite files sequentially in argument order
     if namespace.apply is not None:
