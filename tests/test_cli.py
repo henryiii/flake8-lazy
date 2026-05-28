@@ -65,6 +65,10 @@ def test_collect_errors_for_file_respects_encoding_cookie(tmp_path: Path) -> Non
     ]
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
 def test_process_single_file_native_mode_does_not_collect_native_fields(
     tmp_path: Path,
 ) -> None:

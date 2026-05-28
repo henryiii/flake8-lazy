@@ -2,6 +2,8 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "argparse",
+    "concurrent",
+    "concurrent.futures",
     "flake8_lazy._options",
     "flake8_lazy._rewriter",
     "flake8_lazy.api",
