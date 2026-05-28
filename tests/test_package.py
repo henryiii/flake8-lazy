@@ -13,14 +13,14 @@ from flake8_lazy._always_imported import (
 )
 from flake8_lazy._analysis import (
     collect_lazy_packages,
+    collect_non_lazy_imports,
     collect_recommended_lazy_modules,
     collect_side_effect_only_import_packages,
     collect_unnecessary_lazy_imports,
     has_dynamic_lazy_modules,
 )
 from flake8_lazy._visitors import (
-    collect_non_lazy_imports,
-    collect_strictly_top_level_names,
+    collect_strictly_top_level_data,
     collect_top_level_imports,
 )
 
@@ -923,7 +923,7 @@ if condition:
 """,
     )
 
-    names = collect_strictly_top_level_names(tree)
+    names, _ = collect_strictly_top_level_data(tree)
 
     assert "re" in names
     assert "os" not in names
@@ -953,7 +953,7 @@ except Exception:
 """,
     )
 
-    names = collect_strictly_top_level_names(tree)
+    names, _ = collect_strictly_top_level_data(tree)
 
     assert "a" not in names
     assert "b" not in names

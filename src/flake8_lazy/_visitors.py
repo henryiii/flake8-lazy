@@ -22,14 +22,11 @@ from ._ast_helpers import (
 
 __all__ = [
     "collect_guarded_import_packages",
-    "collect_non_lazy_imports",
-    "collect_strictly_top_level_attribute_paths",
-    "collect_strictly_top_level_names",
+    "collect_strictly_top_level_data",
     "collect_top_level_imported_names",
     "collect_top_level_imports",
     "collect_top_level_lazy_imports",
-    "collect_top_level_runtime_attribute_paths",
-    "collect_top_level_runtime_names",
+    "collect_top_level_runtime_data",
     "collect_type_checking_guard_names",
 ]
 
@@ -350,18 +347,11 @@ class _TopLevelRuntimeNameCollector(_TopLevelScopeVisitor):
         self._visit_class_signature(node)
 
 
-def collect_top_level_runtime_names(tree: ast.AST) -> set[str]:
-    """Return names loaded at top-level module runtime."""
+def collect_top_level_runtime_data(tree: ast.AST) -> tuple[set[str], set[str]]:
+    """Return ``(names, attribute_paths)`` loaded at top-level module runtime."""
     collector = _TopLevelRuntimeNameCollector()
     collector.visit(tree)
-    return collector.names
-
-
-def collect_top_level_runtime_attribute_paths(tree: ast.AST) -> set[str]:
-    """Return dotted attribute paths loaded at top-level module runtime."""
-    collector = _TopLevelRuntimeNameCollector()
-    collector.visit(tree)
-    return collector.attribute_paths
+    return collector.names, collector.attribute_paths
 
 
 class _StrictTopLevelRuntimeNameCollector(_TopLevelRuntimeNameCollector):
@@ -388,28 +378,8 @@ class _StrictTopLevelRuntimeNameCollector(_TopLevelRuntimeNameCollector):
         pass
 
 
-def collect_strictly_top_level_names(tree: ast.AST) -> set[str]:
-    """Return names loaded at the strict top level (no conditional blocks)."""
+def collect_strictly_top_level_data(tree: ast.AST) -> tuple[set[str], set[str]]:
+    """Return ``(names, attribute_paths)`` at the strict top level (no conditionals)."""
     collector = _StrictTopLevelRuntimeNameCollector()
     collector.visit(tree)
-    return collector.names
-
-
-def collect_strictly_top_level_attribute_paths(tree: ast.AST) -> set[str]:
-    """Return dotted attribute paths loaded at strict top level."""
-    collector = _StrictTopLevelRuntimeNameCollector()
-    collector.visit(tree)
-    return collector.attribute_paths
-
-
-def collect_non_lazy_imports(tree: ast.AST) -> list[str]:
-    """Return imported names that are used at top-level runtime."""
-    imported_names = collect_top_level_imported_names(tree)
-    used_names = collect_top_level_runtime_names(tree)
-    non_lazy: list[str] = []
-    seen: set[str] = set()
-    for name in imported_names:
-        if name in used_names and name not in seen:
-            non_lazy.append(name)
-            seen.add(name)
-    return non_lazy
+    return collector.names, collector.attribute_paths

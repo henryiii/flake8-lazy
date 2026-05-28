@@ -30,17 +30,16 @@ from ._ast_helpers import (
 )
 from ._bindings import (
     ImportBinding,
+    collect_import_bindings,
     collect_top_level_import_bindings,
     collect_top_level_lazy_import_bindings,
 )
 from ._visitors import (
     collect_guarded_import_packages,
-    collect_non_lazy_imports,
-    collect_strictly_top_level_attribute_paths,
-    collect_strictly_top_level_names,
+    collect_strictly_top_level_data,
     collect_top_level_imports,
     collect_top_level_lazy_imports,
-    collect_top_level_runtime_attribute_paths,
+    collect_top_level_runtime_data,
     collect_type_checking_guard_names,
 )
 
@@ -55,6 +54,7 @@ __all__ = [
     "collect_missing_lazy_modules",
     "collect_mixed_lazy_eager_imports",
     "collect_native_lazy_modules",
+    "collect_non_lazy_imports",
     "collect_recommended_lazy_modules",
     "collect_redundant_lazy_declarations",
     "collect_side_effect_only_import_packages",
@@ -110,7 +110,11 @@ def collect_lazy_imports_in_suppress_blocks(
     return result
 
 
-def collect_side_effect_only_import_packages(tree: ast.AST) -> set[str]:
+def collect_side_effect_only_import_packages(
+    tree: ast.AST,
+    *,
+    top_level_imports: list[ast.Import | ast.ImportFrom] | None = None,
+) -> set[str]:
     """Return packages imported purely for side effects."""
     all_loaded: set[str] = set()
     for item in ast.walk(tree):
@@ -120,8 +124,11 @@ def collect_side_effect_only_import_packages(tree: ast.AST) -> set[str]:
             case _:
                 pass
 
+    if top_level_imports is None:
+        top_level_imports = collect_top_level_imports(tree)
+
     packages: set[str] = set()
-    for node in collect_top_level_imports(tree):
+    for node in top_level_imports:
         match node:
             case ast.Import(names=aliases):
                 for alias in aliases:
@@ -373,6 +380,28 @@ def collect_invalid_lazy_module_names(tree: ast.AST) -> list[tuple[str, int, int
     ]
 
 
+def _compute_non_lazy_names(
+    bindings: list[ImportBinding],
+    runtime_names: set[str],
+) -> list[str]:
+    """Return bound names from ``bindings`` that appear in ``runtime_names``."""
+    non_lazy: list[str] = []
+    seen: set[str] = set()
+    for binding in bindings:
+        name = binding.bound_name
+        if name in runtime_names and name not in seen:
+            non_lazy.append(name)
+            seen.add(name)
+    return non_lazy
+
+
+def collect_non_lazy_imports(tree: ast.AST) -> list[str]:
+    """Return imported names that are used at top-level runtime."""
+    bindings = collect_top_level_import_bindings(tree)
+    runtime_names, _ = collect_top_level_runtime_data(tree)
+    return _compute_non_lazy_names(bindings, runtime_names)
+
+
 def _is_non_lazy_binding(
     binding: ImportBinding,
     non_lazy_names: set[str],
@@ -429,11 +458,14 @@ def _collect_recommended_lazy_bindings(
     if excluded_packages is None:
         excluded_packages = set()
 
-    bindings = collect_top_level_import_bindings(tree)
-    non_lazy_names = set(collect_non_lazy_imports(tree))
-    runtime_attribute_paths = collect_top_level_runtime_attribute_paths(tree)
+    imports = collect_top_level_imports(tree)
+    bindings = collect_import_bindings(imports)
+    runtime_names, runtime_attribute_paths = collect_top_level_runtime_data(tree)
+    non_lazy_names = set(_compute_non_lazy_names(bindings, runtime_names))
     guard_names = collect_type_checking_guard_names(tree)
-    side_effect_packages = collect_side_effect_only_import_packages(tree)
+    side_effect_packages = collect_side_effect_only_import_packages(
+        tree, top_level_imports=imports
+    )
     guarded_packages = collect_guarded_import_packages(tree)
     guard_packages: set[str] = {
         package
@@ -576,8 +608,7 @@ def collect_unnecessary_lazy_imports(
 ) -> list[tuple[str, int, int]]:
     """Return lazy imports whose bound names are used at the strict module top level."""
     lazy_packages = collect_lazy_packages(tree)
-    strict_names = collect_strictly_top_level_names(tree)
-    strict_attribute_paths = collect_strictly_top_level_attribute_paths(tree)
+    strict_names, strict_attribute_paths = collect_strictly_top_level_data(tree)
     unnecessary: list[tuple[str, int, int]] = []
     seen_packages: set[str] = set()
 
