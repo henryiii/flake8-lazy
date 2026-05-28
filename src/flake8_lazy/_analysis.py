@@ -411,6 +411,7 @@ class _RecommendationPolicy:
         return (
             root not in seen_packages
             and root not in self.excluded_packages
+            and root not in self.blocked_packages
             and root not in self.side_effect_packages
             and root not in self.guard_packages
             and root not in self.non_lazy_packages
