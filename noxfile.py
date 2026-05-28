@@ -81,14 +81,14 @@ def cpython(session: nox.Session) -> None:
         extracted.rename(cpython_dir)
 
     session.install("-e.")
-    # Exclude directories that contain intentionally broken/unparseable Python files.
-    _skip = frozenset({"badsyntax", "tokenizedata"})
+    # Exclude directories that contain intentionally broken/unparsable Python files.
+    _skip = frozenset({"badsyntax", "tokenizedata", "syntax_warnings.py"})
     files = sorted(
-        str(p)
-        for p in cpython_dir.rglob("*.py")
-        if not _skip.intersection(p.parts)
+        str(p) for p in cpython_dir.rglob("*.py") if not _skip.intersection(p.parts)
     )
-    session.run("flake8-lazy", "-j", "auto", *files, *session.posargs, success_codes=[0, 1])
+    session.run(
+        "flake8-lazy", "-j", "auto", *files, *session.posargs, success_codes=[0, 1]
+    )
 
 
 @nox.session
