@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import shutil
+import tarfile
+import urllib.request
 from pathlib import Path
 
 import nox
@@ -60,6 +62,27 @@ def docs(session: nox.Session) -> None:
         session.run("zensical", "serve", *session.posargs)
     else:
         session.run("zensical", "build", "--clean", *session.posargs)
+
+
+@nox.session(python="3.15.0b1", default=False)
+def cpython(session: nox.Session) -> None:
+    """Run flake8-lazy on the CPython 3.15.0b1 source tree."""
+    cpython_dir = DIR / ".nox" / "cpython-3.15.0b1"
+    if not cpython_dir.exists():
+        tarball = DIR / ".nox" / "cpython-3.15.0b1.tgz"
+        if not tarball.exists():
+            session.log("Downloading CPython 3.15.0b1 source...")
+            url = "https://www.python.org/ftp/python/3.15.0/Python-3.15.0b1.tgz"
+            urllib.request.urlretrieve(url, tarball)  # noqa: S310
+        session.log("Extracting CPython source...")
+        with tarfile.open(tarball, "r:gz") as tf:
+            tf.extractall(path=DIR / ".nox", filter="data")
+        extracted = DIR / ".nox" / "Python-3.15.0b1"
+        extracted.rename(cpython_dir)
+
+    session.install("-e.")
+    files = sorted(str(p) for p in cpython_dir.rglob("*.py"))
+    session.run("flake8-lazy", "-j", "auto", *files, *session.posargs)
 
 
 @nox.session

@@ -14,6 +14,8 @@ from flake8_lazy._analysis import (
 from flake8_lazy._rewriter import apply_lazy_modules
 from flake8_lazy.api import (
     _build_noqa_map,
+    _deduplicate_paths,
+    _process_single_file,
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
@@ -61,6 +63,33 @@ def test_collect_errors_for_file_respects_encoding_cookie(tmp_path: Path) -> Non
             "LZY102 module 'numpy' should be listed in __lazy_modules__",
         ),
     ]
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_process_single_file_native_mode_does_not_collect_native_fields(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("lazy import numpy\n", encoding="utf-8")
+
+    _path, analysis = _process_single_file(
+        path,
+        import_preset="default",
+        exclude_modules=frozenset(),
+        apply_mode="native",
+        include_errors=False,
+    )
+
+    assert analysis.has_native_lazy is False
+    assert analysis.native_modules == []
+
+
+def test_deduplicate_paths_tolerates_missing_paths(tmp_path: Path) -> None:
+    missing = tmp_path / "missing.py"
+    assert _deduplicate_paths([missing]) == [missing]
 
 
 def test_collect_errors_for_file_includes_path_in_decode_error(tmp_path: Path) -> None:
@@ -619,6 +648,23 @@ def test_main_apply_invalid_mode_exits(
 
     with pytest.raises(SystemExit) as excinfo:
         main(["--apply=bad", str(path)])
+
+    assert excinfo.value.code == 2
+
+
+def test_main_jobs_rejects_non_positive(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["-j", "0", str(path)])
+
+    assert excinfo.value.code == 2
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["-j", "-4", str(path)])
 
     assert excinfo.value.code == 2
 

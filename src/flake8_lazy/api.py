@@ -15,6 +15,8 @@ import ast
 import re
 import sys
 import tokenize
+from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from ._always_imported import IMPORT_PRESETS
@@ -28,6 +30,9 @@ from ._analysis import (
 from .checker import LazyImportChecker
 
 __all__ = [
+    "_FileAnalysis",
+    "_process_single_file",
+    "clear_parse_cache",
     "collect_declared_lazy_modules_for_file",
     "collect_errors_for_file",
     "collect_native_lazy_modules_for_file",
@@ -39,6 +44,71 @@ __all__ = [
 # Pattern matching inline noqa suppression comments, optionally followed by a
 # colon-separated list of error codes (e.g. ``LZY101, LZY102``).
 _NOQA_RE = re.compile(r"#\s*noqa(?:\s*:\s*([^\n]*))?", re.IGNORECASE)
+
+
+@dataclass(frozen=True, slots=True)
+class _FileAnalysis:
+    recommended_modules: list[str]
+    declared_modules: list[str] | None
+    native_modules: list[str]
+    is_dynamic: bool
+    has_native_lazy: bool
+    errors: list[tuple[int, int, str]]
+
+
+def _process_single_file(
+    path: Path,
+    import_preset: str,
+    exclude_modules: frozenset[str],
+    *,
+    apply_mode: str | None,
+    include_errors: bool,
+) -> tuple[Path, _FileAnalysis]:
+    """Analyze a single file for parallel execution."""
+    declared_modules = collect_declared_lazy_modules_for_file(path)
+    is_dynamic = apply_mode == "dynamic" and has_dynamic_lazy_modules_for_file(path)
+    has_native_lazy = apply_mode in {
+        "list",
+        "set",
+        "dynamic",
+    } and has_native_lazy_imports_for_file(path)
+    native_modules: list[str] = []
+    if has_native_lazy and apply_mode in {"list", "set"}:
+        native_modules = collect_native_lazy_modules_for_file(path)
+    errors = (
+        collect_errors_for_file(
+            path,
+            import_preset=import_preset,
+            exclude_modules=exclude_modules,
+        )
+        if include_errors
+        else []
+    )
+    recommended_modules = collect_recommended_lazy_modules_for_file(
+        path,
+        import_preset=import_preset,
+        exclude_modules=exclude_modules,
+    )
+    return path, _FileAnalysis(
+        recommended_modules=recommended_modules,
+        declared_modules=declared_modules,
+        native_modules=native_modules,
+        is_dynamic=is_dynamic,
+        has_native_lazy=has_native_lazy,
+        errors=errors,
+    )
+
+
+def _deduplicate_paths(paths: list[Path]) -> list[Path]:
+    """Resolve symlinks and remove duplicate paths while preserving order."""
+    seen: set[Path] = set()
+    result: list[Path] = []
+    for p in paths:
+        resolved = p.resolve(strict=False)
+        if resolved not in seen:
+            seen.add(resolved)
+            result.append(p)
+    return result
 
 
 def _build_noqa_map(source: str) -> dict[int, set[str] | None]:
@@ -138,9 +208,20 @@ def has_native_lazy_imports_for_file(path: str | Path) -> bool:
     return has_native_lazy_imports(tree)
 
 
+def clear_parse_cache() -> None:
+    """Clear the file-parse cache (e.g. after rewriting a file on disk)."""
+    _parse_file_cached.cache_clear()
+
+
 def _parse_file(path: str | Path) -> tuple[Path, ast.AST, str]:
     """Read and parse a Python file with filename-aware syntax errors."""
-    item = Path(path)
+    item = Path(path).resolve(strict=False)
+    return _parse_file_cached(item)
+
+
+@lru_cache(maxsize=512)
+def _parse_file_cached(item: Path) -> tuple[Path, ast.AST, str]:
+    """Cached version for a canonicalized path."""
     try:
         with tokenize.open(item) as f:
             source = f.read()
