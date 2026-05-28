@@ -2,6 +2,7 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "argparse",
+    "flake8_lazy._options",
     "flake8_lazy._rewriter",
     "flake8_lazy.api",
     "flake8_lazy.checker",
@@ -14,6 +15,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from flake8_lazy import __version__
+from flake8_lazy._options import (
+    DEFAULT_EXCLUDE_MODULES,
+    DEFAULT_IMPORT_PRESET,
+    IMPORT_PRESET_CHOICES,
+    parse_exclude_modules,
+)
 from flake8_lazy._rewriter import apply_lazy_modules
 from flake8_lazy.api import (
     collect_declared_lazy_modules_for_file,
@@ -142,8 +149,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--lazy-import-preset",
-        choices=("none", "minimal", "default"),
-        default="default",
+        choices=IMPORT_PRESET_CHOICES,
+        default=DEFAULT_IMPORT_PRESET,
         dest="import_preset",
         metavar="PRESET",
         help=(
@@ -153,7 +160,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--lazy-exclude-modules",
-        default="",
+        default=DEFAULT_EXCLUDE_MODULES,
         dest="exclude_modules",
         metavar="MODULES",
         help=(
@@ -170,9 +177,7 @@ def main(argv: list[str] | None = None) -> None:
         "MODE is list, set, native, or dynamic",
     )
     namespace = parser.parse_args(list(argv) if argv is not None else None)
-    exclude_modules = frozenset(
-        m.strip() for m in (namespace.exclude_modules or "").split(",") if m.strip()
-    )
+    exclude_modules = parse_exclude_modules(namespace.exclude_modules)
 
     found_errors = False
     for path in namespace.files:
