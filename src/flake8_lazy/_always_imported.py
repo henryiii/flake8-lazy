@@ -10,8 +10,8 @@ Two preset sets are provided, corresponding to different Python startup modes:
   + no-site mode (``python -IS``).  A small core set: ``sys``, ``time``,
   ``codecs``, etc.
 * ``ALWAYS_IMPORTED_DEFAULT`` — modules present during a normal Python startup
-  (``python -I``, with site initialisation).  Includes ``os``, ``abc``,
-  ``site``, and more.
+  (``python -I``, with site initialisation).  Includes ``os``, ``os.path``,
+  ``abc``, ``site``, and more.
 
 The sets were generated with ``scripts/list_always_imported.py`` using
 CPython 3.15 on Unix.  Platform-specific names (e.g. ``posix`` on POSIX,
@@ -56,6 +56,7 @@ ALWAYS_IMPORTED_DEFAULT: frozenset[str] = frozenset(
         "nt",  # Windows
         "ntpath",  # Windows
         "os",
+        "os.path",
         "posix",  # POSIX (Linux/macOS)
         "posixpath",  # POSIX (Linux/macOS)
         "site",

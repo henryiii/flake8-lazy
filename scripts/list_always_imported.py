@@ -31,6 +31,29 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import ModuleType
+
+
+def _module_aliases(modules: set[str]) -> set[str]:
+    aliases: set[str] = set()
+    loaded_modules = {
+        name: sys.modules[name]
+        for name in modules
+        if name in sys.modules and isinstance(sys.modules[name], ModuleType)
+    }
+    for parent_name, parent in loaded_modules.items():
+        for attr_name, value in vars(parent).items():
+            if not isinstance(value, ModuleType):
+                continue
+            child_name = value.__name__
+            if child_name == parent_name:
+                continue
+            if loaded_modules.get(child_name) is not value:
+                continue
+            alias = f"{parent_name}.{attr_name}"
+            if alias != child_name and not (alias.startswith("_") or "._" in alias):
+                aliases.add(alias)
+    return aliases
 
 
 def main() -> None:
@@ -73,6 +96,7 @@ def main() -> None:
                 if name.startswith("_") or "._" in name:
                     continue
                 modules.add(name)
+        modules |= _module_aliases(modules)
         for module in sorted(modules):
             print(module)  # noqa: T201
     finally:

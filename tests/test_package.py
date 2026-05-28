@@ -1629,6 +1629,35 @@ import numpy
     assert "time" not in recommended_minimal
 
 
+def test_always_imported_default_includes_os_path() -> None:
+    assert "os.path" in ALWAYS_IMPORTED_DEFAULT
+
+
+def test_collect_recommended_lazy_modules_skips_blocked_parent_packages() -> None:
+    tree = ast.parse(
+        """
+import os.path
+
+def fn() -> None:
+    os.path.join("a", "b")
+""",
+    )
+
+    assert collect_recommended_lazy_modules(
+        tree,
+        always_imported=frozenset({"os"}),
+    ) == ["os.path"]
+
+
+def test_checker_does_not_flag_os_path_lzy10x() -> None:
+    tree = ast.parse("import os.path\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    lzy10x_errors = [e for e in checker.run() if e[2].startswith(("LZY101", "LZY102"))]
+
+    assert lzy10x_errors == []
+
+
 # ---------------------------------------------------------------------------
 # exclude_modules tests
 # ---------------------------------------------------------------------------
