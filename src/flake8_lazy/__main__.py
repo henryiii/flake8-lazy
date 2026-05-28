@@ -2,8 +2,6 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "argparse",
-    "concurrent",
-    "concurrent.futures",
     "flake8_lazy._options",
     "flake8_lazy._rewriter",
     "flake8_lazy.api",
@@ -14,7 +12,6 @@ __lazy_modules__ = [
 import argparse
 import os
 import sys
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from flake8_lazy import __version__
@@ -346,6 +343,8 @@ def _run_parallel(
             namespace=namespace,
             exclude_modules=exclude_modules,
         )
+
+    from concurrent.futures import ProcessPoolExecutor, as_completed
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = {
