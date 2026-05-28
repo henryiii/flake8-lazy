@@ -10,8 +10,9 @@ __lazy_modules__ = [
 ]
 
 import argparse
+import os
 import sys
-from dataclasses import dataclass
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from flake8_lazy import __version__
@@ -23,6 +24,10 @@ from flake8_lazy._options import (
 )
 from flake8_lazy._rewriter import apply_lazy_modules
 from flake8_lazy.api import (
+    _deduplicate_paths,
+    _FileAnalysis,
+    _process_single_file,
+    clear_parse_cache,
     collect_declared_lazy_modules_for_file,
     collect_errors_for_file,
     collect_native_lazy_modules_for_file,
@@ -33,53 +38,6 @@ from flake8_lazy.api import (
 from flake8_lazy.checker import ERROR_MESSAGES
 
 __all__ = ["main"]
-
-
-@dataclass(frozen=True, slots=True)
-class _FileAnalysis:
-    recommended_modules: list[str]
-    declared_modules: list[str] | None
-    native_modules: list[str]
-    is_dynamic: bool
-    has_native_lazy: bool
-    errors: list[tuple[int, int, str]]
-
-
-def _format_lazy_modules(path: Path, modules: list[str]) -> str:
-    joined_modules = ", ".join(
-        module
-        if module.startswith('f"{__spec__.parent') and module.endswith('"')
-        else f'"{module}"'
-        for module in modules
-    )
-    return f"{path}: __lazy_modules__ = [{joined_modules}]"
-
-
-def _report_file_errors(
-    path: Path,
-    errors: list[tuple[int, int, str]],
-    format_mode: str,
-) -> bool:
-    """Print errors for a single file; return True if any were found."""
-    found = False
-    for lineno, col_offset, message in errors:
-        if format_mode == "flake8":
-            sys.stdout.write(f"{path}:{lineno}:{col_offset}: {message}\n")
-        found = True
-    return found
-
-
-def _should_apply(
-    apply_mode: str,
-    declared_modules: list[str] | None,
-    recommended_modules: list[str],
-    *,
-    is_dynamic: bool = False,
-    has_native_lazy: bool = False,
-) -> bool:
-    if apply_mode == "dynamic" and is_dynamic:
-        return False
-    return bool(recommended_modules) or declared_modules is not None or has_native_lazy
 
 
 def _analyze_file(
@@ -122,6 +80,53 @@ def _analyze_file(
         has_native_lazy=has_native_lazy,
         errors=errors,
     )
+
+
+def _format_lazy_modules(path: Path, modules: list[str]) -> str:
+    joined_modules = ", ".join(
+        module
+        if module.startswith('f"{__spec__.parent') and module.endswith('"')
+        else f'"{module}"'
+        for module in modules
+    )
+    return f"{path}: __lazy_modules__ = [{joined_modules}]"
+
+
+def _report_file_errors(
+    path: Path,
+    errors: list[tuple[int, int, str]],
+    format_mode: str,
+) -> bool:
+    """Print errors for a single file; return True if any were found."""
+    found = False
+    for lineno, col_offset, message in errors:
+        if format_mode == "flake8":
+            sys.stdout.write(f"{path}:{lineno}:{col_offset}: {message}\n")
+        found = True
+    return found
+
+
+def _should_apply(
+    apply_mode: str,
+    declared_modules: list[str] | None,
+    recommended_modules: list[str],
+    *,
+    is_dynamic: bool = False,
+    has_native_lazy: bool = False,
+) -> bool:
+    if apply_mode == "dynamic" and is_dynamic:
+        return False
+    return bool(recommended_modules) or declared_modules is not None or has_native_lazy
+
+
+def _parse_jobs(value: str) -> int:
+    if value.lower() == "auto":
+        return -1
+    try:
+        return int(value)
+    except ValueError:
+        msg = f"invalid int value: {value!r}"
+        raise argparse.ArgumentTypeError(msg) from None
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -176,11 +181,43 @@ def main(argv: list[str] | None = None) -> None:
         help="rewrite files to use the recommended lazy declarations; "
         "MODE is list, set, native, or dynamic",
     )
+    parser.add_argument(
+        "-j",
+        "--jobs",
+        type=_parse_jobs,
+        default=-1,
+        metavar="N",
+        help="number of parallel processes (default: auto)",
+    )
     namespace = parser.parse_args(list(argv) if argv is not None else None)
     exclude_modules = parse_exclude_modules(namespace.exclude_modules)
 
+    paths = _deduplicate_paths(namespace.files)
+    jobs = namespace.jobs
+    if jobs <= 0:
+        jobs = os.cpu_count() or 1
+
+    found_errors = _run_parallel(
+        paths,
+        namespace=namespace,
+        exclude_modules=exclude_modules,
+        jobs=jobs,
+    )
+
+    if found_errors:
+        raise SystemExit(1)
+
+
+def _run_sequential(
+    paths: list[Path],
+    *,
+    namespace: argparse.Namespace,
+    exclude_modules: frozenset[str],
+) -> bool:
     found_errors = False
-    for path in namespace.files:
+    for path in paths:
+        exc: BaseException | None = None
+        analysis: _FileAnalysis | None = None
         try:
             analysis = _analyze_file(
                 path,
@@ -202,6 +239,7 @@ def main(argv: list[str] | None = None) -> None:
                         set(analysis.recommended_modules) | set(analysis.native_modules)
                     )
                 apply_lazy_modules(path, effective_modules, mode=namespace.apply)
+                clear_parse_cache()
                 if namespace.apply == "native" and sys.version_info < (3, 15):
                     continue
                 analysis = _analyze_file(
@@ -211,34 +249,170 @@ def main(argv: list[str] | None = None) -> None:
                     apply_mode=namespace.apply,
                     include_errors=True,
                 )
-            errors = analysis.errors
-        except OSError as exc:
-            sys.stderr.write(f"{path}:0:0: LZY000 failed to read file ({exc})\n")
+        except OSError as exc_:
+            exc = exc_
             found_errors = True
-            continue
-        except SyntaxError as exc:
+        except SyntaxError as exc_:
+            exc = exc_
+            found_errors = True
+
+        if _emit_output(path, namespace=namespace, analysis=analysis, exc=exc):
+            found_errors = True
+
+    return found_errors
+
+
+def _emit_output(
+    path: Path,
+    *,
+    namespace: argparse.Namespace,
+    analysis: _FileAnalysis | None = None,
+    exc: BaseException | None = None,
+) -> bool:
+    """Emit output (errors or lazy-modules) for one file; return True if errors."""
+    found_errors = False
+    if exc is not None:
+        if isinstance(exc, OSError):
+            sys.stderr.write(f"{path}:0:0: LZY000 failed to read file ({exc})\n")
+        elif isinstance(exc, SyntaxError):
             lineno = exc.lineno if exc.lineno is not None else 0
             col_offset = (exc.offset - 1) if exc.offset is not None else 0
             sys.stderr.write(
                 f"{path}:{lineno}:{col_offset}: LZY000 failed to parse Python file\n",
             )
-            found_errors = True
+        else:
+            raise exc
+        return True
+
+    if analysis is None:
+        return False
+
+    if (
+        namespace.format == "lazy-modules"
+        and analysis.recommended_modules
+        and analysis.declared_modules != analysis.recommended_modules
+    ):
+        sys.stdout.write(
+            f"{_format_lazy_modules(path, analysis.recommended_modules)}\n"
+        )
+
+    if _report_file_errors(path, analysis.errors, namespace.format):
+        found_errors = True
+
+    return found_errors
+
+
+def _apply_rewrites(
+    paths: list[Path],
+    results: dict[Path, _FileAnalysis],
+    errors_by_path: dict[Path, BaseException],
+    *,
+    apply_mode: str,
+    import_preset: str,
+    exclude_modules: frozenset[str],
+) -> tuple[dict[Path, _FileAnalysis], dict[Path, BaseException], bool]:
+    """Apply rewrites sequentially in argument order."""
+    found_errors = False
+    for path in paths:
+        analysis = results.get(path)
+        if analysis is None:
             continue
-
-        if (
-            namespace.format == "lazy-modules"
-            and analysis.recommended_modules
-            and analysis.declared_modules != analysis.recommended_modules
+        if _should_apply(
+            apply_mode,
+            analysis.declared_modules,
+            analysis.recommended_modules,
+            is_dynamic=analysis.is_dynamic,
+            has_native_lazy=analysis.has_native_lazy,
         ):
-            sys.stdout.write(
-                f"{_format_lazy_modules(path, analysis.recommended_modules)}\n"
-            )
+            effective_modules = analysis.recommended_modules
+            if analysis.native_modules:
+                effective_modules = sorted(
+                    set(analysis.recommended_modules) | set(analysis.native_modules)
+                )
+            try:
+                apply_lazy_modules(path, effective_modules, mode=apply_mode)
+            except OSError as exc:
+                errors_by_path[path] = exc
+                found_errors = True
+                continue
+            clear_parse_cache()
+            if apply_mode == "native" and sys.version_info < (3, 15):
+                continue
+            try:
+                results[path] = _analyze_file(
+                    path,
+                    import_preset=import_preset,
+                    exclude_modules=exclude_modules,
+                    apply_mode=apply_mode,
+                    include_errors=True,
+                )
+            except OSError as exc:
+                errors_by_path[path] = exc
+                found_errors = True
+    return results, errors_by_path, found_errors
 
-        if _report_file_errors(path, errors, namespace.format):
+
+def _run_parallel(
+    paths: list[Path],
+    *,
+    namespace: argparse.Namespace,
+    exclude_modules: frozenset[str],
+    jobs: int,
+) -> bool:
+    found_errors = False
+    results: dict[Path, _FileAnalysis] = {}
+    errors_by_path: dict[Path, BaseException] = {}
+
+    max_workers = min(jobs, len(paths), os.cpu_count() or 1)
+    if max_workers <= 1:
+        return _run_sequential(
+            paths,
+            namespace=namespace,
+            exclude_modules=exclude_modules,
+        )
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                _process_single_file,
+                path,
+                namespace.import_preset,
+                exclude_modules,
+            ): path
+            for path in paths
+        }
+        for future in as_completed(futures):
+            path, analysis, exc = future.result()
+            if exc is not None:
+                errors_by_path[path] = exc
+                found_errors = True
+            elif analysis is not None:
+                results[path] = analysis
+
+    # Apply mode: rewrite files sequentially in argument order
+    if namespace.apply is not None:
+        results, errors_by_path, apply_errors = _apply_rewrites(
+            paths,
+            results,
+            errors_by_path,
+            apply_mode=namespace.apply,
+            import_preset=namespace.import_preset,
+            exclude_modules=exclude_modules,
+        )
+        if apply_errors:
             found_errors = True
 
-    if found_errors:
-        raise SystemExit(1)
+    # Emit output in original argument order
+    for path in paths:
+        if _emit_output(
+            path,
+            namespace=namespace,
+            analysis=results.get(path),
+            exc=errors_by_path.get(path),
+        ):
+            found_errors = True
+
+    return found_errors
 
 
 if __name__ == "__main__":
