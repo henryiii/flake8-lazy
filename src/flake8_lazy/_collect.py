@@ -166,8 +166,12 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
 
         if not lazy and self._guard_active:
             if isinstance(node, ast.ImportFrom):
-                if node.module is not None:
-                    self.guarded_packages.add(node.module)
+                for alias in node.names:
+                    if alias.name == "*":
+                        continue
+                    package = package_for_import_from(node, alias)
+                    if package is not None:
+                        self.guarded_packages.add(package)
             else:
                 self.guarded_packages.update(alias.name for alias in node.names)
 
