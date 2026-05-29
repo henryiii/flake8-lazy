@@ -161,3 +161,6 @@ Thumbs.db
 # Lockfiles
 *.lock
 *.pylock
+
+# ClaudeCode doesn't respect AGENTS.md, so ignore a symlink here
+CLAUDE.md
