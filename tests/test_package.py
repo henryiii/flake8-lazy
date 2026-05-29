@@ -13,17 +13,11 @@ from flake8_lazy._always_imported import (
 )
 from flake8_lazy._analysis import (
     collect_broken_lazy_modules,
-    collect_lazy_packages,
     collect_non_lazy_imports,
     collect_recommended_lazy_modules,
-    collect_side_effect_only_import_packages,
     collect_unnecessary_lazy_imports,
-    has_dynamic_lazy_modules,
 )
-from flake8_lazy._visitors import (
-    collect_strictly_top_level_data,
-    collect_top_level_imports,
-)
+from flake8_lazy._collect import build_module_info, collect_top_level_imports
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -105,7 +99,7 @@ class C:
 """,
     )
 
-    assert collect_non_lazy_imports(tree) == ["os"]
+    assert collect_non_lazy_imports(build_module_info(tree)) == ["os"]
 
 
 def test_collect_non_lazy_imports_handles_aliases_and_from_imports() -> None:
@@ -123,7 +117,7 @@ def fn() -> None:
 """,
     )
 
-    assert collect_non_lazy_imports(tree) == ["la", "P"]
+    assert collect_non_lazy_imports(build_module_info(tree)) == ["la", "P"]
 
 
 def test_recommended_includes_import_from_submodule() -> None:
@@ -139,7 +133,7 @@ def fn() -> None:
 """,
     )
 
-    assert collect_recommended_lazy_modules(tree) == [
+    assert collect_recommended_lazy_modules(build_module_info(tree)) == [
         "cibuildwheel",
         "cibuildwheel.logger",
         "cibuildwheel.util",
@@ -155,7 +149,7 @@ __version__ = importlib.metadata.version("flake8-lazy")
 """,
     )
 
-    assert collect_recommended_lazy_modules(tree) == []
+    assert collect_recommended_lazy_modules(build_module_info(tree)) == []
 
 
 def test_collect_non_lazy_imports_detects_class_decorator_usage() -> None:
@@ -171,7 +165,7 @@ class Item:
 """,
     )
 
-    assert collect_non_lazy_imports(tree) == ["dataclass"]
+    assert collect_non_lazy_imports(build_module_info(tree)) == ["dataclass"]
 
 
 def test_collect_non_lazy_imports_detects_class_base_usage() -> None:
@@ -186,7 +180,7 @@ class Visitor(ast.NodeVisitor):
 """,
     )
 
-    assert collect_non_lazy_imports(tree) == ["ast"]
+    assert collect_non_lazy_imports(build_module_info(tree)) == ["ast"]
 
 
 def test_collect_lazy_packages() -> None:
@@ -196,7 +190,7 @@ __lazy_modules__ = ["numpy", "pandas"]
 """,
     )
 
-    assert collect_lazy_packages(tree) == {"numpy", "pandas"}
+    assert build_module_info(tree).lazy_packages == {"numpy", "pandas"}
 
 
 def test_checker_emits_lzy102_for_missing_lazy_packages() -> None:
@@ -228,7 +222,7 @@ import os
 
     # logging.config is a dotted unaliased import and logging is never loaded;
     # os is a plain import so it is not side-effect-only.
-    result = collect_side_effect_only_import_packages(tree)
+    result = build_module_info(tree).side_effect_only_packages
 
     assert result == {"logging.config"}
 
@@ -243,7 +237,7 @@ logging.basicConfig()
     )
 
     # `logging` is loaded via attribute access, so the import is NOT side-effect-only.
-    result = collect_side_effect_only_import_packages(tree)
+    result = build_module_info(tree).side_effect_only_packages
 
     assert result == set()
 
@@ -256,7 +250,7 @@ import logging.config as lc
     )
 
     # `as lc` means the caller intends to use the binding explicitly.
-    result = collect_side_effect_only_import_packages(tree)
+    result = build_module_info(tree).side_effect_only_packages
 
     assert result == set()
 
@@ -978,7 +972,7 @@ __lazy_modules__ = ["concurrent.futures", "numpy", "concurrent"]
 """,
     )
 
-    result = collect_broken_lazy_modules(tree)
+    result = collect_broken_lazy_modules(build_module_info(tree))
     assert result == [
         ("concurrent.futures", 2, 20),
         ("concurrent", 2, 51),
@@ -992,7 +986,7 @@ __lazy_modules__ = ["numpy", "pandas"]
 """,
     )
 
-    result = collect_broken_lazy_modules(tree)
+    result = collect_broken_lazy_modules(build_module_info(tree))
     assert result == []
 
 
@@ -1003,7 +997,9 @@ __lazy_modules__ = ["foo.bar", "numpy"]
 """,
     )
 
-    result = collect_broken_lazy_modules(tree, broken=frozenset({"foo.bar"}))
+    result = collect_broken_lazy_modules(
+        build_module_info(tree), broken=frozenset({"foo.bar"})
+    )
     assert result == [("foo.bar", 2, 20)]
 
 
@@ -1020,7 +1016,7 @@ if condition:
 """,
     )
 
-    names, _ = collect_strictly_top_level_data(tree)
+    names = build_module_info(tree).strict_names
 
     assert "re" in names
     assert "os" not in names
@@ -1050,7 +1046,7 @@ except Exception:
 """,
     )
 
-    names, _ = collect_strictly_top_level_data(tree)
+    names = build_module_info(tree).strict_names
 
     assert "a" not in names
     assert "b" not in names
@@ -1068,7 +1064,7 @@ REGEX = re.compile(".")
 """,
     )
 
-    result = collect_unnecessary_lazy_imports(tree)
+    result = collect_unnecessary_lazy_imports(build_module_info(tree))
 
     assert len(result) == 1
     assert result[0][0] == "re"
@@ -1085,7 +1081,7 @@ if __name__ == "__main__":
 """,
     )
 
-    result = collect_unnecessary_lazy_imports(tree)
+    result = collect_unnecessary_lazy_imports(build_module_info(tree))
 
     assert result == []
 
@@ -1100,7 +1096,7 @@ rich.traceback.install(suppress=[rich], show_locals=False, width=None)
 """,
     )
 
-    result = collect_unnecessary_lazy_imports(tree)
+    result = collect_unnecessary_lazy_imports(build_module_info(tree))
 
     assert result == []
 
@@ -1115,7 +1111,7 @@ __version__ = importlib.metadata.version("flake8-lazy")
 """,
     )
 
-    result = collect_unnecessary_lazy_imports(tree)
+    result = collect_unnecessary_lazy_imports(build_module_info(tree))
 
     assert result == [("importlib.metadata", 3, 0)]
 
@@ -1132,7 +1128,7 @@ def test_collect_unnecessary_lazy_imports_ignores_enclosing_packages(
     path.write_text(source, encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
 
-    result = collect_unnecessary_lazy_imports(tree)
+    result = collect_unnecessary_lazy_imports(build_module_info(tree))
 
     assert result == []
 
@@ -1630,22 +1626,22 @@ lazy from numpy import random
 
 def test_has_dynamic_lazy_modules_false_for_list() -> None:
     tree = ast.parse('__lazy_modules__ = ["numpy"]\nimport numpy\n')
-    assert not has_dynamic_lazy_modules(tree)
+    assert not build_module_info(tree).has_dynamic_lazy_modules
 
 
 def test_has_dynamic_lazy_modules_false_when_absent() -> None:
     tree = ast.parse("import numpy\n")
-    assert not has_dynamic_lazy_modules(tree)
+    assert not build_module_info(tree).has_dynamic_lazy_modules
 
 
 def test_has_dynamic_lazy_modules_true_for_call() -> None:
     tree = ast.parse("__lazy_modules__ = AllLazy()\nimport numpy\n")
-    assert has_dynamic_lazy_modules(tree)
+    assert build_module_info(tree).has_dynamic_lazy_modules
 
 
 def test_has_dynamic_lazy_modules_true_for_name() -> None:
     tree = ast.parse("__lazy_modules__ = SOME_CONSTANT\nimport numpy\n")
-    assert has_dynamic_lazy_modules(tree)
+    assert build_module_info(tree).has_dynamic_lazy_modules
 
 
 def test_checker_suppresses_lzy102_for_dynamic_lazy_modules() -> None:
@@ -1702,9 +1698,11 @@ import numpy
 """,
     )
 
+    info = build_module_info(tree)
+
     # With the default preset, sys and time are excluded; only numpy is recommended.
     recommended_default = collect_recommended_lazy_modules(
-        tree, always_imported=ALWAYS_IMPORTED_DEFAULT
+        info, always_imported=ALWAYS_IMPORTED_DEFAULT
     )
     assert "sys" not in recommended_default
     assert "time" not in recommended_default
@@ -1712,7 +1710,7 @@ import numpy
 
     # With no filtering (empty frozenset), sys and time are also candidates.
     recommended_none = collect_recommended_lazy_modules(
-        tree, always_imported=frozenset()
+        info, always_imported=frozenset()
     )
     assert "sys" in recommended_none
     assert "time" in recommended_none
@@ -1720,7 +1718,7 @@ import numpy
 
     # With minimal preset, sys and time are also excluded.
     recommended_minimal = collect_recommended_lazy_modules(
-        tree, always_imported=ALWAYS_IMPORTED_MINIMAL
+        info, always_imported=ALWAYS_IMPORTED_MINIMAL
     )
     assert "sys" not in recommended_minimal
     assert "time" not in recommended_minimal
@@ -1741,7 +1739,7 @@ def fn() -> None:
     )
 
     assert collect_recommended_lazy_modules(
-        tree,
+        build_module_info(tree),
         always_imported=frozenset({"os"}),
     ) == ["os.path"]
 
@@ -1782,3 +1780,67 @@ def test_checker_run_exclude_modules_does_not_affect_other_modules() -> None:
     modules = [e[2] for e in errors]
     assert not any("numpy" in m for m in modules)
     assert any("pandas" in m for m in modules)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests pinning behaviour the single-pass collector must preserve.
+# These cover currently-untested edge cases where scope/conditional nesting
+# changes which statements a check considers.
+# ---------------------------------------------------------------------------
+
+
+def test_checker_does_not_emit_lzy204_for_import_inside_top_level_if() -> None:
+    # The import is nested in a top-level ``if`` (not a direct module-body
+    # statement), so it does not count toward late-assignment detection.
+    tree = ast.parse(
+        """
+if True:
+    import numpy
+__lazy_modules__ = ["numpy"]
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    lzy204 = [e for e in checker.run() if e[2].startswith("LZY204")]
+    assert lzy204 == []
+
+
+def test_checker_does_not_emit_lzy401_for_lazy_module_used_only_in_if_test() -> None:
+    # A name used only inside an ``if`` test expression is not a strict
+    # top-level use, so the lazy import is not flagged as unnecessary.
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+if re.match("a", "b"):
+    pass
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    lzy401 = [e for e in checker.run() if e[2].startswith("LZY401")]
+    assert lzy401 == []
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="Python 3.15 lazy import AST is required",
+)
+def test_checker_does_not_emit_lzy301_for_lazy_import_in_nested_suppress() -> None:
+    # Only ``lazy`` imports that are direct children of a top-level
+    # ``suppress(ImportError)`` block are flagged; a suppress nested inside an
+    # ``if`` is not scanned.
+    tree = ast.parse(
+        """
+from contextlib import suppress
+
+if True:
+    with suppress(ImportError):
+        lazy import numpy
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    lzy301 = [e for e in checker.run() if e[2].startswith("LZY301")]
+    assert lzy301 == []

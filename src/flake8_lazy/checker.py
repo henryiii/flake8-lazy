@@ -5,6 +5,7 @@ from __future__ import annotations
 __lazy_modules__ = [
     f"{__spec__.parent}._always_imported",
     f"{__spec__.parent}._analysis",
+    f"{__spec__.parent}._collect",
     f"{__spec__.parent}._options",
     "importlib",
     "importlib.metadata",
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
     import argparse
     import ast
     from typing import Protocol
+
+    from ._model import ModuleInfo
 
     class _OptionManager(Protocol):
         """Minimal protocol for flake8's OptionManager."""
@@ -44,8 +47,8 @@ from ._analysis import (
     collect_unnecessary_lazy_imports,
     collect_unsorted_lazy_modules,
     collect_unused_lazy_modules,
-    has_dynamic_lazy_modules,
 )
+from ._collect import build_module_info
 from ._options import (
     DEFAULT_EXCLUDE_MODULES,
     DEFAULT_IMPORT_PRESET,
@@ -85,6 +88,82 @@ def _lazy_module_error_code(module: str) -> str:
     if root_module in sys.stdlib_module_names:
         return "LZY101"
     return "LZY102"
+
+
+def _missing_lazy_module_diagnostics(
+    info: ModuleInfo, *, always_imported: frozenset[str]
+) -> list[tuple[int, int, str]]:
+    diagnostics: list[tuple[int, int, str]] = []
+    for module, lineno, col_offset in collect_missing_lazy_modules(
+        info, always_imported=always_imported
+    ):
+        code = _lazy_module_error_code(module)
+        message = ERROR_MESSAGES[code].format(module=module)
+        diagnostics.append((lineno, col_offset, f"{code} {message}"))
+    return diagnostics
+
+
+def _lazy_module_validation_diagnostics(
+    info: ModuleInfo,
+) -> list[tuple[int, int, str]]:
+    if info.has_dynamic_lazy_modules:
+        return []
+    diagnostics: list[tuple[int, int, str]] = []
+    for lineno, col_offset in collect_unsorted_lazy_modules(info):
+        diagnostics.append((lineno, col_offset, f"LZY201 {ERROR_MESSAGES['LZY201']}"))
+    for module, lineno, col_offset in collect_unused_lazy_modules(info):
+        message = ERROR_MESSAGES["LZY202"].format(module=module)
+        diagnostics.append((lineno, col_offset, f"LZY202 {message}"))
+    for module, lineno, col_offset in collect_duplicate_lazy_modules(info):
+        message = ERROR_MESSAGES["LZY203"].format(module=module)
+        diagnostics.append((lineno, col_offset, f"LZY203 {message}"))
+    for lineno, col_offset in collect_late_lazy_module_assignments(info):
+        diagnostics.append((lineno, col_offset, f"LZY204 {ERROR_MESSAGES['LZY204']}"))
+    for module, lineno, col_offset in collect_invalid_lazy_module_names(info):
+        message = ERROR_MESSAGES["LZY205"].format(module=module)
+        diagnostics.append((lineno, col_offset, f"LZY205 {message}"))
+    for module, lineno, col_offset in collect_broken_lazy_modules(info):
+        message = ERROR_MESSAGES["LZY206"].format(module=module)
+        diagnostics.append((lineno, col_offset, f"LZY206 {message}"))
+    return diagnostics
+
+
+def _lazy_keyword_diagnostics(info: ModuleInfo) -> list[tuple[int, int, str]]:
+    diagnostics: list[tuple[int, int, str]] = []
+    for module, lineno, col_offset in collect_lazy_imports_in_suppress_blocks(info):
+        message = ERROR_MESSAGES["LZY301"].format(module=module)
+        diagnostics.append((lineno, col_offset, f"LZY301 {message}"))
+    for module, lineno, col_offset in collect_redundant_lazy_declarations(info):
+        message = ERROR_MESSAGES["LZY302"].format(module=module)
+        diagnostics.append((lineno, col_offset, f"LZY302 {message}"))
+    for module, lineno, col_offset in collect_mixed_lazy_eager_imports(info):
+        message = ERROR_MESSAGES["LZY303"].format(module=module)
+        diagnostics.append((lineno, col_offset, f"LZY303 {message}"))
+    return diagnostics
+
+
+def _semantic_lazy_diagnostics(info: ModuleInfo) -> list[tuple[int, int, str]]:
+    diagnostics: list[tuple[int, int, str]] = []
+    for module, lineno, col_offset in collect_unnecessary_lazy_imports(info):
+        message = ERROR_MESSAGES["LZY401"].format(module=module)
+        diagnostics.append((lineno, col_offset, f"LZY401 {message}"))
+    for module, lineno, col_offset in collect_enclosing_lazy_modules(info):
+        message = ERROR_MESSAGES["LZY402"].format(module=module)
+        diagnostics.append((lineno, col_offset, f"LZY402 {message}"))
+    return diagnostics
+
+
+def build_diagnostics(
+    info: ModuleInfo, *, always_imported: frozenset[str]
+) -> list[tuple[int, int, str]]:
+    """Return all ``(lineno, col_offset, "CODE message")`` diagnostics for ``info``."""
+    diagnostics = _missing_lazy_module_diagnostics(
+        info, always_imported=always_imported
+    )
+    diagnostics += _lazy_module_validation_diagnostics(info)
+    diagnostics += _lazy_keyword_diagnostics(info)
+    diagnostics += _semantic_lazy_diagnostics(info)
+    return diagnostics
 
 
 class LazyImportChecker:
@@ -153,106 +232,6 @@ class LazyImportChecker:
         cls.import_preset = preset
         cls.exclude_modules = parse_exclude_modules(options.lazy_exclude_modules)
 
-    def _build_missing_lazy_module_errors(
-        self,
-        *,
-        always_imported: frozenset[str],
-    ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
-        errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
-        for module, lineno, col_offset in collect_missing_lazy_modules(
-            self.tree,
-            filename=self.filename,
-            always_imported=always_imported,
-        ):
-            code = _lazy_module_error_code(module)
-            message = ERROR_MESSAGES[code].format(module=module)
-            errors.append((lineno, col_offset, f"{code} {message}", type(self)))
-        return errors
-
-    def _build_lazy_module_validation_errors(
-        self,
-    ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
-        if has_dynamic_lazy_modules(self.tree):
-            return []
-        errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
-        for lineno, col_offset in collect_unsorted_lazy_modules(self.tree):
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    f"LZY201 {ERROR_MESSAGES['LZY201']}",
-                    type(self),
-                )
-            )
-
-        for module, lineno, col_offset in collect_unused_lazy_modules(
-            self.tree,
-            filename=self.filename,
-        ):
-            message = ERROR_MESSAGES["LZY202"].format(module=module)
-            errors.append((lineno, col_offset, f"LZY202 {message}", type(self)))
-
-        for module, lineno, col_offset in collect_duplicate_lazy_modules(self.tree):
-            message = ERROR_MESSAGES["LZY203"].format(module=module)
-            errors.append((lineno, col_offset, f"LZY203 {message}", type(self)))
-
-        for lineno, col_offset in collect_late_lazy_module_assignments(self.tree):
-            errors.append(
-                (
-                    lineno,
-                    col_offset,
-                    f"LZY204 {ERROR_MESSAGES['LZY204']}",
-                    type(self),
-                )
-            )
-
-        for module, lineno, col_offset in collect_invalid_lazy_module_names(self.tree):
-            message = ERROR_MESSAGES["LZY205"].format(module=module)
-            errors.append((lineno, col_offset, f"LZY205 {message}", type(self)))
-
-        for module, lineno, col_offset in collect_broken_lazy_modules(self.tree):
-            message = ERROR_MESSAGES["LZY206"].format(module=module)
-            errors.append((lineno, col_offset, f"LZY206 {message}", type(self)))
-
-        return errors
-
-    def _build_lazy_keyword_errors(
-        self,
-    ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
-        errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
-        for module, lineno, col_offset in collect_lazy_imports_in_suppress_blocks(
-            self.tree
-        ):
-            message = ERROR_MESSAGES["LZY301"].format(module=module)
-            errors.append((lineno, col_offset, f"LZY301 {message}", type(self)))
-
-        for module, lineno, col_offset in collect_redundant_lazy_declarations(
-            self.tree
-        ):
-            message = ERROR_MESSAGES["LZY302"].format(module=module)
-            errors.append((lineno, col_offset, f"LZY302 {message}", type(self)))
-
-        for module, lineno, col_offset in collect_mixed_lazy_eager_imports(self.tree):
-            message = ERROR_MESSAGES["LZY303"].format(module=module)
-            errors.append((lineno, col_offset, f"LZY303 {message}", type(self)))
-
-        return errors
-
-    def _build_semantic_lazy_errors(
-        self,
-    ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
-        errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
-        for module, lineno, col_offset in collect_unnecessary_lazy_imports(self.tree):
-            message = ERROR_MESSAGES["LZY401"].format(module=module)
-            errors.append((lineno, col_offset, f"LZY401 {message}", type(self)))
-        for module, lineno, col_offset in collect_enclosing_lazy_modules(
-            self.tree,
-            filename=self.filename,
-        ):
-            message = ERROR_MESSAGES["LZY402"].format(module=module)
-            errors.append((lineno, col_offset, f"LZY402 {message}", type(self)))
-        return errors
-
     def run(
         self,
         *,
@@ -264,11 +243,11 @@ class LazyImportChecker:
         if exclude_modules is None:
             exclude_modules = type(self).exclude_modules
         always_imported = always_imported | exclude_modules
-        errors: list[tuple[int, int, str, type[LazyImportChecker]]] = []
-        errors.extend(
-            self._build_missing_lazy_module_errors(always_imported=always_imported)
-        )
-        errors.extend(self._build_lazy_module_validation_errors())
-        errors.extend(self._build_lazy_keyword_errors())
-        errors.extend(self._build_semantic_lazy_errors())
-        return errors
+        info = build_module_info(self.tree, self.filename)
+        checker = type(self)
+        return [
+            (lineno, col_offset, message, checker)
+            for lineno, col_offset, message in build_diagnostics(
+                info, always_imported=always_imported
+            )
+        ]

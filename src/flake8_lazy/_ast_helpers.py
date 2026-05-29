@@ -15,7 +15,6 @@ __all__ = [
     "is_import_error_name",
     "is_lazy_import_node",
     "is_lazy_modules_target",
-    "is_runtime_guard",
     "is_suppress_import_error_call",
     "is_type_checking_guard",
     "lazy_module_container_elements",
@@ -39,25 +38,6 @@ def is_type_checking_guard(node: ast.AST) -> bool:
         case ast.Name(id="TYPE_CHECKING"):
             return True
         case ast.Attribute(value=ast.Name(id="typing"), attr="TYPE_CHECKING"):
-            return True
-        case _:
-            return False
-
-
-def is_runtime_guard(node: ast.AST) -> bool:
-    """Return True if ``node`` is a guard that protects code from runtime execution.
-
-    This includes TYPE_CHECKING and sys.version_info comparisons.
-    """
-    # Check for TYPE_CHECKING guards
-    if is_type_checking_guard(node):
-        return True
-
-    # Check for sys.version_info comparisons
-    match node:
-        case ast.Compare(
-            left=ast.Attribute(value=ast.Name(id="sys"), attr="version_info")
-        ):
             return True
         case _:
             return False

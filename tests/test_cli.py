@@ -7,10 +7,8 @@ from pathlib import Path
 import pytest
 
 from flake8_lazy.__main__ import main
-from flake8_lazy._analysis import (
-    collect_declared_lazy_modules,
-    collect_recommended_lazy_modules,
-)
+from flake8_lazy._analysis import collect_recommended_lazy_modules
+from flake8_lazy._collect import build_module_info
 from flake8_lazy._rewriter import apply_lazy_modules
 from flake8_lazy.api import (
     _build_noqa_map,
@@ -135,7 +133,7 @@ HOME = pathlib.Path.home()
 """,
     )
 
-    assert collect_recommended_lazy_modules(tree) == ["requests"]
+    assert collect_recommended_lazy_modules(build_module_info(tree)) == ["requests"]
 
 
 def test_collect_recommended_lazy_modules_for_file_skips_enclosing_packages(
@@ -261,7 +259,7 @@ __lazy_modules__ = ["pandas", "numpy"]
 """,
     )
 
-    assert collect_declared_lazy_modules(tree) == ["pandas", "numpy"]
+    assert build_module_info(tree).declared_lazy_modules == ["pandas", "numpy"]
 
 
 def test_collect_declared_lazy_modules_supports_relative_spec_parent_syntax() -> None:
@@ -271,7 +269,9 @@ __lazy_modules__ = [f"{__spec__.parent}.subpackage"]
 """,
     )
 
-    assert collect_declared_lazy_modules(tree) == ['f"{__spec__.parent}.subpackage"']
+    assert build_module_info(tree).declared_lazy_modules == [
+        'f"{__spec__.parent}.subpackage"'
+    ]
 
 
 def test_main_outputs_lazy_modules_format_and_exits_nonzero(
