@@ -3,7 +3,7 @@ from __future__ import annotations
 __lazy_modules__ = [
     "ast",
     f"{__spec__.parent}._ast_helpers",
-    f"{__spec__.parent}._visitors",
+    f"{__spec__.parent}._collect",
     "io",
     "tokenize",
 ]
@@ -18,7 +18,7 @@ from ._ast_helpers import (
     lazy_modules_assignment_value,
     package_for_import_from,
 )
-from ._visitors import collect_top_level_imports, collect_top_level_lazy_imports
+from ._collect import collect_top_level_imports, collect_top_level_lazy_imports
 
 __all__ = ["apply_lazy_modules"]
 

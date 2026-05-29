@@ -1,277 +1,83 @@
-"""Collection logic for lazy import diagnostics and recommendations."""
+"""Lazy-import checks (Phase 2).
+
+Every function here is pure over a :class:`~flake8_lazy._model.ModuleInfo`
+produced by ``_collect.build_module_info`` — they never traverse the AST.  Each
+``collect_*`` corresponds to one or more LZY diagnostics and returns
+``(module, lineno, col_offset)`` (or ``(lineno, col_offset)``) tuples for the
+checker to format.
+"""
 
 from __future__ import annotations
 
-__lazy_modules__ = [
-    "ast",
-    f"{__spec__.parent}._ast_helpers",
-    f"{__spec__.parent}._bindings",
-    f"{__spec__.parent}._visitors",
-]
-
-import ast
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ._always_imported import ALWAYS_IMPORTED_DEFAULT, BROKEN
+
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
-from ._always_imported import ALWAYS_IMPORTED_DEFAULT, BROKEN
-from ._ast_helpers import (
-    containing_package_prefixes,
-    is_lazy_import_node,
-    is_suppress_import_error_call,
-    lazy_module_container_elements,
-    lazy_modules_assignment_value,
-    package_for_import_from,
-    parse_lazy_module_list,
-    parse_relative_lazy_module,
-)
-from ._bindings import (
-    ImportBinding,
-    collect_import_bindings,
-    collect_top_level_import_bindings,
-    collect_top_level_lazy_import_bindings,
-)
-from ._visitors import (
-    collect_guarded_import_packages,
-    collect_strictly_top_level_data,
-    collect_top_level_imports,
-    collect_top_level_lazy_imports,
-    collect_top_level_runtime_data,
-    collect_type_checking_guard_names,
-)
+    from ._model import ImportInfo, ModuleInfo
 
 __all__ = [
     "collect_broken_lazy_modules",
-    "collect_declared_lazy_modules",
     "collect_duplicate_lazy_modules",
     "collect_enclosing_lazy_modules",
     "collect_invalid_lazy_module_names",
     "collect_late_lazy_module_assignments",
     "collect_lazy_imports_in_suppress_blocks",
-    "collect_lazy_packages",
     "collect_missing_lazy_modules",
     "collect_mixed_lazy_eager_imports",
     "collect_native_lazy_modules",
     "collect_non_lazy_imports",
     "collect_recommended_lazy_modules",
     "collect_redundant_lazy_declarations",
-    "collect_side_effect_only_import_packages",
     "collect_unnecessary_lazy_imports",
     "collect_unsorted_lazy_modules",
     "collect_unused_lazy_modules",
-    "has_dynamic_lazy_modules",
     "has_native_lazy_imports",
 ]
 
 
-def _lazy_import_entries(
-    stmt: ast.Import | ast.ImportFrom,
-) -> list[tuple[str, int, int]]:
-    """Return (module, lineno, col_offset) for a single lazy import statement."""
-    match stmt:
-        case ast.Import(names=aliases, lineno=lineno, col_offset=col_offset):
-            return [(alias.name, lineno, col_offset) for alias in aliases]
-        case ast.ImportFrom(names=aliases, lineno=lineno, col_offset=col_offset):
-            for alias in aliases:
-                if alias.name == "*":
-                    continue
-                package = package_for_import_from(stmt, alias)
-                if package is not None:
-                    return [(package, lineno, col_offset)]
-            return []
-        case _:
-            return []  # type: ignore[unreachable]
+def _eager_imports(info: ModuleInfo) -> list[ImportInfo]:
+    """Module-scope eager imports, as ``collect_top_level_imports`` returned."""
+    return [imp for imp in info.imports if imp.runtime_visible and not imp.is_lazy]
 
 
-def collect_lazy_imports_in_suppress_blocks(
-    tree: ast.AST,
-) -> list[tuple[str, int, int]]:
-    """Return (module, lineno, col_offset) for lazy imports in suppress(ImportError)."""
-    if not isinstance(tree, ast.Module):
-        return []
-
-    result: list[tuple[str, int, int]] = []
-    for node in tree.body:
-        match node:
-            case ast.With(items=items, body=body) if any(
-                is_suppress_import_error_call(item.context_expr) for item in items
-            ):
-                for stmt in body:
-                    if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
-                        continue
-                    if not is_lazy_import_node(stmt):
-                        continue
-                    result.extend(_lazy_import_entries(stmt))
-            case _:
-                continue
-
-    return result
+def _lazy_imports(info: ModuleInfo) -> list[ImportInfo]:
+    """Module-scope native ``lazy`` imports (Python 3.15+)."""
+    return [imp for imp in info.imports if imp.runtime_visible and imp.is_lazy]
 
 
-def collect_side_effect_only_import_packages(
-    tree: ast.AST,
-    *,
-    top_level_imports: list[ast.Import | ast.ImportFrom] | None = None,
-) -> set[str]:
-    """Return packages imported purely for side effects."""
-    all_loaded: set[str] = set()
-    for item in ast.walk(tree):
-        match item:
-            case ast.Name(id=name, ctx=ast.Load()):
-                all_loaded.add(name)
-            case _:
-                pass
-
-    if top_level_imports is None:
-        top_level_imports = collect_top_level_imports(tree)
-
-    packages: set[str] = set()
-    for node in top_level_imports:
-        match node:
-            case ast.Import(names=aliases):
-                for alias in aliases:
-                    match alias:
-                        case ast.alias(name=name, asname=None) if "." in name:
-                            bound_name = name.split(".", maxsplit=1)[0]
-                            if bound_name not in all_loaded:
-                                packages.add(name)
-                        case _:
-                            pass
-            case _:
-                continue
-    return packages
+# ---------------------------------------------------------------------------
+# Native lazy imports (Python 3.15+)
+# ---------------------------------------------------------------------------
 
 
-def _iter_declared_lazy_module_entries(
-    tree: ast.AST,
-) -> list[tuple[str, int, int]]:
-    """Return parsed ``__lazy_modules__`` entries with source locations."""
-    if not isinstance(tree, ast.Module):
-        return []
-
-    entries: list[tuple[str, int, int]] = []
-    for node in tree.body:
-        value_node = lazy_modules_assignment_value(node)
-        if value_node is None:
-            continue
-
-        elements = lazy_module_container_elements(value_node)
-        if elements is None:
-            continue
-
-        for element in elements:
-            match element:
-                case ast.Constant(
-                    value=str() as value,
-                    lineno=lineno,
-                    col_offset=col_offset,
-                ):
-                    entries.append((value, lineno, col_offset))
-                case ast.JoinedStr(
-                    lineno=lineno,
-                    col_offset=col_offset,
-                ):
-                    parsed_relative = parse_relative_lazy_module(element)
-                    if parsed_relative is not None:
-                        entries.append((parsed_relative, lineno, col_offset))
-                case _:
-                    continue
-
-    return entries
+def has_native_lazy_imports(info: ModuleInfo) -> bool:
+    """Return True if the module contains any natively-lazy imports."""
+    return any(imp.is_lazy and imp.runtime_visible for imp in info.imports)
 
 
-def _iter_static_lazy_module_assignments(
-    tree: ast.AST,
-) -> list[tuple[ast.Assign | ast.AnnAssign, list[str]]]:
-    """Return static ``__lazy_modules__`` assignment nodes with parsed values."""
-    if not isinstance(tree, ast.Module):
-        return []
-
-    assignments: list[tuple[ast.Assign | ast.AnnAssign, list[str]]] = []
-    for node in tree.body:
-        value_node = lazy_modules_assignment_value(node)
-        if value_node is None:
-            continue
-
-        parsed = parse_lazy_module_list(value_node)
-        if parsed is None:
-            continue
-
-        if isinstance(node, (ast.Assign, ast.AnnAssign)):
-            assignments.append((node, parsed))
-
-    return assignments
+def collect_native_lazy_modules(info: ModuleInfo) -> list[str]:
+    """Return sorted package names declared via native ``lazy import`` syntax."""
+    return sorted(
+        {imp.package for imp in _lazy_imports(info) if imp.package is not None}
+    )
 
 
-def collect_declared_lazy_modules(tree: ast.AST) -> list[str] | None:
-    """Return the last static ``__lazy_modules__`` declaration, if present."""
-    declared: list[str] | None = None
-    for _node, modules in _iter_static_lazy_module_assignments(tree):
-        declared = modules
-
-    return declared
+# ---------------------------------------------------------------------------
+# __lazy_modules__ validation (LZY2xx)
+# ---------------------------------------------------------------------------
 
 
-def has_dynamic_lazy_modules(tree: ast.AST) -> bool:
-    """Return True if ``__lazy_modules__`` is assigned a non-static (dynamic) value.
-
-    A dynamic ``__lazy_modules__`` (e.g. a custom object instead of a list/tuple/set)
-    is treated as "all modules are declared lazy", so no LZY1xx/LZY2xx errors are
-    emitted.
-    """
-    if not isinstance(tree, ast.Module):
-        return False
-    for node in tree.body:
-        value_node = lazy_modules_assignment_value(node)
-        if value_node is None:
-            continue
-        if lazy_module_container_elements(value_node) is None:
-            return True
-    return False
-
-
-def has_native_lazy_imports(tree: ast.AST) -> bool:
-    """Return True if the module contains any natively-lazy imports (Python 3.15+).
-
-    On Python < 3.15 this always returns False because ``lazy import`` syntax
-    does not exist and the AST cannot contain such nodes.
-    """
-    return bool(collect_top_level_lazy_imports(tree))
-
-
-def collect_native_lazy_modules(tree: ast.AST) -> list[str]:
-    """Return a sorted list of package names declared via native ``lazy import`` syntax.
-
-    On Python < 3.15 this always returns an empty list.
-    """
-    packages = [
-        binding.package
-        for binding in collect_top_level_lazy_import_bindings(tree)
-        if binding.package is not None
-    ]
-    return sorted(set(packages))
-
-
-def collect_lazy_packages(tree: ast.AST) -> set[str]:
-    """Return statically-declared values of ``__lazy_modules__``."""
-    lazy_modules: set[str] = set()
-    for _node, modules in _iter_static_lazy_module_assignments(tree):
-        lazy_modules = set(modules)
-
-    return lazy_modules
-
-
-def collect_unsorted_lazy_modules(tree: ast.AST) -> list[tuple[int, int]]:
+def collect_unsorted_lazy_modules(info: ModuleInfo) -> list[tuple[int, int]]:
     """Return locations of static ``__lazy_modules__`` assignments that are unsorted."""
-    unsorted: list[tuple[int, int]] = []
-    for node, modules in _iter_static_lazy_module_assignments(tree):
-        if modules != sorted(modules):
-            unsorted.append((node.lineno, node.col_offset))
-
-    return unsorted
+    return [
+        (assignment.lineno, assignment.col_offset)
+        for assignment in info.static_lazy_assignments
+        if assignment.modules != sorted(assignment.modules)
+    ]
 
 
 def _is_imported_package(module: str, imported_packages: set[str]) -> bool:
@@ -282,27 +88,19 @@ def _is_imported_package(module: str, imported_packages: set[str]) -> bool:
     )
 
 
-def collect_unused_lazy_modules(
-    tree: ast.AST,
-    filename: str | Path | None = None,
-) -> list[tuple[str, int, int]]:
+def collect_unused_lazy_modules(info: ModuleInfo) -> list[tuple[str, int, int]]:
     """Return modules listed in ``__lazy_modules__`` that are never imported."""
-    excluded_packages = containing_package_prefixes(filename)
     imported_packages = {
-        binding.package
-        for binding in collect_top_level_import_bindings(tree)
-        if binding.package is not None
+        imp.package for imp in _eager_imports(info) if imp.package is not None
     }
-
     unused: list[tuple[str, int, int]] = []
-    for node, modules in _iter_static_lazy_module_assignments(tree):
+    for assignment in info.static_lazy_assignments:
         unused.extend(
-            (module, node.lineno, node.col_offset)
-            for module in modules
+            (module, assignment.lineno, assignment.col_offset)
+            for module in assignment.modules
             if not _is_imported_package(module, imported_packages)
-            if module not in excluded_packages
+            if module not in info.enclosing_packages
         )
-
     return unused
 
 
@@ -321,86 +119,100 @@ def _collect_duplicate_modules(modules: list[str]) -> list[str]:
     return duplicates
 
 
-def collect_duplicate_lazy_modules(tree: ast.AST) -> list[tuple[str, int, int]]:
+def collect_duplicate_lazy_modules(info: ModuleInfo) -> list[tuple[str, int, int]]:
     """Return duplicated modules listed in ``__lazy_modules__``."""
     duplicated: list[tuple[str, int, int]] = []
-    for node, modules in _iter_static_lazy_module_assignments(tree):
+    for assignment in info.static_lazy_assignments:
         duplicated.extend(
-            (module, node.lineno, node.col_offset)
-            for module in _collect_duplicate_modules(modules)
+            (module, assignment.lineno, assignment.col_offset)
+            for module in _collect_duplicate_modules(assignment.modules)
         )
-
     return duplicated
 
 
-def collect_late_lazy_module_assignments(tree: ast.AST) -> list[tuple[int, int]]:
+def collect_late_lazy_module_assignments(info: ModuleInfo) -> list[tuple[int, int]]:
     """Return ``__lazy_modules__`` assignments after importing listed modules."""
-    if not isinstance(tree, ast.Module):
-        return []
-
-    late_assignments: list[tuple[int, int]] = []
-    imported_packages: set[str] = set()
-
-    for node in tree.body:
-        match node:
-            case ast.Import(names=aliases):
-                imported_packages.update(alias.name for alias in aliases)
-                continue
-            case ast.ImportFrom(module=module, names=aliases) if module != "__future__":
-                imported_packages.update(
-                    package
-                    for package in (
-                        package_for_import_from(node, alias) for alias in aliases
-                    )
-                    if package is not None
-                )
-                continue
-            case _:
-                pass
-
-        value_node = lazy_modules_assignment_value(node)
-        if value_node is None:
-            continue
-
-        modules = parse_lazy_module_list(value_node)
-        if modules is None:
-            continue
-
-        if any(module in imported_packages for module in modules):
-            late_assignments.append((node.lineno, node.col_offset))
-
-    return late_assignments
+    return list(info.late_lazy_module_locations)
 
 
-def collect_invalid_lazy_module_names(tree: ast.AST) -> list[tuple[str, int, int]]:
+def collect_invalid_lazy_module_names(info: ModuleInfo) -> list[tuple[str, int, int]]:
     """Return relative ``__lazy_modules__`` entries that must be absolute."""
     return [
         (module, lineno, col_offset)
-        for module, lineno, col_offset in _iter_declared_lazy_module_entries(tree)
+        for module, lineno, col_offset in info.lazy_module_entries
         if module.startswith(".")
     ]
 
 
 def collect_broken_lazy_modules(
-    tree: ast.AST,
+    info: ModuleInfo,
     *,
     broken: frozenset[str] = BROKEN,
 ) -> list[tuple[str, int, int]]:
-    """Return modules listed in ``__lazy_modules__`` that are known broken.
-
-    These modules are known to be broken under lazy imports and should not be
-    declared in ``__lazy_modules__``.
-    """
+    """Return modules listed in ``__lazy_modules__`` that are known broken."""
     return [
         (module, lineno, col_offset)
-        for module, lineno, col_offset in _iter_declared_lazy_module_entries(tree)
+        for module, lineno, col_offset in info.lazy_module_entries
         if module in broken
     ]
 
 
+# ---------------------------------------------------------------------------
+# Native lazy keyword diagnostics (LZY3xx)
+# ---------------------------------------------------------------------------
+
+
+def collect_lazy_imports_in_suppress_blocks(
+    info: ModuleInfo,
+) -> list[tuple[str, int, int]]:
+    """Return lazy imports declared inside ``suppress(ImportError)`` (LZY301)."""
+    return list(info.suppress_lazy_imports)
+
+
+def _unique_lazy_binding_packages(
+    info: ModuleInfo,
+    *,
+    include: Callable[[str], bool],
+) -> list[tuple[str, int, int]]:
+    result: list[tuple[str, int, int]] = []
+    seen: set[str] = set()
+    for binding in _lazy_imports(info):
+        package = binding.package
+        if package is None or package in seen or not include(package):
+            continue
+        result.append((package, binding.lineno, binding.col_offset))
+        seen.add(package)
+    return result
+
+
+def collect_redundant_lazy_declarations(
+    info: ModuleInfo,
+) -> list[tuple[str, int, int]]:
+    """Return ``lazy`` imports also named in ``__lazy_modules__`` (LZY302)."""
+    lazy_packages = info.lazy_packages
+    if not lazy_packages:
+        return []
+    return _unique_lazy_binding_packages(info, include=lazy_packages.__contains__)
+
+
+def collect_mixed_lazy_eager_imports(info: ModuleInfo) -> list[tuple[str, int, int]]:
+    """Return modules imported both eagerly and lazily (LZY303)."""
+    eager_packages = {
+        imp.package for imp in _eager_imports(info) if imp.package is not None
+    }
+    if not eager_packages:
+        return []
+    return _unique_lazy_binding_packages(info, include=eager_packages.__contains__)
+
+
+# ---------------------------------------------------------------------------
+# Non-lazy / recommendation analysis (LZY1xx)
+# ---------------------------------------------------------------------------
+
+
 def _compute_non_lazy_names(
-    bindings: list[ImportBinding],
-    runtime_names: set[str],
+    bindings: list[ImportInfo],
+    runtime_names: frozenset[str],
 ) -> list[str]:
     """Return bound names from ``bindings`` that appear in ``runtime_names``."""
     non_lazy: list[str] = []
@@ -413,24 +225,20 @@ def _compute_non_lazy_names(
     return non_lazy
 
 
-def collect_non_lazy_imports(tree: ast.AST) -> list[str]:
+def collect_non_lazy_imports(info: ModuleInfo) -> list[str]:
     """Return imported names that are used at top-level runtime."""
-    bindings = collect_top_level_import_bindings(tree)
-    runtime_names, _ = collect_top_level_runtime_data(tree)
-    return _compute_non_lazy_names(bindings, runtime_names)
+    return _compute_non_lazy_names(_eager_imports(info), info.runtime_names)
 
 
 def _is_non_lazy_binding(
-    binding: ImportBinding,
+    binding: ImportInfo,
     non_lazy_names: set[str],
-    runtime_attribute_paths: set[str],
+    runtime_attribute_paths: frozenset[str],
 ) -> bool:
     if binding.package is None or binding.bound_name not in non_lazy_names:
         return False
-
     if binding.package in runtime_attribute_paths:
         return True
-
     root = binding.package.split(".", maxsplit=1)[0]
     if binding.package == binding.bound_name:
         return True
@@ -466,25 +274,15 @@ class _RecommendationPolicy:
         )
 
 
-def _collect_recommended_lazy_bindings(
-    tree: ast.AST,
+def _collect_recommended_lazy_entries(
+    info: ModuleInfo,
     *,
-    excluded_packages: set[str] | None = None,
     always_imported: frozenset[str] = ALWAYS_IMPORTED_DEFAULT,
-) -> list[ImportBinding]:
-    """Return module-scope imports that should appear in ``__lazy_modules__``."""
-    if excluded_packages is None:
-        excluded_packages = set()
-
-    imports = collect_top_level_imports(tree)
-    bindings = collect_import_bindings(imports)
-    runtime_names, runtime_attribute_paths = collect_top_level_runtime_data(tree)
-    non_lazy_names = set(_compute_non_lazy_names(bindings, runtime_names))
-    guard_names = collect_type_checking_guard_names(tree)
-    side_effect_packages = collect_side_effect_only_import_packages(
-        tree, top_level_imports=imports
-    )
-    guarded_packages = collect_guarded_import_packages(tree)
+) -> list[tuple[str, int, int]]:
+    """Return ``(package, lineno, col_offset)`` recommendations in source order."""
+    bindings = _eager_imports(info)
+    guard_names = info.type_checking_guard_names
+    non_lazy_names = set(_compute_non_lazy_names(bindings, info.runtime_names))
     guard_packages: set[str] = {
         package
         for binding in bindings
@@ -495,26 +293,27 @@ def _collect_recommended_lazy_bindings(
         package
         for binding in bindings
         if (package := binding.package) is not None
-        if _is_non_lazy_binding(binding, non_lazy_names, runtime_attribute_paths)
+        if _is_non_lazy_binding(binding, non_lazy_names, info.runtime_attribute_paths)
     }
+    side_effect_packages = set(info.side_effect_only_packages)
     blocked_packages = (
         side_effect_packages
         | guard_packages
-        | guarded_packages
+        | set(info.guarded_packages)
         | non_lazy_packages
         | non_lazy_names
-        | guard_names
-        | always_imported
+        | set(guard_names)
+        | set(always_imported)
     )
     policy = _RecommendationPolicy(
-        excluded_packages=excluded_packages,
+        excluded_packages=set(info.enclosing_packages),
         blocked_packages=blocked_packages,
         side_effect_packages=side_effect_packages,
         guard_packages=guard_packages,
         non_lazy_packages=non_lazy_packages,
     )
 
-    recommended: list[ImportBinding] = []
+    recommended: list[tuple[str, int, int]] = []
     seen_packages: set[str] = set()
     for binding in bindings:
         package = binding.package
@@ -522,77 +321,62 @@ def _collect_recommended_lazy_bindings(
             continue
         if policy.should_skip(package, seen_packages=seen_packages):
             continue
-        recommended.append(binding)
+        recommended.append((package, binding.lineno, binding.col_offset))
         seen_packages.add(package)
 
         if "." in package and "{" not in package:
-            # Add all parent packages from root to immediate parent
+            # Add all parent packages from root to immediate parent.
             parts = package.split(".")
-            for i in range(1, len(parts)):
-                parent = ".".join(parts[:i])
+            for index in range(1, len(parts)):
+                parent = ".".join(parts[:index])
                 if policy.should_add_root(parent, seen_packages=seen_packages):
-                    recommended.append(
-                        ImportBinding(
-                            package=parent,
-                            bound_name=parent,
-                            lineno=binding.lineno,
-                            col_offset=binding.col_offset,
-                        )
-                    )
+                    recommended.append((parent, binding.lineno, binding.col_offset))
                     seen_packages.add(parent)
 
     return recommended
 
 
 def collect_recommended_lazy_modules(
-    tree: ast.AST,
-    filename: str | Path | None = None,
+    info: ModuleInfo,
     *,
     always_imported: frozenset[str] = ALWAYS_IMPORTED_DEFAULT,
 ) -> list[str]:
-    """Return a sorted ``__lazy_modules__`` recommendation for ``tree``."""
-    excluded_packages = containing_package_prefixes(filename)
-    recommended_modules: list[str] = []
-    for binding in _collect_recommended_lazy_bindings(
-        tree,
-        excluded_packages=excluded_packages,
-        always_imported=always_imported,
-    ):
-        package = binding.package
-        if package is None:
-            continue
-        recommended_modules.append(package)
-    return sorted(recommended_modules)
+    """Return a sorted ``__lazy_modules__`` recommendation for ``info``."""
+    return sorted(
+        package
+        for package, _lineno, _col in _collect_recommended_lazy_entries(
+            info, always_imported=always_imported
+        )
+    )
 
 
 def collect_missing_lazy_modules(
-    tree: ast.AST,
-    filename: str | Path | None = None,
+    info: ModuleInfo,
     *,
     always_imported: frozenset[str] = ALWAYS_IMPORTED_DEFAULT,
 ) -> list[tuple[str, int, int]]:
     """Return lazy-capable packages missing from ``__lazy_modules__``."""
-    if has_dynamic_lazy_modules(tree):
+    if info.has_dynamic_lazy_modules:
         return []
-    lazy_modules = collect_lazy_packages(tree)
-    excluded_packages = containing_package_prefixes(filename)
-    missing: list[tuple[str, int, int]] = []
-    for binding in _collect_recommended_lazy_bindings(
-        tree,
-        excluded_packages=excluded_packages,
-        always_imported=always_imported,
-    ):
-        package = binding.package
-        if package is None or package in lazy_modules:
-            continue
-        missing.append((package, binding.lineno, binding.col_offset))
-    return missing
+    lazy_modules = info.lazy_packages
+    return [
+        (package, lineno, col_offset)
+        for package, lineno, col_offset in _collect_recommended_lazy_entries(
+            info, always_imported=always_imported
+        )
+        if package not in lazy_modules
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Semantic diagnostics (LZY4xx)
+# ---------------------------------------------------------------------------
 
 
 def _check_binding_unnecessary(
-    binding: ImportBinding,
-    strict_names: set[str],
-    strict_attribute_paths: set[str],
+    binding: ImportInfo,
+    strict_names: frozenset[str],
+    strict_attribute_paths: frozenset[str],
     seen_packages: set[str],
     *,
     require_lazy_package: bool,
@@ -622,36 +406,25 @@ def _check_binding_unnecessary(
 
 
 def collect_unnecessary_lazy_imports(
-    tree: ast.AST,
+    info: ModuleInfo,
 ) -> list[tuple[str, int, int]]:
-    """Return lazy imports whose bound names are used at the strict module top level."""
-    lazy_packages = collect_lazy_packages(tree)
-    strict_names, strict_attribute_paths = collect_strictly_top_level_data(tree)
+    """Return lazy imports whose bound names are used at the strict top level."""
+    lazy_packages = info.lazy_packages
+    strict_names = info.strict_names
+    strict_attribute_paths = info.strict_attribute_paths
     unnecessary: list[tuple[str, int, int]] = []
     seen_packages: set[str] = set()
 
-    for binding in collect_top_level_import_bindings(tree):
+    candidates = [(binding, True) for binding in _eager_imports(info)] + [
+        (binding, False) for binding in _lazy_imports(info)
+    ]
+    for binding, require_lazy_package in candidates:
         if _check_binding_unnecessary(
             binding,
             strict_names,
             strict_attribute_paths,
             seen_packages,
-            require_lazy_package=True,
-            lazy_packages=lazy_packages,
-        ):
-            package = binding.package
-            if package is None:
-                continue
-            unnecessary.append((package, binding.lineno, binding.col_offset))
-            seen_packages.add(package)
-
-    for binding in collect_top_level_lazy_import_bindings(tree):
-        if _check_binding_unnecessary(
-            binding,
-            strict_names,
-            strict_attribute_paths,
-            seen_packages,
-            require_lazy_package=False,
+            require_lazy_package=require_lazy_package,
             lazy_packages=lazy_packages,
         ):
             package = binding.package
@@ -664,80 +437,25 @@ def collect_unnecessary_lazy_imports(
 
 
 def collect_enclosing_lazy_modules(
-    tree: ast.AST,
-    filename: str | Path | None = None,
+    info: ModuleInfo,
 ) -> list[tuple[str, int, int]]:
-    """Return lazily-declared enclosing package modules for ``filename``."""
-    excluded_packages = containing_package_prefixes(filename)
+    """Return lazily-declared enclosing package modules for the analysed file."""
     enclosing_lazy_modules: list[tuple[str, int, int]] = []
     seen_modules: set[str] = set()
 
-    for module, lineno, col_offset in _iter_declared_lazy_module_entries(tree):
-        if module not in excluded_packages:
-            continue
-        if module in seen_modules:
+    for module, lineno, col_offset in info.lazy_module_entries:
+        if module not in info.enclosing_packages or module in seen_modules:
             continue
         enclosing_lazy_modules.append((module, lineno, col_offset))
         seen_modules.add(module)
 
-    for binding in collect_top_level_lazy_import_bindings(tree):
+    for binding in _lazy_imports(info):
         package = binding.package
         if package is None:
             continue
-        if package not in excluded_packages:
-            continue
-        if package in seen_modules:
+        if package not in info.enclosing_packages or package in seen_modules:
             continue
         enclosing_lazy_modules.append((package, binding.lineno, binding.col_offset))
         seen_modules.add(package)
 
     return enclosing_lazy_modules
-
-
-def _collect_unique_lazy_binding_packages(
-    tree: ast.AST,
-    *,
-    include_package: Callable[[str], bool],
-) -> list[tuple[str, int, int]]:
-    result: list[tuple[str, int, int]] = []
-    seen: set[str] = set()
-    for binding in collect_top_level_lazy_import_bindings(tree):
-        package = binding.package
-        if package is None:
-            continue
-        if package in seen:
-            continue
-        if not include_package(package):
-            continue
-        result.append((package, binding.lineno, binding.col_offset))
-        seen.add(package)
-    return result
-
-
-def collect_redundant_lazy_declarations(tree: ast.AST) -> list[tuple[str, int, int]]:
-    """Return (module, lineno, col_offset) for ``lazy`` imports in __lazy_modules__."""
-    lazy_packages = collect_lazy_packages(tree)
-    if not lazy_packages:
-        return []
-    return _collect_unique_lazy_binding_packages(
-        tree,
-        include_package=lazy_packages.__contains__,
-    )
-
-
-def collect_mixed_lazy_eager_imports(tree: ast.AST) -> list[tuple[str, int, int]]:
-    """Return modules imported both eagerly and lazily.
-
-    Returns tuples of ``(module, lineno, col_offset)``.
-    """
-    eager_packages = {
-        binding.package
-        for binding in collect_top_level_import_bindings(tree)
-        if binding.package is not None
-    }
-    if not eager_packages:
-        return []
-    return _collect_unique_lazy_binding_packages(
-        tree,
-        include_package=eager_packages.__contains__,
-    )
