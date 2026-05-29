@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
 from ._always_imported import IMPORT_PRESETS
 from ._analysis import (
+    collect_broken_lazy_modules,
     collect_duplicate_lazy_modules,
     collect_enclosing_lazy_modules,
     collect_invalid_lazy_module_names,
@@ -62,6 +63,10 @@ ERROR_MESSAGES = {
     "LZY202": "module {module!r} is listed in __lazy_modules__ but never imported",
     "LZY203": "module {module!r} is duplicated in __lazy_modules__",
     "LZY205": "module {module!r} in __lazy_modules__ must be absolute",
+    "LZY206": (
+        "module {module!r} is listed in __lazy_modules__"
+        " but is broken under lazy imports"
+    ),
     "LZY301": "lazy import {module!r} inside suppress(ImportError) is misleading",
     "LZY302": (
         "module {module!r} is declared lazy by both 'lazy' keyword and __lazy_modules__"
@@ -204,6 +209,10 @@ class LazyImportChecker:
         for module, lineno, col_offset in collect_invalid_lazy_module_names(self.tree):
             message = ERROR_MESSAGES["LZY205"].format(module=module)
             errors.append((lineno, col_offset, f"LZY205 {message}", type(self)))
+
+        for module, lineno, col_offset in collect_broken_lazy_modules(self.tree):
+            message = ERROR_MESSAGES["LZY206"].format(module=module)
+            errors.append((lineno, col_offset, f"LZY206 {message}", type(self)))
 
         return errors
 

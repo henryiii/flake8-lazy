@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-from ._always_imported import ALWAYS_IMPORTED_DEFAULT
+from ._always_imported import ALWAYS_IMPORTED_DEFAULT, BROKEN
 from ._ast_helpers import (
     containing_package_prefixes,
     is_lazy_import_node,
@@ -44,6 +44,7 @@ from ._visitors import (
 )
 
 __all__ = [
+    "collect_broken_lazy_modules",
     "collect_declared_lazy_modules",
     "collect_duplicate_lazy_modules",
     "collect_enclosing_lazy_modules",
@@ -377,6 +378,23 @@ def collect_invalid_lazy_module_names(tree: ast.AST) -> list[tuple[str, int, int
         (module, lineno, col_offset)
         for module, lineno, col_offset in _iter_declared_lazy_module_entries(tree)
         if module.startswith(".")
+    ]
+
+
+def collect_broken_lazy_modules(
+    tree: ast.AST,
+    *,
+    broken: frozenset[str] = BROKEN,
+) -> list[tuple[str, int, int]]:
+    """Return modules listed in ``__lazy_modules__`` that are known broken.
+
+    These modules are known to be broken under lazy imports and should not be
+    declared in ``__lazy_modules__``.
+    """
+    return [
+        (module, lineno, col_offset)
+        for module, lineno, col_offset in _iter_declared_lazy_module_entries(tree)
+        if module in broken
     ]
 
 
