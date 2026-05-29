@@ -12,15 +12,16 @@ from flake8_lazy._always_imported import (
     ALWAYS_IMPORTED_MINIMAL,
 )
 from flake8_lazy._analysis import (
+    collect_broken_lazy_modules,
     collect_lazy_packages,
+    collect_non_lazy_imports,
     collect_recommended_lazy_modules,
     collect_side_effect_only_import_packages,
     collect_unnecessary_lazy_imports,
     has_dynamic_lazy_modules,
 )
 from flake8_lazy._visitors import (
-    collect_non_lazy_imports,
-    collect_strictly_top_level_names,
+    collect_strictly_top_level_data,
     collect_top_level_imports,
 )
 
@@ -910,6 +911,102 @@ __lazy_modules__ = [f"{__spec__.parent}.local"]
     assert lzy205_errors == []
 
 
+def test_checker_emits_lzy206_for_broken_module() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["concurrent.futures"]
+import concurrent.futures
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy206_errors = [e for e in errors if e[2].startswith("LZY206")]
+    assert lzy206_errors == [
+        (
+            2,
+            20,
+            "LZY206 module 'concurrent.futures' is listed in"
+            " __lazy_modules__ but is broken under lazy imports",
+            LazyImportChecker,
+        ),
+    ]
+
+
+def test_checker_emits_lzy206_for_parent_of_broken_module() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["concurrent"]
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy206_errors = [e for e in errors if e[2].startswith("LZY206")]
+    assert lzy206_errors == [
+        (
+            2,
+            20,
+            "LZY206 module 'concurrent' is listed in"
+            " __lazy_modules__ but is broken under lazy imports",
+            LazyImportChecker,
+        ),
+    ]
+
+
+def test_checker_does_not_emit_lzy206_for_non_broken_module() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["numpy"]
+import numpy
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy206_errors = [e for e in errors if e[2].startswith("LZY206")]
+    assert lzy206_errors == []
+
+
+def test_collect_broken_lazy_modules_basic() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["concurrent.futures", "numpy", "concurrent"]
+""",
+    )
+
+    result = collect_broken_lazy_modules(tree)
+    assert result == [
+        ("concurrent.futures", 2, 20),
+        ("concurrent", 2, 51),
+    ]
+
+
+def test_collect_broken_lazy_modules_empty() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["numpy", "pandas"]
+""",
+    )
+
+    result = collect_broken_lazy_modules(tree)
+    assert result == []
+
+
+def test_collect_broken_lazy_modules_custom_set() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["foo.bar", "numpy"]
+""",
+    )
+
+    result = collect_broken_lazy_modules(tree, broken=frozenset({"foo.bar"}))
+    assert result == [("foo.bar", 2, 20)]
+
+
 def test_collect_strictly_top_level_names_excludes_conditional_blocks() -> None:
     tree = ast.parse(
         """
@@ -923,7 +1020,7 @@ if condition:
 """,
     )
 
-    names = collect_strictly_top_level_names(tree)
+    names, _ = collect_strictly_top_level_data(tree)
 
     assert "re" in names
     assert "os" not in names
@@ -953,7 +1050,7 @@ except Exception:
 """,
     )
 
-    names = collect_strictly_top_level_names(tree)
+    names, _ = collect_strictly_top_level_data(tree)
 
     assert "a" not in names
     assert "b" not in names
