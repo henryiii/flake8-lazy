@@ -22,7 +22,7 @@ from flake8_lazy._options import (
     IMPORT_PRESET_CHOICES,
     parse_exclude_modules,
 )
-from flake8_lazy._rewriter import apply_lazy_modules
+from flake8_lazy._rewriter import DEFAULT_LINE_LENGTH, apply_lazy_modules
 from flake8_lazy.api import (
     _deduplicate_paths,
     _FileAnalysis,
@@ -103,6 +103,18 @@ def _parse_jobs(value: str) -> int:
     return jobs
 
 
+def _parse_line_length(value: str) -> int:
+    try:
+        length = int(value)
+    except ValueError:
+        msg = f"invalid int value: {value!r}"
+        raise argparse.ArgumentTypeError(msg) from None
+    if length < 0:
+        msg = "line-length must be a non-negative integer"
+        raise argparse.ArgumentTypeError(msg)
+    return length
+
+
 def main(argv: list[str] | None = None) -> None:
     """Run flake8-lazy checks directly from the command line."""
     help_epilog = "\n".join(
@@ -154,6 +166,16 @@ def main(argv: list[str] | None = None) -> None:
         metavar="MODE",
         help="rewrite files to use the recommended lazy declarations; "
         "MODE is list, set, native, or dynamic",
+    )
+    parser.add_argument(
+        "--line-length",
+        type=_parse_line_length,
+        default=DEFAULT_LINE_LENGTH,
+        dest="line_length",
+        metavar="N",
+        help="max length of a single-line __lazy_modules__ assignment before "
+        "--apply splits it across multiple lines, black/ruff style; "
+        f"0 disables splitting (default: {DEFAULT_LINE_LENGTH})",
     )
     parser.add_argument(
         "-j",
@@ -212,7 +234,12 @@ def _run_sequential(
                     effective_modules = sorted(
                         set(analysis.recommended_modules) | set(analysis.native_modules)
                     )
-                apply_lazy_modules(path, effective_modules, mode=namespace.apply)
+                apply_lazy_modules(
+                    path,
+                    effective_modules,
+                    mode=namespace.apply,
+                    line_length=namespace.line_length,
+                )
                 clear_parse_cache()
                 if namespace.apply == "native" and sys.version_info < (3, 15):
                     continue
@@ -284,6 +311,7 @@ def _apply_rewrites(
     apply_mode: str,
     import_preset: str,
     exclude_modules: frozenset[str],
+    line_length: int,
 ) -> tuple[dict[Path, _FileAnalysis], dict[Path, Exception], bool]:
     """Apply rewrites sequentially in argument order."""
     found_errors = False
@@ -304,7 +332,12 @@ def _apply_rewrites(
                     set(analysis.recommended_modules) | set(analysis.native_modules)
                 )
             try:
-                apply_lazy_modules(path, effective_modules, mode=apply_mode)
+                apply_lazy_modules(
+                    path,
+                    effective_modules,
+                    mode=apply_mode,
+                    line_length=line_length,
+                )
             except OSError as exc:
                 errors_by_path[path] = exc
                 found_errors = True
@@ -376,6 +409,7 @@ def _run_parallel(
             apply_mode=namespace.apply,
             import_preset=namespace.import_preset,
             exclude_modules=exclude_modules,
+            line_length=namespace.line_length,
         )
         if apply_errors:
             found_errors = True

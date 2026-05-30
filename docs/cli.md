@@ -72,6 +72,25 @@ This is the shortest way to declare every import as lazy without enumerating
 them. It is idempotent: running `--apply=dynamic` on a file that already has a
 dynamic `__lazy_modules__` is a no-op.
 
+### Line length
+
+For the `list` and `set` modes, if the single-line assignment would exceed the
+line length (`--line-length`, default `88`, matching black/ruff), it is written
+one module per line with a trailing comma, black/ruff style:
+
+```python
+__lazy_modules__ = [
+    "long_package_name_one",
+    "long_package_name_two",
+    "long_package_name_three",
+]
+```
+
+The trailing comma is a "magic trailing comma", so black and ruff keep the
+exploded form instead of collapsing it. This means `--apply` output does not
+need to be reformatted afterwards. Pass `--line-length=0` to disable splitting
+and always write the assignment on a single line.
+
 The command exits with status `1` if any diagnostics are produced.
 
 ## Configuring always-imported modules with `--lazy-import-preset`

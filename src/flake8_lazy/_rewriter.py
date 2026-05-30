@@ -26,6 +26,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+#: Maximum length of a single-line ``__lazy_modules__`` assignment before
+#: ``--apply`` splits it across multiple lines (black/ruff default).
+DEFAULT_LINE_LENGTH = 88
+
+
 def _format_module_literal(module: str) -> str:
     if module.startswith('f"{__spec__.parent') and module.endswith('"'):
         return module
@@ -50,21 +55,54 @@ def _detect_container_kind(node: ast.AST) -> str:
             return "list"
 
 
-def _lazy_modules_assignment_line(modules: list[str], container: str = "list") -> str:
-    joined_modules = ", ".join(_format_module_literal(module) for module in modules)
+def _single_line_assignment(literals: list[str], container: str) -> str:
+    joined = ", ".join(literals)
     match container:
         case "tuple":
             # Single-element tuples require a trailing comma.
-            inner = (
-                f"({joined_modules},)" if len(modules) == 1 else f"({joined_modules})"
-            )
+            inner = f"({joined},)" if len(literals) == 1 else f"({joined})"
         case "set":
-            inner = f"{{{joined_modules}}}"
+            inner = f"{{{joined}}}"
         case "frozenset":
-            inner = f"frozenset([{joined_modules}])"
+            inner = f"frozenset([{joined}])"
         case _:
-            inner = f"[{joined_modules}]"
+            inner = f"[{joined}]"
     return f"__lazy_modules__ = {inner}"
+
+
+def _multiline_assignment(literals: list[str], container: str, newline: str) -> str:
+    """Format the assignment black/ruff-style, one item per line + trailing comma.
+
+    The trailing comma is a "magic trailing comma": it makes black and ruff keep
+    the collection exploded across lines instead of collapsing it back.
+    """
+    items = "".join(f"    {literal},{newline}" for literal in literals)
+    match container:
+        case "tuple":
+            inner = f"({newline}{items})"
+        case "set":
+            inner = f"{{{newline}{items}}}"
+        case "frozenset":
+            nested = "".join(f"        {literal},{newline}" for literal in literals)
+            inner = f"frozenset({newline}    [{newline}{nested}    ]{newline})"
+        case _:
+            inner = f"[{newline}{items}]"
+    return f"__lazy_modules__ = {inner}"
+
+
+def _lazy_modules_assignment_line(
+    modules: list[str],
+    container: str = "list",
+    *,
+    line_length: int = DEFAULT_LINE_LENGTH,
+    newline: str = "\n",
+) -> str:
+    literals = [_format_module_literal(module) for module in modules]
+    single_line = _single_line_assignment(literals, container)
+    # A line length of 0 disables splitting: always write a single line.
+    if not line_length or len(single_line) <= line_length:
+        return single_line
+    return _multiline_assignment(literals, container, newline)
 
 
 def _is_lazy_modules_assignment(node: ast.stmt) -> bool:
@@ -176,6 +214,7 @@ def _rewrite_lazy_modules_source(
     modules: list[str],
     *,
     forced_container: str | None = None,
+    line_length: int = DEFAULT_LINE_LENGTH,
 ) -> str:
     tree = ast.parse(source)
     assert isinstance(tree, ast.Module)
@@ -204,7 +243,9 @@ def _rewrite_lazy_modules_source(
     if forced_container is not None:
         container = forced_container
 
-    assignment_line = _lazy_modules_assignment_line(modules, container)
+    assignment_line = _lazy_modules_assignment_line(
+        modules, container, line_length=line_length, newline=newline
+    )
 
     if assignments:
         first_assignment = assignments[0]
@@ -343,14 +384,20 @@ def _rewrite_dynamic_lazy_source(source: str) -> str:
     return "".join(lines)
 
 
-def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") -> None:
+def apply_lazy_modules(
+    path: Path,
+    modules: list[str],
+    *,
+    mode: str = "list",
+    line_length: int = DEFAULT_LINE_LENGTH,
+) -> None:
     raw_bytes = path.read_bytes()
     encoding, _ = tokenize.detect_encoding(io.BytesIO(raw_bytes).readline)
     source = raw_bytes.decode(encoding)
     match mode:
         case "set":
             updated_source = _rewrite_lazy_modules_source(
-                source, modules, forced_container="set"
+                source, modules, forced_container="set", line_length=line_length
             )
         case "native":
             updated_source = _rewrite_native_lazy_source(source, modules)
@@ -358,7 +405,7 @@ def apply_lazy_modules(path: Path, modules: list[str], *, mode: str = "list") ->
             updated_source = _rewrite_dynamic_lazy_source(source)
         case "list":
             updated_source = _rewrite_lazy_modules_source(
-                source, modules, forced_container="list"
+                source, modules, forced_container="list", line_length=line_length
             )
         case _:
             msg = f"unknown apply mode {mode!r}"

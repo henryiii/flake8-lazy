@@ -172,8 +172,11 @@ To rewrite files in place with the recommended declaration, use `--apply`:
 flake8-lazy --apply=list path/to/file.py another_file.py
 ```
 
-Available modes: `list`, `set`, `native` (3.15+ syntax), `dynamic`. The command
-exits with status code `1` if any error is found.
+Available modes: `list`, `set`, `native` (3.15+ syntax), `dynamic`. Long `list`
+and `set` assignments are split one module per line with a trailing comma
+(black/ruff style) when they exceed `--line-length` (default `88`), so the
+output needs no reformatting. The command exits with status code `1` if any
+error is found.
 
 ## Local development
 
