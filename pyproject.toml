@@ -5,7 +5,7 @@ build-backend = "uv_build"
 
 [project]
 name = "flake8-lazy"
-version = "0.7.1"
+version = "0.8.0"
 authors = [
   { name = "Henry Schreiner", email = "henryschreineriii@gmail.com" },
 ]
@@ -149,6 +149,7 @@ messages_control.disable = [
 [tool.check-sdist]
 git-only = [
   ".gitignore",
+  ".pre-commit-hooks.yaml",
   ".readthedocs.yaml",
   "AGENTS.md",
   "docs/*",

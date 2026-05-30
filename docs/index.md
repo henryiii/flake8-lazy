@@ -36,6 +36,30 @@ flake8 your_package
 
 The plugin is auto-discovered by flake8 via entry points.
 
+## Run through pre-commit
+
+flake8-lazy ships a [pre-commit](https://pre-commit.com) hook, so you can run
+the standalone checker without installing it into your environment. Add it to
+your `.pre-commit-config.yaml`:
+
+```yaml
+- repo: https://github.com/henryiii/flake8-lazy
+  rev: v0.8.0
+  hooks:
+    - id: flake8-lazy
+```
+
+By default the hook only reports diagnostics. To have it rewrite files in place,
+pass `--apply`:
+
+```yaml
+- repo: https://github.com/henryiii/flake8-lazy
+  rev: v0.8.0
+  hooks:
+    - id: flake8-lazy
+      args: [--apply=list]
+```
+
 ## Next steps
 
 - [Rule reference](rules.md) — all LZY error codes
