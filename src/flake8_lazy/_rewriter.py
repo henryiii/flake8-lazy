@@ -99,7 +99,8 @@ def _lazy_modules_assignment_line(
 ) -> str:
     literals = [_format_module_literal(module) for module in modules]
     single_line = _single_line_assignment(literals, container)
-    if len(single_line) <= line_length:
+    # A line length of 0 disables splitting: always write a single line.
+    if not line_length or len(single_line) <= line_length:
         return single_line
     return _multiline_assignment(literals, container, newline)
 

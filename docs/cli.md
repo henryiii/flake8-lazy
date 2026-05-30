@@ -88,7 +88,8 @@ __lazy_modules__ = [
 
 The trailing comma is a "magic trailing comma", so black and ruff keep the
 exploded form instead of collapsing it. This means `--apply` output does not
-need to be reformatted afterwards.
+need to be reformatted afterwards. Pass `--line-length=0` to disable splitting
+and always write the assignment on a single line.
 
 The command exits with status `1` if any diagnostics are produced.
 

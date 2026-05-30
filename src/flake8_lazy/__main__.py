@@ -109,8 +109,8 @@ def _parse_line_length(value: str) -> int:
     except ValueError:
         msg = f"invalid int value: {value!r}"
         raise argparse.ArgumentTypeError(msg) from None
-    if length <= 0:
-        msg = "line-length must be a positive integer"
+    if length < 0:
+        msg = "line-length must be a non-negative integer"
         raise argparse.ArgumentTypeError(msg)
     return length
 
@@ -174,8 +174,8 @@ def main(argv: list[str] | None = None) -> None:
         dest="line_length",
         metavar="N",
         help="max length of a single-line __lazy_modules__ assignment before "
-        "--apply splits it across multiple lines, black/ruff style "
-        f"(default: {DEFAULT_LINE_LENGTH})",
+        "--apply splits it across multiple lines, black/ruff style; "
+        f"0 disables splitting (default: {DEFAULT_LINE_LENGTH})",
     )
     parser.add_argument(
         "-j",

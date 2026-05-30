@@ -471,6 +471,25 @@ def test_apply_line_length_option_controls_split(
     assert "__lazy_modules__ = [\n" in path.read_text(encoding="utf-8")
 
 
+def test_apply_line_length_zero_disables_split(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    imports = "".join(f"import long_package_name_{i}\n" for i in range(5))
+    path.write_text(
+        f"from __future__ import annotations\n\n{imports}", encoding="utf-8"
+    )
+
+    # A line length of 0 disables splitting, keeping the old single-line output.
+    _run_main_and_assert_no_output(
+        ["--apply=list", "--line-length=0", str(path)], capsys
+    )
+    text = path.read_text(encoding="utf-8")
+    assert "__lazy_modules__ = [\n" not in text
+    assert '"long_package_name_0", "long_package_name_1"' in text
+
+
 def test_apply_invalid_line_length_errors(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -479,8 +498,8 @@ def test_apply_invalid_line_length_errors(
     path.write_text("import requests\n", encoding="utf-8")
 
     with pytest.raises(SystemExit):
-        main(["--apply=list", "--line-length=0", str(path)])
-    assert "line-length must be a positive integer" in capsys.readouterr().err
+        main(["--apply=list", "--line-length=-1", str(path)])
+    assert "line-length must be a non-negative integer" in capsys.readouterr().err
 
 
 def test_apply_lazy_modules_writes_raw_newlines(
