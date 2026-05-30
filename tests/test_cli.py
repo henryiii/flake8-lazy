@@ -422,6 +422,67 @@ def test_main_apply_inserts_blank_line_after_future_annotations_import_when_miss
     )
 
 
+def test_apply_splits_long_assignment_multiline(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    imports = "".join(f"import long_package_name_{i}\n" for i in range(5))
+    path.write_text(
+        f"from __future__ import annotations\n\n{imports}", encoding="utf-8"
+    )
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    text = path.read_text(encoding="utf-8")
+    assert "__lazy_modules__ = [\n" in text
+    assert '    "long_package_name_0",\n' in text
+    # Magic trailing comma on the final element keeps black/ruff from collapsing.
+    assert '    "long_package_name_4",\n]\n' in text
+
+
+def test_apply_keeps_short_assignment_single_line(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from __future__ import annotations\n\nimport requests\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    assert '__lazy_modules__ = ["requests"]\n' in path.read_text(encoding="utf-8")
+
+
+def test_apply_line_length_option_controls_split(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    imports = "".join(f"import pkg_{i}\n" for i in range(4))
+    path.write_text(
+        f"from __future__ import annotations\n\n{imports}", encoding="utf-8"
+    )
+
+    # A tiny line-length forces every assignment to be split.
+    _run_main_and_assert_no_output(
+        ["--apply=list", "--line-length=20", str(path)], capsys
+    )
+    assert "__lazy_modules__ = [\n" in path.read_text(encoding="utf-8")
+
+
+def test_apply_invalid_line_length_errors(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import requests\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit):
+        main(["--apply=list", "--line-length=0", str(path)])
+    assert "line-length must be a positive integer" in capsys.readouterr().err
+
+
 def test_apply_lazy_modules_writes_raw_newlines(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
