@@ -34,6 +34,10 @@ Try `--format=lazy-modules` to get copy-paste lines or even `--apply=list` to
 have the tool update your lazy modules automatically! For maximum laziness, try
 `--apply=dynamic`.
 
+The standalone runner also reads defaults from a `[tool.flake8-lazy.standalone]`
+table in your `pyproject.toml`; see the
+[CLI docs](https://flake8-lazy.readthedocs.io/en/latest/cli/) for details.
+
 ## Install
 
 ```bash

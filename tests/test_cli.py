@@ -9,6 +9,11 @@ import pytest
 from flake8_lazy.__main__ import main
 from flake8_lazy._analysis import collect_recommended_lazy_modules
 from flake8_lazy._collect import build_module_info
+from flake8_lazy._config import (
+    ConfigError,
+    find_config_file,
+    load_standalone_defaults,
+)
 from flake8_lazy._rewriter import apply_lazy_modules
 from flake8_lazy.api import (
     _build_noqa_map,
@@ -1154,3 +1159,198 @@ def test_main_exclude_modules_comma_separated(
     _run_main_and_assert_no_output(
         ["--lazy-exclude-modules=numpy,pandas", str(path)], capsys
     )
+
+
+# ---------------------------------------------------------------------------
+# config file ([tool.flake8-lazy.standalone]) tests
+# ---------------------------------------------------------------------------
+
+
+def _write_config(directory: Path, body: str) -> Path:
+    config = directory / "pyproject.toml"
+    config.write_text(f"[tool.flake8-lazy.standalone]\n{body}", encoding="utf-8")
+    return config
+
+
+def test_find_config_file_walks_up(tmp_path: Path) -> None:
+    config = tmp_path / "pyproject.toml"
+    config.write_text("", encoding="utf-8")
+    nested = tmp_path / "a" / "b"
+    nested.mkdir(parents=True)
+
+    assert find_config_file(nested) == config
+
+
+def test_load_standalone_defaults_empty_without_table(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.other]\nfoo = "bar"\n', encoding="utf-8"
+    )
+
+    assert load_standalone_defaults(tmp_path) == {}
+
+
+def test_load_standalone_defaults_normalizes_keys(tmp_path: Path) -> None:
+    _write_config(
+        tmp_path,
+        'format = "lazy-modules"\n'
+        'lazy-import-preset = "minimal"\n'
+        'lazy-exclude-modules = ["numpy", "pandas"]\n'
+        'apply = "list"\n'
+        "line-length = 100\n"
+        "jobs = 4\n",
+    )
+
+    assert load_standalone_defaults(tmp_path) == {
+        "format": "lazy-modules",
+        "import_preset": "minimal",
+        "exclude_modules": "numpy,pandas",
+        "apply": "list",
+        "line_length": 100,
+        "jobs": 4,
+    }
+
+
+def test_load_standalone_defaults_accepts_underscore_keys(tmp_path: Path) -> None:
+    _write_config(tmp_path, 'lazy_exclude_modules = "numpy"\nline_length = 0\n')
+
+    assert load_standalone_defaults(tmp_path) == {
+        "exclude_modules": "numpy",
+        "line_length": 0,
+    }
+
+
+def test_load_standalone_defaults_jobs_auto(tmp_path: Path) -> None:
+    _write_config(tmp_path, 'jobs = "auto"\n')
+
+    assert load_standalone_defaults(tmp_path) == {"jobs": 0}
+
+
+def test_load_standalone_defaults_string_exclude_modules(tmp_path: Path) -> None:
+    _write_config(tmp_path, 'lazy-exclude-modules = "numpy,pandas"\n')
+
+    assert load_standalone_defaults(tmp_path) == {"exclude_modules": "numpy,pandas"}
+
+
+def test_load_standalone_defaults_rejects_unknown_key(tmp_path: Path) -> None:
+    _write_config(tmp_path, 'unknown = "x"\n')
+
+    with pytest.raises(ConfigError, match="unknown key 'unknown'"):
+        load_standalone_defaults(tmp_path)
+
+
+def test_load_standalone_defaults_rejects_bad_choice(tmp_path: Path) -> None:
+    _write_config(tmp_path, 'format = "nonsense"\n')
+
+    with pytest.raises(ConfigError, match="'format' must be one of"):
+        load_standalone_defaults(tmp_path)
+
+
+def test_load_standalone_defaults_rejects_negative_line_length(tmp_path: Path) -> None:
+    _write_config(tmp_path, "line-length = -1\n")
+
+    with pytest.raises(ConfigError, match="non-negative integer"):
+        load_standalone_defaults(tmp_path)
+
+
+def test_load_standalone_defaults_rejects_bool_jobs(tmp_path: Path) -> None:
+    _write_config(tmp_path, "jobs = true\n")
+
+    with pytest.raises(ConfigError, match="positive integer or 'auto'"):
+        load_standalone_defaults(tmp_path)
+
+
+def test_load_standalone_defaults_rejects_malformed_toml(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("not = valid = toml", encoding="utf-8")
+
+    with pytest.raises(ConfigError, match="failed to parse"):
+        load_standalone_defaults(tmp_path)
+
+
+def test_main_reads_exclude_modules_from_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_config(tmp_path, 'lazy-exclude-modules = ["numpy"]\n')
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    _run_main_and_assert_no_output([str(path)], capsys)
+
+
+def test_main_reads_import_preset_from_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_config(tmp_path, 'lazy-import-preset = "none"\n')
+    path = tmp_path / "mod.py"
+    path.write_text("import sys\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit, match="1"):
+        main([str(path)])
+
+
+def test_main_cli_overrides_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Config would flag sys (preset none), but the CLI flag wins.
+    _write_config(tmp_path, 'lazy-import-preset = "none"\n')
+    path = tmp_path / "mod.py"
+    path.write_text("import sys\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    _run_main_and_assert_no_output(["--lazy-import-preset=default", str(path)], capsys)
+
+
+def test_main_reads_format_from_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_config(tmp_path, 'format = "lazy-modules"\n')
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit, match="1"):
+        main([str(path)])
+
+    captured = capsys.readouterr()
+    assert captured.out == f'{path}: __lazy_modules__ = ["numpy"]\n'
+
+
+def test_main_reads_apply_from_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_config(tmp_path, 'apply = "list"\n')
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    _run_main_and_assert_no_output([str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ["numpy"]\n\nimport numpy\n'
+    )
+
+
+def test_main_invalid_config_exits_two(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_config(tmp_path, 'unknown = "x"\n')
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as excinfo:
+        main([str(path)])
+
+    assert excinfo.value.code == 2
+    assert "unknown key 'unknown'" in capsys.readouterr().err
