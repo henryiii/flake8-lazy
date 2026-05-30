@@ -93,11 +93,11 @@ and always write the assignment on a single line.
 
 The command exits with status `1` if any diagnostics are produced.
 
-## Use with pre-commit
+## Use with pre-commit / prek
 
 The standalone runner is also available as a
-[pre-commit](https://pre-commit.com) hook, which installs and runs it for you.
-Add it to your `.pre-commit-config.yaml`:
+[pre-commit](https://pre-commit.com) / [prek](https://prek.j178.dev) hook, which
+installs and runs it for you. Add it to your `.pre-commit-config.yaml`:
 
 ```yaml
 - repo: https://github.com/henryiii/flake8-lazy
