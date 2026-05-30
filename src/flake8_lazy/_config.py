@@ -80,17 +80,16 @@ def load_standalone_defaults(start: Path) -> dict[str, object]:
 def _normalize(table: dict[str, object]) -> dict[str, object]:
     defaults: dict[str, object] = {}
     for key, value in table.items():
-        norm = key.replace("-", "_")
-        match norm:
+        match key:
             case "format":
                 defaults["format"] = _choice(key, value, FORMAT_CHOICES)
-            case "lazy_import_preset":
+            case "lazy-import-preset":
                 defaults["import_preset"] = _choice(key, value, IMPORT_PRESET_CHOICES)
-            case "lazy_exclude_modules":
+            case "lazy-exclude-modules":
                 defaults["exclude_modules"] = _module_list(key, value)
             case "apply":
                 defaults["apply"] = _choice(key, value, APPLY_CHOICES)
-            case "line_length":
+            case "line-length":
                 defaults["line_length"] = _non_negative_int(key, value)
             case "jobs":
                 defaults["jobs"] = _jobs(key, value)

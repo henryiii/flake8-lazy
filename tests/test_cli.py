@@ -1210,13 +1210,12 @@ def test_load_standalone_defaults_normalizes_keys(tmp_path: Path) -> None:
     }
 
 
-def test_load_standalone_defaults_accepts_underscore_keys(tmp_path: Path) -> None:
-    _write_config(tmp_path, 'lazy_exclude_modules = "numpy"\nline_length = 0\n')
+def test_load_standalone_defaults_rejects_underscore_keys(tmp_path: Path) -> None:
+    # Only the exact dash-form CLI flag names are accepted.
+    _write_config(tmp_path, 'lazy_exclude_modules = "numpy"\n')
 
-    assert load_standalone_defaults(tmp_path) == {
-        "exclude_modules": "numpy",
-        "line_length": 0,
-    }
+    with pytest.raises(ConfigError, match="unknown key 'lazy_exclude_modules'"):
+        load_standalone_defaults(tmp_path)
 
 
 def test_load_standalone_defaults_jobs_auto(tmp_path: Path) -> None:

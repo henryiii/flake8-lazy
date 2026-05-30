@@ -48,11 +48,11 @@ line-length = 100
 jobs = 4
 ```
 
-The keys mirror the command-line flags (underscore variants such as
-`lazy_exclude_modules` are also accepted). `lazy-exclude-modules` accepts either
-a list of strings (shown above) or a single comma-separated string, and `jobs`
-accepts a positive integer or `"auto"`. Unknown keys or invalid values cause the
-runner to exit with status `2`.
+The keys must match the command-line flag names exactly (e.g.
+`lazy-import-preset`, not `lazy_import_preset`). `lazy-exclude-modules` accepts
+either a list of strings (shown above) or a single comma-separated string, and
+`jobs` accepts a positive integer or `"auto"`. Unknown keys or invalid values
+cause the runner to exit with status `2`.
 
 This table only configures the standalone runner. When running under flake8, use
 the flake8 options described below instead.
