@@ -93,6 +93,35 @@ and always write the assignment on a single line.
 
 The command exits with status `1` if any diagnostics are produced.
 
+## Use with pre-commit / prek
+
+The standalone runner is also available as a
+[pre-commit](https://pre-commit.com) / [prek](https://prek.j178.dev) hook, which
+installs and runs it for you. Add it to your `.pre-commit-config.yaml`:
+
+```yaml
+- repo: https://github.com/henryiii/flake8-lazy
+  rev: v0.8.0
+  hooks:
+    - id: flake8-lazy
+```
+
+The hook runs on staged Python files and reports diagnostics by default. Any of
+the CLI options above can be passed through `args`. For example, to auto-apply
+the recommended `__lazy_modules__` declaration on commit:
+
+```yaml
+- repo: https://github.com/henryiii/flake8-lazy
+  rev: v0.8.0
+  hooks:
+    - id: flake8-lazy
+      args: [--apply=list]
+```
+
+When `--apply` rewrites a file, pre-commit reports the hook as failed and leaves
+the changes in your working tree for review, just like other auto-fixing hooks
+(black, ruff, etc.). Re-stage the files and re-run the commit to accept them.
+
 ## Configuring always-imported modules with `--lazy-import-preset`
 
 Some modules are always loaded before any user code runs (e.g. `sys`, `time`).

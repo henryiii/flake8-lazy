@@ -45,6 +45,23 @@ e.g. `dev` or `lint`.
 
 flake8 will automatically discover the plugin.
 
+## Pre-commit
+
+flake8-lazy ships a [pre-commit](https://pre-commit.com) /
+[prek](https://pre-commit.com) hook. Add it to your `.pre-commit-config.yaml`:
+
+```yaml
+- repo: https://github.com/henryiii/flake8-lazy
+  rev: v0.8.0
+  hooks:
+    - id: flake8-lazy
+```
+
+The hook reports diagnostics by default; add `args: [--apply=list]` (or another
+`--apply` mode) to have it rewrite files in place on commit. _This is the
+built-in runner_, use flake8's pre-commit integration if you want flake8 to run
+it.
+
 See the [full documentation](https://flake8-lazy.readthedocs.io/) for details,
 examples, and the standalone CLI runner.
 
