@@ -119,8 +119,8 @@ the recommended `__lazy_modules__` declaration on commit:
 ```
 
 When `--apply` rewrites a file, pre-commit reports the hook as failed and leaves
-the changes staged for review, just like other auto-fixing hooks (black, ruff,
-etc.). Re-run the commit to accept them.
+the changes in your working tree for review, just like other auto-fixing hooks
+(black, ruff, etc.). Re-stage the files and re-run the commit to accept them.
 
 ## Configuring always-imported modules with `--lazy-import-preset`
 
