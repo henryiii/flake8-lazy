@@ -99,6 +99,13 @@ def selfcheck(session: nox.Session) -> None:
 
 
 @nox.session(default=False)
+def bump(session: nox.Session) -> None:
+    """Bump the version."""
+    session.install("bump-my-version")
+    session.run("bump-my-version", *session.posargs)
+
+
+@nox.session(default=False)
 def build(session: nox.Session) -> None:
     """Build an SDist and wheel."""
     build_path = DIR.joinpath("build")

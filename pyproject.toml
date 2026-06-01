@@ -153,6 +153,25 @@ messages_control.disable = [
   "wrong-import-position",
 ]
 
+[tool.bumpversion]
+current_version = "0.8.0"
+
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "rev: v{current_version}"
+replace = "rev: v{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "docs/cli.md"
+search = "rev: v{current_version}"
+replace = "rev: v{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "docs/index.md"
+search = "rev: v{current_version}"
+replace = "rev: v{new_version}"
+
+
 [tool.check-sdist]
 git-only = [
   ".gitignore",
