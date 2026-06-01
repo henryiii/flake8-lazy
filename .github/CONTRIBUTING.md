@@ -93,5 +93,7 @@ nox -s docs
 Bump the version:
 
 ```bash
-uv version <new_version>
+nox -s bump -- bump minor
+# OR
+nox -s bump -- bump --new-version <new-version>
 ```
