@@ -1218,16 +1218,22 @@ def test_load_standalone_defaults_rejects_underscore_keys(tmp_path: Path) -> Non
         load_standalone_defaults(tmp_path)
 
 
-def test_load_standalone_defaults_jobs_auto(tmp_path: Path) -> None:
-    _write_config(tmp_path, 'jobs = "auto"\n')
-
-    assert load_standalone_defaults(tmp_path) == {"jobs": 0}
-
-
-def test_load_standalone_defaults_string_exclude_modules(tmp_path: Path) -> None:
+def test_load_standalone_defaults_rejects_string_exclude_modules(
+    tmp_path: Path,
+) -> None:
+    # Only a TOML array is accepted; comma-separated strings are not.
     _write_config(tmp_path, 'lazy-exclude-modules = "numpy,pandas"\n')
 
-    assert load_standalone_defaults(tmp_path) == {"exclude_modules": "numpy,pandas"}
+    with pytest.raises(ConfigError, match="must be a list of strings"):
+        load_standalone_defaults(tmp_path)
+
+
+def test_load_standalone_defaults_rejects_string_jobs(tmp_path: Path) -> None:
+    # "auto" is no longer accepted; omit the key for automatic parallelism.
+    _write_config(tmp_path, 'jobs = "auto"\n')
+
+    with pytest.raises(ConfigError, match="must be a positive integer"):
+        load_standalone_defaults(tmp_path)
 
 
 def test_load_standalone_defaults_rejects_unknown_key(tmp_path: Path) -> None:
@@ -1254,7 +1260,7 @@ def test_load_standalone_defaults_rejects_negative_line_length(tmp_path: Path) -
 def test_load_standalone_defaults_rejects_bool_jobs(tmp_path: Path) -> None:
     _write_config(tmp_path, "jobs = true\n")
 
-    with pytest.raises(ConfigError, match="positive integer or 'auto'"):
+    with pytest.raises(ConfigError, match="must be a positive integer"):
         load_standalone_defaults(tmp_path)
 
 

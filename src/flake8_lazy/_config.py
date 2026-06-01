@@ -112,11 +112,9 @@ def _choice(key: str, value: object, choices: tuple[str, ...]) -> str:
 
 
 def _module_list(key: str, value: object) -> str:
-    if isinstance(value, str):
-        return value
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         return ",".join(value)
-    msg = f"{key!r} must be a string or a list of strings"
+    msg = f"{key!r} must be a list of strings"
     raise ConfigError(msg)
 
 
@@ -128,11 +126,10 @@ def _non_negative_int(key: str, value: object) -> int:
 
 
 def _jobs(key: str, value: object) -> int:
-    if isinstance(value, str) and value.lower() == "auto":
-        return 0
     if _is_int(value) and value > 0:
         return value
-    msg = f"{key!r} must be a positive integer or 'auto'"
+    # Omit the key entirely for automatic parallelism.
+    msg = f"{key!r} must be a positive integer"
     raise ConfigError(msg)
 
 
