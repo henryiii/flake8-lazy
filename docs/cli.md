@@ -32,6 +32,31 @@ This prints the sorted `__lazy_modules__` value the checker recommends for each
 file when it differs from the file's current static `__lazy_modules__`
 declaration, while keeping the same exit-status behavior.
 
+## Configuration file
+
+The standalone runner reads defaults from a `[tool.flake8-lazy.standalone]`
+table in the nearest `pyproject.toml`, discovered by walking up from the current
+working directory. Command-line flags always override the file:
+
+```toml
+[tool.flake8-lazy.standalone]
+format = "lazy-modules"
+lazy-import-preset = "minimal"
+lazy-exclude-modules = ["numpy", "pandas"]
+apply = "list"
+line-length = 100
+jobs = 4
+```
+
+The keys must match the command-line flag names exactly (e.g.
+`lazy-import-preset`, not `lazy_import_preset`). `lazy-exclude-modules` must be
+a list of strings, and `jobs` must be a positive integer (omit it for automatic
+parallelism). Unknown keys or invalid values cause the runner to exit with
+status `2`.
+
+This table only configures the standalone runner. When running under flake8, use
+the flake8 options described below instead.
+
 ## Auto-apply with `--apply`
 
 To rewrite files in place with the recommended declaration, use `--apply=list`:

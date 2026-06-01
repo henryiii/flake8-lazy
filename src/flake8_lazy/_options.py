@@ -5,6 +5,9 @@ from __future__ import annotations
 DEFAULT_IMPORT_PRESET = "default"
 IMPORT_PRESET_CHOICES = ("none", "minimal", "default")
 
+FORMAT_CHOICES = ("flake8", "lazy-modules")
+APPLY_CHOICES = ("list", "set", "native", "dynamic")
+
 DEFAULT_EXCLUDE_MODULES = ""
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "argparse",
+    "flake8_lazy._config",
     "flake8_lazy._options",
     "flake8_lazy._rewriter",
     "flake8_lazy.api",
@@ -16,9 +17,12 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from flake8_lazy import __version__
+from flake8_lazy._config import ConfigError, load_standalone_defaults
 from flake8_lazy._options import (
+    APPLY_CHOICES,
     DEFAULT_EXCLUDE_MODULES,
     DEFAULT_IMPORT_PRESET,
+    FORMAT_CHOICES,
     IMPORT_PRESET_CHOICES,
     parse_exclude_modules,
 )
@@ -134,7 +138,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--format",
-        choices=("flake8", "lazy-modules"),
+        choices=FORMAT_CHOICES,
         default="flake8",
         help="output style for results",
     )
@@ -161,7 +165,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--apply",
-        choices=("list", "set", "native", "dynamic"),
+        choices=APPLY_CHOICES,
         default=None,
         metavar="MODE",
         help="rewrite files to use the recommended lazy declarations; "
@@ -185,6 +189,12 @@ def main(argv: list[str] | None = None) -> None:
         metavar="N",
         help="number of parallel processes (default: auto)",
     )
+    try:
+        config_defaults = load_standalone_defaults(Path.cwd())
+    except ConfigError as exc:
+        parser.error(str(exc))
+    parser.set_defaults(**config_defaults)
+
     namespace = parser.parse_args(list(argv) if argv is not None else None)
     exclude_modules = parse_exclude_modules(namespace.exclude_modules)
 
