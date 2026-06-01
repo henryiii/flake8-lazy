@@ -44,7 +44,7 @@ your `.pre-commit-config.yaml`:
 
 ```yaml
 - repo: https://github.com/henryiii/flake8-lazy
-  rev: v0.8.0
+  rev: v0.8.1
   hooks:
     - id: flake8-lazy
 ```
@@ -54,7 +54,7 @@ pass `--apply`:
 
 ```yaml
 - repo: https://github.com/henryiii/flake8-lazy
-  rev: v0.8.0
+  rev: v0.8.1
   hooks:
     - id: flake8-lazy
       args: [--apply=list]
