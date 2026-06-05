@@ -196,8 +196,11 @@ flake8-lazy --apply=list path/to/file.py another_file.py
 Available modes: `list`, `set`, `native` (3.15+ syntax), `dynamic`. Long `list`
 and `set` assignments are split one module per line with a trailing comma
 (black/ruff style) when they exceed `--line-length` (default `88`), so the
-output needs no reformatting. The command exits with status code `1` if any
-error is found.
+output needs no reformatting. When an `__lazy_modules__` assignment already
+exists, its quote style (single or double) is preserved, so `--apply` stays a
+no-op once the module set is correct and does not fight a single-quote
+formatter; new assignments use double quotes. The command exits with status code
+`1` if any error is found.
 
 ## Local development
 

@@ -31,10 +31,12 @@ if TYPE_CHECKING:
 DEFAULT_LINE_LENGTH = 88
 
 
-def _format_module_literal(module: str) -> str:
+def _format_module_literal(module: str, quote: str = '"') -> str:
     if module.startswith('f"{__spec__.parent') and module.endswith('"'):
-        return module
-    return f'"{module}"'
+        # ``module`` carries the f-string template verbatim; re-quote it so it
+        # matches the surrounding assignment instead of forcing double quotes.
+        return f"f{quote}{module[2:-1]}{quote}"
+    return f"{quote}{module}{quote}"
 
 
 _CONTAINER_KINDS: frozenset[str] = frozenset({"list", "tuple", "set", "frozenset"})
@@ -96,8 +98,9 @@ def _lazy_modules_assignment_line(
     *,
     line_length: int = DEFAULT_LINE_LENGTH,
     newline: str = "\n",
+    quote: str = '"',
 ) -> str:
-    literals = [_format_module_literal(module) for module in modules]
+    literals = [_format_module_literal(module, quote) for module in modules]
     single_line = _single_line_assignment(literals, container)
     # A line length of 0 disables splitting: always write a single line.
     if not line_length or len(single_line) <= line_length:
@@ -235,16 +238,20 @@ def _rewrite_lazy_modules_source(
         return "".join(lines)
 
     container = "list"
+    quote = '"'
     if assignments:
         value = lazy_modules_assignment_value(assignments[0])
         if value is not None:
             container = _detect_container_kind(value)
+            # Keep the project's quote style instead of forcing double quotes.
+            segment = ast.get_source_segment(source, value) or ""
+            quote = next((char for char in segment if char in "'\""), '"')
 
     if forced_container is not None:
         container = forced_container
 
     assignment_line = _lazy_modules_assignment_line(
-        modules, container, line_length=line_length, newline=newline
+        modules, container, line_length=line_length, newline=newline, quote=quote
     )
 
     if assignments:
