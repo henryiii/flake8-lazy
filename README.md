@@ -52,7 +52,7 @@ flake8 will automatically discover the plugin.
 ## Pre-commit
 
 flake8-lazy ships a [pre-commit](https://pre-commit.com) /
-[prek](https://pre-commit.com) hook. Add it to your `.pre-commit-config.yaml`:
+[prek](https://prek.j178.dev) hook. Add it to your `.pre-commit-config.yaml`:
 
 ```yaml
 - repo: https://github.com/henryiii/flake8-lazy
