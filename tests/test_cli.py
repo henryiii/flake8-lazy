@@ -368,6 +368,34 @@ def test_main_apply_replaces_existing_lazy_modules(
     )
 
 
+def test_main_apply_preserves_single_quote_style(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "__lazy_modules__ = ['unused']\nimport numpy\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        "__lazy_modules__ = ['numpy']\nimport numpy\n"
+    )
+
+
+def test_main_apply_leaves_correct_single_quoted_file_unchanged(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    content = "__lazy_modules__ = ['numpy']\nimport numpy\n"
+    path.write_text(content, encoding="utf-8")
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == content
+
+
 def test_main_apply_inserts_after_comments_and_docstring(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
