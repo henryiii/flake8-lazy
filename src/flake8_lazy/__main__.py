@@ -33,7 +33,6 @@ from flake8_lazy.api import (
     _deduplicate_paths,
     _FileAnalysis,
     _process_single_file,
-    clear_parse_cache,
 )
 from flake8_lazy.checker import ERROR_MESSAGES
 
@@ -247,7 +246,6 @@ def _run_sequential(
                     mode=namespace.apply,
                     line_length=namespace.line_length,
                 )
-                clear_parse_cache()
                 if namespace.apply == "native" and sys.version_info < (3, 15):
                     continue
                 analysis = _analyze_file(
@@ -349,7 +347,6 @@ def _apply_rewrites(
                 errors_by_path[path] = exc
                 found_errors = True
                 continue
-            clear_parse_cache()
             if apply_mode == "native" and sys.version_info < (3, 15):
                 continue
             try:
