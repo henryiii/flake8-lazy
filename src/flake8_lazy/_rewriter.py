@@ -406,6 +406,10 @@ def apply_lazy_modules(
             updated_source = _rewrite_lazy_modules_source(
                 source, modules, forced_container="set", line_length=line_length
             )
+        case "tuple":
+            updated_source = _rewrite_lazy_modules_source(
+                source, modules, forced_container="tuple", line_length=line_length
+            )
         case "native":
             updated_source = _rewrite_native_lazy_source(source, modules)
         case "dynamic":

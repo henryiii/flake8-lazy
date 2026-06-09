@@ -76,6 +76,7 @@ The available modes are:
 | --------- | --------------------------------------------------------------------- |
 | `list`    | `__lazy_modules__ = ["a", "b"]`                                       |
 | `set`     | `__lazy_modules__ = {"a", "b"}` (slower construct, faster membership) |
+| `tuple`   | `__lazy_modules__ = ("a", "b")`                                       |
 | `native`  | `lazy import a` / `lazy from b import ...` (3.15+)                    |
 | `dynamic` | `AllLazy` class that always returns `True` for `in`                   |
 
@@ -99,9 +100,9 @@ dynamic `__lazy_modules__` is a no-op.
 
 ### Line length
 
-For the `list` and `set` modes, if the single-line assignment would exceed the
-line length (`--line-length`, default `88`, matching black/ruff), it is written
-one module per line with a trailing comma, black/ruff style:
+For the `list`, `set`, and `tuple` modes, if the single-line assignment would
+exceed the line length (`--line-length`, default `88`, matching black/ruff), it
+is written one module per line with a trailing comma, black/ruff style:
 
 ```python
 __lazy_modules__ = [
