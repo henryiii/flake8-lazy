@@ -793,6 +793,81 @@ def test_main_apply_set_mode_converts_native_lazy_import(
     )
 
 
+def test_main_apply_tuple_mode_writes_tuple_literal(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\n", encoding="utf-8")
+
+    _run_main_and_assert_no_output(["--apply=tuple", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ("numpy",)\n\nimport numpy\n'
+    )
+
+
+def test_main_apply_tuple_mode_writes_multi_element_tuple(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy\nimport pandas\n", encoding="utf-8")
+
+    _run_main_and_assert_no_output(["--apply=tuple", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ("numpy", "pandas")\n\nimport numpy\nimport pandas\n'
+    )
+
+
+def test_main_apply_tuple_mode_overrides_existing_list(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ["unused"]\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=tuple", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ("numpy",)\nimport numpy\n'
+    )
+
+
+def test_main_apply_tuple_mode_overrides_existing_set(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = {"numpy"}\nimport numpy\nimport pandas\n',
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=tuple", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ("numpy", "pandas")\nimport numpy\nimport pandas\n'
+    )
+
+
+def test_main_apply_tuple_mode_preserves_existing_tuple(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Content is already correct but --apply=tuple must still write it as a tuple.
+    path = tmp_path / "mod.py"
+    path.write_text(
+        '__lazy_modules__ = ["numpy"]\nimport numpy\n',
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=tuple", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = ("numpy",)\nimport numpy\n'
+    )
+
+
 @pytest.mark.skipif(
     sys.version_info < (3, 15),
     reason="Python 3.15 lazy import AST is required",
