@@ -17,10 +17,39 @@ from flake8_lazy._analysis import (
     collect_recommended_lazy_modules,
     collect_unnecessary_lazy_imports,
 )
+from flake8_lazy._ast_helpers import format_module_literal
 from flake8_lazy._collect import build_module_info, collect_top_level_imports
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+@pytest.mark.parametrize(
+    ("module", "quote", "expected"),
+    [
+        ("numpy", '"', '"numpy"'),
+        ("numpy", "'", "'numpy'"),
+        ('f"{__spec__.parent}.sub"', '"', 'f"{__spec__.parent}.sub"'),
+        ('f"{__spec__.parent}.sub"', "'", "f'{__spec__.parent}.sub'"),
+        # Multi-level: the rsplit separator must not reuse the outer quote
+        # (GH-78), otherwise the f-string is a syntax error on Python < 3.12.
+        (
+            'f"{__spec__.parent.rsplit(".", 1)[0]}.sub"',
+            '"',
+            "f\"{__spec__.parent.rsplit('.', 1)[0]}.sub\"",
+        ),
+        (
+            'f"{__spec__.parent.rsplit(".", 1)[0]}.sub"',
+            "'",
+            "f'{__spec__.parent.rsplit(\".\", 1)[0]}.sub'",
+        ),
+    ],
+)
+def test_format_module_literal_quotes(module: str, quote: str, expected: str) -> None:
+    rendered = format_module_literal(module, quote)
+    assert rendered == expected
+    # Every rendering must be a valid string/f-string literal everywhere.
+    ast.parse(rendered)
 
 
 def test_collect_top_level_imports() -> None:

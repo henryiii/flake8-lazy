@@ -316,6 +316,31 @@ def test_main_outputs_lazy_modules_format_for_relative_import(
     assert captured.err == ""
 
 
+def test_main_outputs_lazy_modules_format_for_multilevel_relative_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The suggested snippet must be copy-paste valid on Python < 3.12, so the
+    # ``rsplit`` separator uses the opposite quote of the outer f-string.
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from ..subpackage import helper\n\n\ndef f():\n    return helper\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--format", "lazy-modules", str(path)])
+
+    assert excinfo.value.code == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == (
+        f"{path}: __lazy_modules__ = "
+        "[f\"{__spec__.parent.rsplit('.', 1)[0]}.subpackage\"]\n"
+    )
+    assert captured.err == ""
+
+
 def test_main_outputs_lazy_modules_format_for_clean_file(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -394,6 +419,46 @@ def test_main_apply_leaves_correct_single_quoted_file_unchanged(
 
     _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == content
+
+
+def test_main_apply_multilevel_relative_uses_non_clashing_quotes(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # ``from ..foo import bar`` becomes an f-string whose ``rsplit`` separator
+    # must not reuse the outer quote, or it is a syntax error on Python < 3.12
+    # (GH-78).
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from ..foo import bar\n\n\ndef f():\n    return bar\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        "__lazy_modules__ = [f\"{__spec__.parent.rsplit('.', 1)[0]}.foo\"]\n"
+        "\nfrom ..foo import bar\n\n\ndef f():\n    return bar\n"
+    )
+
+
+def test_main_apply_multilevel_relative_preserves_single_quote_style(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # With a single-quote outer f-string, the ``rsplit`` separator keeps its
+    # double quote (still non-clashing) and the existing style is preserved.
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "__lazy_modules__ = ['unused']\n"
+        "from ..foo import bar\n\n\ndef f():\n    return bar\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        "__lazy_modules__ = [f'{__spec__.parent.rsplit(\".\", 1)[0]}.foo']\n"
+        "from ..foo import bar\n\n\ndef f():\n    return bar\n"
+    )
 
 
 def test_main_apply_inserts_after_comments_and_docstring(

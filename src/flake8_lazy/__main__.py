@@ -2,6 +2,7 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "argparse",
+    "flake8_lazy._ast_helpers",
     "flake8_lazy._config",
     "flake8_lazy._options",
     "flake8_lazy._rewriter",
@@ -17,6 +18,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from flake8_lazy import __version__
+from flake8_lazy._ast_helpers import format_module_literal
 from flake8_lazy._config import ConfigError, load_standalone_defaults
 from flake8_lazy._options import (
     APPLY_CHOICES,
@@ -57,12 +59,7 @@ def _analyze_file(
 
 
 def _format_lazy_modules(path: Path, modules: list[str]) -> str:
-    joined_modules = ", ".join(
-        module
-        if module.startswith('f"{__spec__.parent') and module.endswith('"')
-        else f'"{module}"'
-        for module in modules
-    )
+    joined_modules = ", ".join(format_module_literal(module) for module in modules)
     return f"{path}: __lazy_modules__ = [{joined_modules}]"
 
 

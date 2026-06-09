@@ -12,6 +12,7 @@ __all__ = [
     "bound_name_for_import",
     "collect_loaded_names",
     "containing_package_prefixes",
+    "format_module_literal",
     "is_import_error_name",
     "is_lazy_import_node",
     "is_lazy_modules_target",
@@ -149,6 +150,22 @@ def relative_parent_expression(*, level: int) -> str:
     if level == 1:
         return "__spec__.parent"
     return f'__spec__.parent.rsplit(".", {level - 1})[0]'
+
+
+def format_module_literal(module: str, quote: str = '"') -> str:
+    """Render a ``__lazy_modules__`` entry as a source literal.
+
+    Plain modules become a simple quoted string.  Relative-import entries carry
+    an ``f"{__spec__.parent...}.name"`` template verbatim; for higher levels the
+    template embeds a ``rsplit(".", n)`` call whose separator is quoted.  Python
+    < 3.12 cannot reuse the outer f-string quote inside the expression, so the
+    separator is re-quoted with the opposite character (see GH-78).
+    """
+    if module.startswith('f"{__spec__.parent') and module.endswith('"'):
+        inner_quote = "'" if quote == '"' else '"'
+        template = module[2:-1].replace('"', inner_quote)
+        return f"f{quote}{template}{quote}"
+    return f"{quote}{module}{quote}"
 
 
 def relative_import_package_name(*, level: int, root_module: str) -> str:
