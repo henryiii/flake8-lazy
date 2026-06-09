@@ -402,22 +402,22 @@ def apply_lazy_modules(
     encoding, _ = tokenize.detect_encoding(io.BytesIO(raw_bytes).readline)
     source = raw_bytes.decode(encoding)
     match mode:
-        case "set":
+        case "list":
             updated_source = _rewrite_lazy_modules_source(
-                source, modules, forced_container="set", line_length=line_length
+                source, modules, forced_container="list", line_length=line_length
             )
         case "tuple":
             updated_source = _rewrite_lazy_modules_source(
                 source, modules, forced_container="tuple", line_length=line_length
             )
+        case "set":
+            updated_source = _rewrite_lazy_modules_source(
+                source, modules, forced_container="set", line_length=line_length
+            )
         case "native":
             updated_source = _rewrite_native_lazy_source(source, modules)
         case "dynamic":
             updated_source = _rewrite_dynamic_lazy_source(source)
-        case "list":
-            updated_source = _rewrite_lazy_modules_source(
-                source, modules, forced_container="list", line_length=line_length
-            )
         case _:
             msg = f"unknown apply mode {mode!r}"
             raise ValueError(msg)

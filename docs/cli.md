@@ -75,8 +75,8 @@ The available modes are:
 | Mode      | Output                                                                |
 | --------- | --------------------------------------------------------------------- |
 | `list`    | `__lazy_modules__ = ["a", "b"]`                                       |
-| `set`     | `__lazy_modules__ = {"a", "b"}` (slower construct, faster membership) |
 | `tuple`   | `__lazy_modules__ = ("a", "b")`                                       |
+| `set`     | `__lazy_modules__ = {"a", "b"}` (slower construct, faster membership) |
 | `native`  | `lazy import a` / `lazy from b import ...` (3.15+)                    |
 | `dynamic` | `AllLazy` class that always returns `True` for `in`                   |
 
