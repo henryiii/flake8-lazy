@@ -17,7 +17,6 @@ import re
 import sys
 import tokenize
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 
 from ._always_imported import IMPORT_PRESETS
@@ -32,7 +31,6 @@ from .checker import build_diagnostics
 __all__ = [
     "_FileAnalysis",
     "_process_single_file",
-    "clear_parse_cache",
     "collect_declared_lazy_modules_for_file",
     "collect_errors_for_file",
     "collect_native_lazy_modules_for_file",
@@ -217,20 +215,9 @@ def has_native_lazy_imports_for_file(path: str | Path) -> bool:
     return has_native_lazy_imports(build_module_info(tree))
 
 
-def clear_parse_cache() -> None:
-    """Clear the file-parse cache (e.g. after rewriting a file on disk)."""
-    _parse_file_cached.cache_clear()
-
-
 def _parse_file(path: str | Path) -> tuple[Path, ast.AST, str]:
     """Read and parse a Python file with filename-aware syntax errors."""
     item = Path(path).resolve(strict=False)
-    return _parse_file_cached(item)
-
-
-@lru_cache(maxsize=512)
-def _parse_file_cached(item: Path) -> tuple[Path, ast.AST, str]:
-    """Cached version for a canonicalized path."""
     try:
         with tokenize.open(item) as f:
             source = f.read()
