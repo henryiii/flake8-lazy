@@ -14,6 +14,7 @@ import tokenize
 from typing import TYPE_CHECKING
 
 from ._ast_helpers import (
+    format_module_literal,
     is_lazy_modules_target,
     lazy_modules_assignment_value,
     package_for_import_from,
@@ -29,14 +30,6 @@ if TYPE_CHECKING:
 #: Maximum length of a single-line ``__lazy_modules__`` assignment before
 #: ``--apply`` splits it across multiple lines (black/ruff default).
 DEFAULT_LINE_LENGTH = 88
-
-
-def _format_module_literal(module: str, quote: str = '"') -> str:
-    if module.startswith('f"{__spec__.parent') and module.endswith('"'):
-        # ``module`` carries the f-string template verbatim; re-quote it so it
-        # matches the surrounding assignment instead of forcing double quotes.
-        return f"f{quote}{module[2:-1]}{quote}"
-    return f"{quote}{module}{quote}"
 
 
 _CONTAINER_KINDS: frozenset[str] = frozenset({"list", "tuple", "set", "frozenset"})
@@ -100,7 +93,7 @@ def _lazy_modules_assignment_line(
     newline: str = "\n",
     quote: str = '"',
 ) -> str:
-    literals = [_format_module_literal(module, quote) for module in modules]
+    literals = [format_module_literal(module, quote) for module in modules]
     single_line = _single_line_assignment(literals, container)
     # A line length of 0 disables splitting: always write a single line.
     if not line_length or len(single_line) <= line_length:
