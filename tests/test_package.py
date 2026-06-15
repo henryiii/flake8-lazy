@@ -13,6 +13,7 @@ from flake8_lazy._always_imported import (
 )
 from flake8_lazy._analysis import (
     collect_broken_lazy_modules,
+    collect_missing_lazy_modules,
     collect_non_lazy_imports,
     collect_recommended_lazy_modules,
     collect_unnecessary_lazy_imports,
@@ -1771,6 +1772,35 @@ def fn() -> None:
         build_module_info(tree),
         always_imported=frozenset({"os"}),
     ) == ["os.path"]
+
+
+def test_collect_recommended_lazy_modules_excludes_try_block_imports() -> None:
+    tree = ast.parse(
+        """
+import rich
+
+try:
+    import numpy
+except ImportError:
+    numpy = None
+""",
+    )
+
+    # ``numpy`` lives in a try/except block, where it can never be made lazy.
+    assert collect_recommended_lazy_modules(build_module_info(tree)) == ["rich"]
+
+
+def test_collect_missing_lazy_modules_excludes_try_block_imports() -> None:
+    tree = ast.parse(
+        """
+try:
+    from ._version import version as __version__
+except ImportError:
+    __version__ = None
+""",
+    )
+
+    assert collect_missing_lazy_modules(build_module_info(tree)) == []
 
 
 def test_checker_does_not_flag_os_path_lzy10x() -> None:

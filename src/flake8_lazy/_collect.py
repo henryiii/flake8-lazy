@@ -14,6 +14,9 @@ state flags decide which buckets each node feeds:
   ``all_loaded``).
 * ``_conditional_depth`` — inside ``if``/``for``/``while``/``with``/``try``;
   gates the *strict* buckets only.
+* ``_try_depth`` — inside ``try``/``except``/``finally``; marks imports that can
+  never be made lazy (``lazy`` there is a ``SyntaxError``), so they are dropped
+  from recommendations.
 * ``_runtime_dead`` — inside a ``TYPE_CHECKING`` if-body, which never runs at
   runtime; suppresses runtime *and* strict name/attribute collection.
 * ``_guard_active`` — region blocked from lazy recommendation (``TYPE_CHECKING``
@@ -68,6 +71,7 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
         self._scope_depth = 0
         self._annotation_depth = 0
         self._conditional_depth = 0
+        self._try_depth = 0
         self._runtime_dead = False
         self._guard_active = False
 
@@ -158,6 +162,7 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
                     is_from_import=is_from,
                     is_lazy=lazy,
                     is_guarded=self._guard_active,
+                    in_try_block=self._try_depth != 0,
                     runtime_visible=not self._runtime_dead,
                     lineno=node.lineno,
                     col_offset=node.col_offset,
@@ -339,10 +344,15 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
         self._visit_conditional(node)
 
     def visit_Try(self, node: ast.Try) -> None:
-        self._visit_conditional(node)
+        self._visit_try(node)
 
     def visit_TryStar(self, node: ast.AST) -> None:  # Python 3.11+ try/except*
+        self._visit_try(node)
+
+    def _visit_try(self, node: ast.AST) -> None:
+        self._try_depth += 1
         self._visit_conditional(node)
+        self._try_depth -= 1
 
     def visit_With(self, node: ast.With) -> None:
         if self._at_top_level and any(
@@ -466,6 +476,12 @@ class _TopLevelImportNodeCollector(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self._visit_nested(node)
 
+    def visit_Try(self, node: ast.Try) -> None:
+        self._visit_nested(node)
+
+    def visit_TryStar(self, node: ast.AST) -> None:  # Python 3.11+ try/except*
+        self._visit_nested(node)
+
     def visit_If(self, node: ast.If) -> None:
         if is_type_checking_guard(node.test):
             for item in node.orelse:
@@ -485,7 +501,11 @@ class _TopLevelImportNodeCollector(ast.NodeVisitor):
 
 
 def collect_top_level_imports(tree: ast.AST) -> list[ast.Import | ast.ImportFrom]:
-    """Return eager module-scope import nodes (excludes ``TYPE_CHECKING`` body)."""
+    """Return eager module-scope import nodes.
+
+    Excludes the ``TYPE_CHECKING`` body and ``try``/``except``/``finally`` blocks,
+    where the ``lazy`` keyword is not permitted.
+    """
     collector = _TopLevelImportNodeCollector(lazy=False)
     collector.visit(tree)
     return collector.nodes
