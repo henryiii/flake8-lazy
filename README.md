@@ -56,7 +56,7 @@ flake8-lazy ships a [pre-commit](https://pre-commit.com) /
 
 ```yaml
 - repo: https://github.com/henryiii/flake8-lazy
-  rev: v0.8.2
+  rev: v0.8.3
   hooks:
     - id: flake8-lazy
 ```
