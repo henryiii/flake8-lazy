@@ -34,6 +34,9 @@ It intentionally ignores:
 
 - `from __future__ import ...`
 - Imports inside function and class bodies
+- Imports inside `try`/`except`/`finally` blocks, where lazy imports are not
+  permitted (the `lazy` keyword is a `SyntaxError`, and `__lazy_modules__` would
+  defer an `ImportError` the block exists to catch)
 
 For files inside a package, enclosing package names are also treated as
 non-lazy. For example, in `a/b/c.py`, names `a` and `a.b` should not be declared

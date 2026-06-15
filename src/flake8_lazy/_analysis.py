@@ -40,8 +40,18 @@ __all__ = [
 
 
 def _eager_imports(info: ModuleInfo) -> list[ImportInfo]:
-    """Module-scope eager imports, as ``collect_top_level_imports`` returned."""
-    return [imp for imp in info.imports if imp.runtime_visible and not imp.is_lazy]
+    """Module-scope eager imports, as ``collect_top_level_imports`` returned.
+
+    Imports inside ``try``/``except``/``finally`` are excluded: they can never be
+    made lazy (the ``lazy`` keyword is a ``SyntaxError`` there, and listing them
+    in ``__lazy_modules__`` would defer an ``ImportError`` the block exists to
+    catch), so they are neither recommended nor counted as eager usage.
+    """
+    return [
+        imp
+        for imp in info.imports
+        if imp.runtime_visible and not imp.is_lazy and not imp.in_try_block
+    ]
 
 
 def _lazy_imports(info: ModuleInfo) -> list[ImportInfo]:

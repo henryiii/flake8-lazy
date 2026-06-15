@@ -393,6 +393,24 @@ def test_main_apply_replaces_existing_lazy_modules(
     )
 
 
+def test_main_apply_leaves_try_block_imports_alone(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Imports inside try/except are not added to __lazy_modules__ (#82)."""
+    path = tmp_path / "mod.py"
+    content = (
+        "try:\n"
+        "    from ._version import version as __version__\n"
+        "except ImportError:\n"
+        "    __version__ = None\n"
+    )
+    path.write_text(content, encoding="utf-8")
+
+    _run_main_and_assert_no_output(["--apply=set", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == content
+
+
 def test_main_apply_preserves_single_quote_style(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

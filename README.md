@@ -159,6 +159,8 @@ flake8-lazy inspects module-scope imports and module runtime usage.
 - Treats usage inside `if typing.TYPE_CHECKING:` as type-only.
 - Handles static `sys.version_info` checks
 - Skips `from __future__ import ...`.
+- Skips imports inside `try`/`except`/`finally` blocks, which can never be made
+  lazy.
 - Requires exact module entries for nested imports.
 - Treats enclosing package names as non-lazy for a file. For example, in
   `a/b/c.py`, `a` and `a.b` should not be listed as lazy.

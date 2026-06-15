@@ -30,6 +30,12 @@ class ImportInfo:
     """True when imported in a region blocked from lazy recommendation
     (``TYPE_CHECKING`` or a ``sys.version_info`` guard excluding 3.15+)."""
 
+    in_try_block: bool
+    """True when imported inside a ``try``/``except``/``finally`` block, where
+    lazy imports are forbidden (using ``lazy`` there is a ``SyntaxError``, and
+    ``__lazy_modules__`` would defer an ``ImportError`` the block means to
+    catch)."""
+
     runtime_visible: bool
     """True unless the import lives in a ``TYPE_CHECKING`` if-body (which never
     executes at runtime and is excluded from the top-level import list)."""
