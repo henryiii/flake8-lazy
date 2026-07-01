@@ -336,7 +336,7 @@ def test_main_outputs_lazy_modules_format_for_multilevel_relative_import(
     captured = capsys.readouterr()
     assert captured.out == (
         f"{path}: __lazy_modules__ = "
-        "[f\"{__spec__.parent.rsplit('.', 1)[0]}.subpackage\"]\n"
+        "[f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.subpackage\"]\n"
     )
     assert captured.err == ""
 
@@ -454,7 +454,7 @@ def test_main_apply_multilevel_relative_uses_non_clashing_quotes(
 
     _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
-        "__lazy_modules__ = [f\"{__spec__.parent.rsplit('.', 1)[0]}.foo\"]\n"
+        "__lazy_modules__ = [f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.foo\"]\n"
         "\nfrom ..foo import bar\n\n\ndef f():\n    return bar\n"
     )
 
@@ -474,8 +474,30 @@ def test_main_apply_multilevel_relative_preserves_single_quote_style(
 
     _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
     assert path.read_text(encoding="utf-8") == (
-        "__lazy_modules__ = [f'{__spec__.parent.rsplit(\".\", 1)[0]}.foo']\n"
+        '__lazy_modules__ = [f\'{(__spec__.parent or "").rsplit(".", 1)[0]}.foo\']\n'
         "from ..foo import bar\n\n\ndef f():\n    return bar\n"
+    )
+
+
+def test_main_apply_migrates_legacy_multilevel_form(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The pre-guard ``__spec__.parent.rsplit(...)`` form (which tripped strict
+    # mypy's union-attr because ``__spec__.parent`` is ``str | None``) is still
+    # recognized and rewritten to the guarded ``(__spec__.parent or "")`` form.
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "__lazy_modules__ = [f\"{__spec__.parent.rsplit('.', 1)[0]}.foo\"]\n"
+        "\nfrom ..foo import bar\n\n\ndef f():\n    return bar\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+
+    assert path.read_text(encoding="utf-8") == (
+        "__lazy_modules__ = [f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.foo\"]\n"
+        "\nfrom ..foo import bar\n\n\ndef f():\n    return bar\n"
     )
 
 

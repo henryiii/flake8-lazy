@@ -149,7 +149,11 @@ def bound_name_for_import(alias: ast.alias, *, from_import: bool) -> str:
 def relative_parent_expression(*, level: int) -> str:
     if level == 1:
         return "__spec__.parent"
-    return f'__spec__.parent.rsplit(".", {level - 1})[0]'
+    # ``__spec__.parent`` is typed ``str | None``; ``or ""`` narrows it to ``str``
+    # so the ``.rsplit`` call type-checks under strict mypy.  A module deep enough
+    # to need ``rsplit`` always has a non-empty parent, so this never alters the
+    # value at runtime.
+    return f'(__spec__.parent or "").rsplit(".", {level - 1})[0]'
 
 
 def format_module_literal(module: str, quote: str = '"') -> str:
@@ -157,11 +161,15 @@ def format_module_literal(module: str, quote: str = '"') -> str:
 
     Plain modules become a simple quoted string.  Relative-import entries carry
     an ``f"{__spec__.parent...}.name"`` template verbatim; for higher levels the
-    template embeds a ``rsplit(".", n)`` call whose separator is quoted.  Python
-    < 3.12 cannot reuse the outer f-string quote inside the expression, so the
-    separator is re-quoted with the opposite character (see GH-78).
+    template embeds a ``(__spec__.parent or "").rsplit(".", n)`` call whose
+    quotes must be re-quoted with the opposite character because Python < 3.12
+    cannot reuse the outer f-string quote inside the expression (see GH-78).
     """
-    if module.startswith('f"{__spec__.parent') and module.endswith('"'):
+    if (
+        module.startswith('f"{')
+        and module.endswith('"')
+        and "__spec__.parent" in module
+    ):
         inner_quote = "'" if quote == '"' else '"'
         template = module[2:-1].replace('"', inner_quote)
         return f"f{quote}{template}{quote}"
@@ -173,19 +181,30 @@ def relative_import_package_name(*, level: int, root_module: str) -> str:
     return f'f"{{{parent_expression}}}.{root_module}"'
 
 
+def _is_spec_parent(node: ast.AST) -> bool:
+    """Match ``__spec__.parent`` and its ``(__spec__.parent or "")`` guarded form."""
+    match node:
+        case ast.Attribute(value=ast.Name(id="__spec__"), attr="parent"):
+            return True
+        case ast.BoolOp(
+            op=ast.Or(),
+            values=[
+                ast.Attribute(value=ast.Name(id="__spec__"), attr="parent"),
+                ast.Constant(value=""),
+            ],
+        ):
+            return True
+        case _:
+            return False
+
+
 def relative_parent_level(node: ast.AST) -> int | None:
     match node:
         case ast.Attribute(value=ast.Name(id="__spec__"), attr="parent"):
             return 1
         case ast.Subscript(
             value=ast.Call(
-                func=ast.Attribute(
-                    value=ast.Attribute(
-                        value=ast.Name(id="__spec__"),
-                        attr="parent",
-                    ),
-                    attr="rsplit",
-                ),
+                func=ast.Attribute(value=inner, attr="rsplit"),
                 args=[
                     ast.Constant(value="."),
                     ast.Constant(value=int() as level_minus_one),
@@ -193,7 +212,7 @@ def relative_parent_level(node: ast.AST) -> int | None:
                 keywords=[],
             ),
             slice=ast.Constant(value=0),
-        ):
+        ) if _is_spec_parent(inner):
             return level_minus_one + 1
         case _:
             return None

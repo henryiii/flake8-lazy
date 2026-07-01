@@ -32,17 +32,17 @@ if TYPE_CHECKING:
         ("numpy", "'", "'numpy'"),
         ('f"{__spec__.parent}.sub"', '"', 'f"{__spec__.parent}.sub"'),
         ('f"{__spec__.parent}.sub"', "'", "f'{__spec__.parent}.sub'"),
-        # Multi-level: the rsplit separator must not reuse the outer quote
+        # Multi-level: the guarded rsplit's quotes must not reuse the outer quote
         # (GH-78), otherwise the f-string is a syntax error on Python < 3.12.
         (
-            'f"{__spec__.parent.rsplit(".", 1)[0]}.sub"',
+            'f"{(__spec__.parent or "").rsplit(".", 1)[0]}.sub"',
             '"',
-            "f\"{__spec__.parent.rsplit('.', 1)[0]}.sub\"",
+            "f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.sub\"",
         ),
         (
-            'f"{__spec__.parent.rsplit(".", 1)[0]}.sub"',
+            'f"{(__spec__.parent or "").rsplit(".", 1)[0]}.sub"',
             "'",
-            "f'{__spec__.parent.rsplit(\".\", 1)[0]}.sub'",
+            'f\'{(__spec__.parent or "").rsplit(".", 1)[0]}.sub\'',
         ),
     ],
 )
