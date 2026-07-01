@@ -179,5 +179,6 @@ git-only = [
   ".readthedocs.yaml",
   "AGENTS.md",
   "docs/*",
+  "skills/*",
   "zensical.toml",
 ]

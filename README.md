@@ -69,6 +69,22 @@ it.
 See the [full documentation](https://flake8-lazy.readthedocs.io/) for details,
 examples, and the standalone CLI runner.
 
+## Agent skill
+
+This repo ships a skill, `setup-lazy-imports`, that adopts flake8-lazy for you:
+it adds the pre-commit hook (defaulting to `--apply=set`), runs it once to
+declare lazy imports, and verifies the result with your test suite and an import
+check.
+
+Add it with `gh` (`npx skills` should work too):
+
+```bash
+gh skill install henryiii/flake8-lazy setup-lazy-imports
+```
+
+(Add `--agent ...` to pick your tooling.) Then run directly or ask to "set up
+lazy imports" in any Python project.
+
 ## Rule codes
 
 ### 1xx: Missing lazy declarations
