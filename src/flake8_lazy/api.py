@@ -61,10 +61,11 @@ def _process_single_file(
     *,
     apply_mode: str | None,
     include_errors: bool,
+    strict_typing: bool = False,
 ) -> tuple[Path, _FileAnalysis]:
     """Analyze a single file for parallel execution."""
     item, tree, source = _parse_file(path)
-    info = build_module_info(tree, item)
+    info = build_module_info(tree, item, strict_typing=strict_typing)
     always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
 
     declared_modules = info.declared_lazy_modules
@@ -149,6 +150,7 @@ def collect_errors_for_file(
     *,
     import_preset: str = "default",
     exclude_modules: frozenset[str] = frozenset(),
+    strict_typing: bool = False,
 ) -> list[tuple[int, int, str]]:
     """Return checker errors for a single Python file, respecting noqa comments."""
     if import_preset not in IMPORT_PRESETS:
@@ -157,7 +159,7 @@ def collect_errors_for_file(
         raise ValueError(msg)
     item, tree, source = _parse_file(path)
     always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
-    info = build_module_info(tree, item)
+    info = build_module_info(tree, item, strict_typing=strict_typing)
     errors = build_diagnostics(info, always_imported=always_imported)
     if not errors:
         return []
@@ -179,6 +181,7 @@ def collect_recommended_lazy_modules_for_file(
     *,
     import_preset: str = "default",
     exclude_modules: frozenset[str] = frozenset(),
+    strict_typing: bool = False,
 ) -> list[str]:
     """Return a sorted ``__lazy_modules__`` recommendation for a file."""
     if import_preset not in IMPORT_PRESETS:
@@ -187,7 +190,7 @@ def collect_recommended_lazy_modules_for_file(
         raise ValueError(msg)
     always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
     item, tree, _source = _parse_file(path)
-    info = build_module_info(tree, item)
+    info = build_module_info(tree, item, strict_typing=strict_typing)
     return collect_recommended_lazy_modules(info, always_imported=always_imported)
 
 
@@ -197,10 +200,12 @@ def collect_native_lazy_modules_for_file(path: str | Path) -> list[str]:
     return collect_native_lazy_modules(build_module_info(tree))
 
 
-def collect_declared_lazy_modules_for_file(path: str | Path) -> list[str] | None:
+def collect_declared_lazy_modules_for_file(
+    path: str | Path, *, strict_typing: bool = False
+) -> list[str] | None:
     """Return the last static ``__lazy_modules__`` declaration for a file."""
     _item, tree, _source = _parse_file(path)
-    return build_module_info(tree).declared_lazy_modules
+    return build_module_info(tree, strict_typing=strict_typing).declared_lazy_modules
 
 
 def has_dynamic_lazy_modules_for_file(path: str | Path) -> bool:

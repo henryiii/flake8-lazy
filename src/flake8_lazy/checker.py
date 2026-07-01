@@ -52,6 +52,7 @@ from ._collect import build_module_info
 from ._options import (
     DEFAULT_EXCLUDE_MODULES,
     DEFAULT_IMPORT_PRESET,
+    DEFAULT_STRICT_TYPING,
     parse_exclude_modules,
 )
 
@@ -176,6 +177,7 @@ class LazyImportChecker:
     # Class-level options, set by parse_options when running under flake8.
     import_preset: str = DEFAULT_IMPORT_PRESET
     exclude_modules: frozenset[str] = frozenset()
+    strict_typing: bool = DEFAULT_STRICT_TYPING
 
     def __init__(self, tree: ast.AST, filename: str) -> None:
         self.tree = tree
@@ -215,6 +217,18 @@ class LazyImportChecker:
                 "lazy declarations. [%(default)s]"
             ),
         )
+        option_manager.add_option(
+            "--lazy-strict-typing",
+            action="store_true",
+            default=DEFAULT_STRICT_TYPING,
+            parse_from_config=True,
+            dest="lazy_strict_typing",
+            help=(
+                "Render multi-level relative imports in __lazy_modules__ with a "
+                "'(__spec__.parent or \"\")' guard so they type-check under "
+                "strict optional checking. [%(default)s]"
+            ),
+        )
 
     @classmethod
     def parse_options(
@@ -231,6 +245,7 @@ class LazyImportChecker:
             raise ValueError(msg)
         cls.import_preset = preset
         cls.exclude_modules = parse_exclude_modules(options.lazy_exclude_modules)
+        cls.strict_typing = bool(options.lazy_strict_typing)
 
     def run(
         self,
@@ -243,7 +258,9 @@ class LazyImportChecker:
         if exclude_modules is None:
             exclude_modules = type(self).exclude_modules
         always_imported = always_imported | exclude_modules
-        info = build_module_info(self.tree, self.filename)
+        info = build_module_info(
+            self.tree, self.filename, strict_typing=type(self).strict_typing
+        )
         checker = type(self)
         return [
             (lineno, col_offset, message, checker)

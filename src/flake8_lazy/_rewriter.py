@@ -272,7 +272,7 @@ def _rewrite_lazy_modules_source(
 
 
 def _collect_import_lines_to_lazify(
-    tree: ast.Module, modules_set: set[str]
+    tree: ast.Module, modules_set: set[str], *, strict_typing: bool = False
 ) -> set[int]:
     """Return 1-based line numbers of top-level imports to get a ``lazy`` prefix.
 
@@ -290,14 +290,18 @@ def _collect_import_lines_to_lazify(
                     if alias.name == "*":
                         packages.add("")
                         break
-                    pkg = package_for_import_from(node, alias)
+                    pkg = package_for_import_from(
+                        node, alias, strict_typing=strict_typing
+                    )
                     packages.add(pkg if pkg is not None else "")
         if packages and packages.issubset(modules_set):
             lazy_lines.add(lineno)
     return lazy_lines
 
 
-def _rewrite_native_lazy_source(source: str, modules: list[str]) -> str:
+def _rewrite_native_lazy_source(
+    source: str, modules: list[str], *, strict_typing: bool = False
+) -> str:
     """Rewrite ``source`` by adding ``lazy`` keyword to qualifying imports.
 
     Any existing ``__lazy_modules__`` assignments are removed.  A
@@ -313,7 +317,9 @@ def _rewrite_native_lazy_source(source: str, modules: list[str]) -> str:
     assignments = [stmt for stmt in tree.body if _is_lazy_modules_assignment(stmt)]
 
     # Collect import line numbers to prefix.
-    lazy_import_lines = _collect_import_lines_to_lazify(tree, modules_set)
+    lazy_import_lines = _collect_import_lines_to_lazify(
+        tree, modules_set, strict_typing=strict_typing
+    )
 
     # Apply deletions and prefixes from highest line to lowest to keep indices stable.
     for lineno in sorted(lazy_import_lines, reverse=True):
@@ -390,6 +396,7 @@ def apply_lazy_modules(
     *,
     mode: str = "list",
     line_length: int = DEFAULT_LINE_LENGTH,
+    strict_typing: bool = False,
 ) -> None:
     raw_bytes = path.read_bytes()
     encoding, _ = tokenize.detect_encoding(io.BytesIO(raw_bytes).readline)
@@ -408,7 +415,9 @@ def apply_lazy_modules(
                 source, modules, forced_container="set", line_length=line_length
             )
         case "native":
-            updated_source = _rewrite_native_lazy_source(source, modules)
+            updated_source = _rewrite_native_lazy_source(
+                source, modules, strict_typing=strict_typing
+            )
         case "dynamic":
             updated_source = _rewrite_dynamic_lazy_source(source)
         case _:

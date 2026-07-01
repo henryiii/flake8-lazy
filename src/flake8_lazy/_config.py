@@ -93,11 +93,13 @@ def _normalize(table: dict[str, object]) -> dict[str, object]:
                 defaults["line_length"] = _non_negative_int(key, value)
             case "jobs":
                 defaults["jobs"] = _jobs(key, value)
+            case "strict-typing":
+                defaults["strict_typing"] = _bool(key, value)
             case _:
                 msg = (
                     f"unknown key {key!r} in [tool.flake8-lazy.standalone]; "
                     "valid keys are format, lazy-import-preset, "
-                    "lazy-exclude-modules, apply, line-length, jobs"
+                    "lazy-exclude-modules, apply, line-length, jobs, strict-typing"
                 )
                 raise ConfigError(msg)
     return defaults
@@ -116,6 +118,13 @@ def _module_list(key: str, value: object) -> str:
         return ",".join(value)
     msg = f"{key!r} must be a list of strings"
     raise ConfigError(msg)
+
+
+def _bool(key: str, value: object) -> bool:
+    if not isinstance(value, bool):
+        msg = f"{key!r} must be a boolean"
+        raise ConfigError(msg)
+    return value
 
 
 def _non_negative_int(key: str, value: object) -> int:

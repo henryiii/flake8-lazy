@@ -46,13 +46,14 @@ lazy-exclude-modules = ["numpy", "pandas"]
 apply = "list"
 line-length = 100
 jobs = 4
+strict-typing = true
 ```
 
 The keys must match the command-line flag names exactly (e.g.
 `lazy-import-preset`, not `lazy_import_preset`). `lazy-exclude-modules` must be
-a list of strings, and `jobs` must be a positive integer (omit it for automatic
-parallelism). Unknown keys or invalid values cause the runner to exit with
-status `2`.
+a list of strings, `jobs` must be a positive integer (omit it for automatic
+parallelism), and `strict-typing` must be a boolean. Unknown keys or invalid
+values cause the runner to exit with status `2`.
 
 This table only configures the standalone runner. When running under flake8, use
 the flake8 options described below instead.
@@ -194,4 +195,33 @@ When using flake8 directly, add the option to your `.flake8` or `setup.cfg`:
 ```ini
 [flake8]
 lazy-exclude-modules = numpy,pandas
+```
+
+## Type-checker-safe relative imports with `--strict-typing`
+
+A relative import that reaches more than one package level up is recorded as
+`f"{__spec__.parent.rsplit(".", 1)[0]}.name"`. Since `__spec__.parent` is typed
+`str | None`, that `.rsplit` trips a strict optional checker (e.g. mypy
+`--strict`). Pass `--strict-typing` to wrap the parent in a
+`(__spec__.parent or "")` guard that narrows it to `str`:
+
+```bash
+flake8-lazy --apply=list --strict-typing path/to/file.py
+```
+
+```python
+__lazy_modules__ = [f"{(__spec__.parent or '').rsplit('.', 1)[0]}.name"]
+```
+
+The guard never changes the value at runtime. It is off by default; both the
+plain and guarded forms are recognized on input, so toggling the option migrates
+existing declarations on the next `--apply`. Single-level relative imports
+(`f"{__spec__.parent}.name"`) are unaffected.
+
+When using flake8 directly, use `--lazy-strict-typing` in your `.flake8` or
+`setup.cfg`:
+
+```ini
+[flake8]
+lazy-strict-typing = true
 ```

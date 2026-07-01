@@ -67,7 +67,8 @@ __all__ = [
 class _ModuleInfoBuilder(ast.NodeVisitor):
     """Collect everything the lazy-import checks need in a single pass."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, strict_typing: bool = False) -> None:
+        self._strict_typing = strict_typing
         self._scope_depth = 0
         self._annotation_depth = 0
         self._conditional_depth = 0
@@ -150,7 +151,7 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
             if alias.name == "*":
                 continue
             package = (
-                package_for_import_from(node, alias)
+                package_for_import_from(node, alias, strict_typing=self._strict_typing)
                 if isinstance(node, ast.ImportFrom)
                 else alias.name
             )
@@ -174,7 +175,9 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
                 for alias in node.names:
                     if alias.name == "*":
                         continue
-                    package = package_for_import_from(node, alias)
+                    package = package_for_import_from(
+                        node, alias, strict_typing=self._strict_typing
+                    )
                     if package is not None:
                         self.guarded_packages.add(package)
             else:
@@ -192,7 +195,12 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
             self.imported_before.update(
                 package
                 for alias in node.names
-                if (package := package_for_import_from(node, alias)) is not None
+                if (
+                    package := package_for_import_from(
+                        node, alias, strict_typing=self._strict_typing
+                    )
+                )
+                is not None
             )
 
     # -- assignments / __lazy_modules__ --------------------------------------
@@ -224,12 +232,14 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
                 case ast.Constant(value=str() as value, lineno=line, col_offset=col):
                     self.lazy_entries.append((value, line, col))
                 case ast.JoinedStr(lineno=line, col_offset=col):
-                    relative = parse_relative_lazy_module(element)
+                    relative = parse_relative_lazy_module(
+                        element, strict_typing=self._strict_typing
+                    )
                     if relative is not None:
                         self.lazy_entries.append((relative, line, col))
                 case _:
                     pass
-        modules = parse_lazy_module_list(value_node)
+        modules = parse_lazy_module_list(value_node, strict_typing=self._strict_typing)
         if modules is not None:
             self.static_assignments.append(
                 LazyAssignment(modules, node.lineno, node.col_offset)
@@ -362,7 +372,9 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
                 if isinstance(
                     stmt, (ast.Import, ast.ImportFrom)
                 ) and is_lazy_import_node(stmt):
-                    self.suppress_lazy_imports.extend(_lazy_import_entries(stmt))
+                    self.suppress_lazy_imports.extend(
+                        _lazy_import_entries(stmt, strict_typing=self._strict_typing)
+                    )
         self._visit_conditional(node)
 
     def _visit_conditional(self, node: ast.AST) -> None:
@@ -372,7 +384,7 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
 
 
 def _lazy_import_entries(
-    stmt: ast.Import | ast.ImportFrom,
+    stmt: ast.Import | ast.ImportFrom, *, strict_typing: bool = False
 ) -> list[tuple[str, int, int]]:
     """Return ``(module, lineno, col)`` entries for one lazy import statement.
 
@@ -386,7 +398,9 @@ def _lazy_import_entries(
             for alias in aliases:
                 if alias.name == "*":
                     continue
-                package = package_for_import_from(stmt, alias)
+                package = package_for_import_from(
+                    stmt, alias, strict_typing=strict_typing
+                )
                 if package is not None:
                     return [(package, lineno, col_offset)]
             return []
@@ -407,9 +421,14 @@ def _attribute_path(node: ast.Attribute) -> str | None:
     return None
 
 
-def build_module_info(tree: ast.AST, filename: str | Path | None = None) -> ModuleInfo:
+def build_module_info(
+    tree: ast.AST,
+    filename: str | Path | None = None,
+    *,
+    strict_typing: bool = False,
+) -> ModuleInfo:
     """Walk ``tree`` once and return the collected :class:`ModuleInfo`."""
-    builder = _ModuleInfoBuilder()
+    builder = _ModuleInfoBuilder(strict_typing=strict_typing)
     builder.visit(tree)
 
     all_loaded = frozenset(builder.all_loaded)

@@ -644,6 +644,36 @@ from .local import helper
     )
 
 
+def test_checker_multilevel_relative_message_defaults_to_plain_form() -> None:
+    tree = ast.parse("from ..local import helper\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2] == 'LZY102 module \'f"{__spec__.parent.rsplit(".", 1)[0]}.local"\''
+        " should be listed in __lazy_modules__"
+    )
+
+
+def test_checker_multilevel_relative_message_guards_under_strict_typing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(LazyImportChecker, "strict_typing", True)
+    tree = ast.parse("from ..local import helper\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2]
+        == 'LZY102 module \'f"{(__spec__.parent or "").rsplit(".", 1)[0]}.local"\''
+        " should be listed in __lazy_modules__"
+    )
+
+
 def test_checker_ignores_relative_package_only_import() -> None:
     tree = ast.parse(
         """
