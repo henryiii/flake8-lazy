@@ -24,6 +24,7 @@ from flake8_lazy._options import (
     APPLY_CHOICES,
     DEFAULT_EXCLUDE_MODULES,
     DEFAULT_IMPORT_PRESET,
+    DEFAULT_STRICT_TYPING,
     FORMAT_CHOICES,
     IMPORT_PRESET_CHOICES,
     parse_exclude_modules,
@@ -46,6 +47,7 @@ def _analyze_file(
     exclude_modules: frozenset[str],
     apply_mode: str | None,
     include_errors: bool,
+    strict_typing: bool,
 ) -> _FileAnalysis:
     _path, analysis = _process_single_file(
         path,
@@ -53,6 +55,7 @@ def _analyze_file(
         exclude_modules=exclude_modules,
         apply_mode=apply_mode,
         include_errors=include_errors,
+        strict_typing=strict_typing,
     )
     return analysis
 
@@ -178,6 +181,15 @@ def main(argv: list[str] | None = None) -> None:
         f"0 disables splitting (default: {DEFAULT_LINE_LENGTH})",
     )
     parser.add_argument(
+        "--strict-typing",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_STRICT_TYPING,
+        dest="strict_typing",
+        help="render multi-level relative imports with a '(__spec__.parent or "
+        '"")\' guard so they type-check under strict optional checking '
+        f"(default: {'on' if DEFAULT_STRICT_TYPING else 'off'})",
+    )
+    parser.add_argument(
         "-j",
         "--jobs",
         type=_parse_jobs,
@@ -227,6 +239,7 @@ def _run_sequential(
                 exclude_modules=exclude_modules,
                 apply_mode=namespace.apply,
                 include_errors=namespace.apply is None,
+                strict_typing=namespace.strict_typing,
             )
             if namespace.apply is not None and _should_apply(
                 namespace.apply,
@@ -245,6 +258,7 @@ def _run_sequential(
                     effective_modules,
                     mode=namespace.apply,
                     line_length=namespace.line_length,
+                    strict_typing=namespace.strict_typing,
                 )
                 if namespace.apply == "native" and sys.version_info < (3, 15):
                     continue
@@ -254,6 +268,7 @@ def _run_sequential(
                     exclude_modules=exclude_modules,
                     apply_mode=namespace.apply,
                     include_errors=True,
+                    strict_typing=namespace.strict_typing,
                 )
         except OSError as exc_:
             exc = exc_
@@ -317,6 +332,7 @@ def _apply_rewrites(
     import_preset: str,
     exclude_modules: frozenset[str],
     line_length: int,
+    strict_typing: bool,
 ) -> tuple[dict[Path, _FileAnalysis], dict[Path, Exception], bool]:
     """Apply rewrites sequentially in argument order."""
     found_errors = False
@@ -342,6 +358,7 @@ def _apply_rewrites(
                     effective_modules,
                     mode=apply_mode,
                     line_length=line_length,
+                    strict_typing=strict_typing,
                 )
             except OSError as exc:
                 errors_by_path[path] = exc
@@ -356,6 +373,7 @@ def _apply_rewrites(
                     exclude_modules=exclude_modules,
                     apply_mode=apply_mode,
                     include_errors=True,
+                    strict_typing=strict_typing,
                 )
             except (OSError, SyntaxError) as exc:
                 errors_by_path[path] = exc
@@ -391,6 +409,7 @@ def _run_parallel(
                 exclude_modules,
                 apply_mode=namespace.apply,
                 include_errors=namespace.apply is None,
+                strict_typing=namespace.strict_typing,
             ): path
             for path in paths
         }
@@ -414,6 +433,7 @@ def _run_parallel(
             import_preset=namespace.import_preset,
             exclude_modules=exclude_modules,
             line_length=namespace.line_length,
+            strict_typing=namespace.strict_typing,
         )
         if apply_errors:
             found_errors = True

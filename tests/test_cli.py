@@ -341,6 +341,31 @@ def test_main_outputs_lazy_modules_format_for_multilevel_relative_import(
     assert captured.err == ""
 
 
+def test_main_outputs_lazy_modules_format_multilevel_strict_typing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # ``--strict-typing`` adds the ``(__spec__.parent or "")`` guard so the
+    # snippet type-checks under strict optional checking.
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from ..subpackage import helper\n\n\ndef f():\n    return helper\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--format", "lazy-modules", "--strict-typing", str(path)])
+
+    assert excinfo.value.code == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == (
+        f"{path}: __lazy_modules__ = "
+        "[f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.subpackage\"]\n"
+    )
+    assert captured.err == ""
+
+
 def test_main_outputs_lazy_modules_format_for_clean_file(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -459,6 +484,27 @@ def test_main_apply_multilevel_relative_uses_non_clashing_quotes(
     )
 
 
+def test_main_apply_multilevel_relative_strict_typing_adds_guard(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # ``--strict-typing`` wraps the parent in ``(__spec__.parent or "")``; the
+    # ``rsplit`` separator still uses the opposite quote (GH-78).
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from ..foo import bar\n\n\ndef f():\n    return bar\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(
+        ["--apply=list", "--strict-typing", str(path)], capsys
+    )
+    assert path.read_text(encoding="utf-8") == (
+        "__lazy_modules__ = [f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.foo\"]\n"
+        "\nfrom ..foo import bar\n\n\ndef f():\n    return bar\n"
+    )
+
+
 def test_main_apply_multilevel_relative_preserves_single_quote_style(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -476,6 +522,50 @@ def test_main_apply_multilevel_relative_preserves_single_quote_style(
     assert path.read_text(encoding="utf-8") == (
         "__lazy_modules__ = [f'{__spec__.parent.rsplit(\".\", 1)[0]}.foo']\n"
         "from ..foo import bar\n\n\ndef f():\n    return bar\n"
+    )
+
+
+def test_main_apply_default_drops_legacy_multilevel_guard(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Without ``--strict-typing`` the guarded ``(__spec__.parent or "")`` form is
+    # recognized and rewritten back to the plainer default form.
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "__lazy_modules__ = [f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.foo\"]\n"
+        "\nfrom ..foo import bar\n\n\ndef f():\n    return bar\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+
+    assert path.read_text(encoding="utf-8") == (
+        "__lazy_modules__ = [f\"{__spec__.parent.rsplit('.', 1)[0]}.foo\"]\n"
+        "\nfrom ..foo import bar\n\n\ndef f():\n    return bar\n"
+    )
+
+
+def test_main_apply_strict_typing_adds_guard_to_legacy_form(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # ``--strict-typing`` migrates a plain declaration to the guarded form so it
+    # type-checks under strict optional checking.
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "__lazy_modules__ = [f\"{__spec__.parent.rsplit('.', 1)[0]}.foo\"]\n"
+        "\nfrom ..foo import bar\n\n\ndef f():\n    return bar\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(
+        ["--apply=list", "--strict-typing", str(path)], capsys
+    )
+
+    assert path.read_text(encoding="utf-8") == (
+        "__lazy_modules__ = [f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.foo\"]\n"
+        "\nfrom ..foo import bar\n\n\ndef f():\n    return bar\n"
     )
 
 
@@ -1383,7 +1473,8 @@ def test_load_standalone_defaults_normalizes_keys(tmp_path: Path) -> None:
         'lazy-exclude-modules = ["numpy", "pandas"]\n'
         'apply = "list"\n'
         "line-length = 100\n"
-        "jobs = 4\n",
+        "jobs = 4\n"
+        "strict-typing = true\n",
     )
 
     assert load_standalone_defaults(tmp_path) == {
@@ -1393,7 +1484,17 @@ def test_load_standalone_defaults_normalizes_keys(tmp_path: Path) -> None:
         "apply": "list",
         "line_length": 100,
         "jobs": 4,
+        "strict_typing": True,
     }
+
+
+def test_load_standalone_defaults_rejects_non_bool_strict_typing(
+    tmp_path: Path,
+) -> None:
+    _write_config(tmp_path, 'strict-typing = "yes"\n')
+
+    with pytest.raises(ConfigError, match="'strict-typing' must be a boolean"):
+        load_standalone_defaults(tmp_path)
 
 
 def test_load_standalone_defaults_rejects_underscore_keys(tmp_path: Path) -> None:

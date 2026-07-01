@@ -32,17 +32,17 @@ if TYPE_CHECKING:
         ("numpy", "'", "'numpy'"),
         ('f"{__spec__.parent}.sub"', '"', 'f"{__spec__.parent}.sub"'),
         ('f"{__spec__.parent}.sub"', "'", "f'{__spec__.parent}.sub'"),
-        # Multi-level: the rsplit separator must not reuse the outer quote
+        # Multi-level: the guarded rsplit's quotes must not reuse the outer quote
         # (GH-78), otherwise the f-string is a syntax error on Python < 3.12.
         (
-            'f"{__spec__.parent.rsplit(".", 1)[0]}.sub"',
+            'f"{(__spec__.parent or "").rsplit(".", 1)[0]}.sub"',
             '"',
-            "f\"{__spec__.parent.rsplit('.', 1)[0]}.sub\"",
+            "f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.sub\"",
         ),
         (
-            'f"{__spec__.parent.rsplit(".", 1)[0]}.sub"',
+            'f"{(__spec__.parent or "").rsplit(".", 1)[0]}.sub"',
             "'",
-            "f'{__spec__.parent.rsplit(\".\", 1)[0]}.sub'",
+            'f\'{(__spec__.parent or "").rsplit(".", 1)[0]}.sub\'',
         ),
     ],
 )
@@ -640,6 +640,36 @@ from .local import helper
     assert len(errors) == 1
     assert (
         errors[0][2] == "LZY102 module 'f\"{__spec__.parent}.local\"'"
+        " should be listed in __lazy_modules__"
+    )
+
+
+def test_checker_multilevel_relative_message_defaults_to_plain_form() -> None:
+    tree = ast.parse("from ..local import helper\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2] == 'LZY102 module \'f"{__spec__.parent.rsplit(".", 1)[0]}.local"\''
+        " should be listed in __lazy_modules__"
+    )
+
+
+def test_checker_multilevel_relative_message_guards_under_strict_typing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(LazyImportChecker, "strict_typing", True)
+    tree = ast.parse("from ..local import helper\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2]
+        == 'LZY102 module \'f"{(__spec__.parent or "").rsplit(".", 1)[0]}.local"\''
         " should be listed in __lazy_modules__"
     )
 

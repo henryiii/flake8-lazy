@@ -146,9 +146,15 @@ def bound_name_for_import(alias: ast.alias, *, from_import: bool) -> str:
     return alias.name.split(".", maxsplit=1)[0]
 
 
-def relative_parent_expression(*, level: int) -> str:
+def relative_parent_expression(*, level: int, strict_typing: bool = False) -> str:
     if level == 1:
         return "__spec__.parent"
+    # ``__spec__.parent`` is typed ``str | None``, so ``.rsplit`` trips strict
+    # optional checkers.  With ``strict_typing`` the ``or ""`` guard narrows it to
+    # ``str``; a module deep enough to need ``rsplit`` always has a non-empty
+    # parent, so the guard never alters the value at runtime.
+    if strict_typing:
+        return f'(__spec__.parent or "").rsplit(".", {level - 1})[0]'
     return f'__spec__.parent.rsplit(".", {level - 1})[0]'
 
 
@@ -157,20 +163,45 @@ def format_module_literal(module: str, quote: str = '"') -> str:
 
     Plain modules become a simple quoted string.  Relative-import entries carry
     an ``f"{__spec__.parent...}.name"`` template verbatim; for higher levels the
-    template embeds a ``rsplit(".", n)`` call whose separator is quoted.  Python
-    < 3.12 cannot reuse the outer f-string quote inside the expression, so the
-    separator is re-quoted with the opposite character (see GH-78).
+    template embeds a ``(__spec__.parent or "").rsplit(".", n)`` call whose
+    quotes must be re-quoted with the opposite character because Python < 3.12
+    cannot reuse the outer f-string quote inside the expression (see GH-78).
     """
-    if module.startswith('f"{__spec__.parent') and module.endswith('"'):
+    if (
+        module.startswith('f"{')
+        and module.endswith('"')
+        and "__spec__.parent" in module
+    ):
         inner_quote = "'" if quote == '"' else '"'
         template = module[2:-1].replace('"', inner_quote)
         return f"f{quote}{template}{quote}"
     return f"{quote}{module}{quote}"
 
 
-def relative_import_package_name(*, level: int, root_module: str) -> str:
-    parent_expression = relative_parent_expression(level=level)
+def relative_import_package_name(
+    *, level: int, root_module: str, strict_typing: bool = False
+) -> str:
+    parent_expression = relative_parent_expression(
+        level=level, strict_typing=strict_typing
+    )
     return f'f"{{{parent_expression}}}.{root_module}"'
+
+
+def _is_spec_parent(node: ast.AST) -> bool:
+    """Match ``__spec__.parent`` and its ``(__spec__.parent or "")`` guarded form."""
+    match node:
+        case ast.Attribute(value=ast.Name(id="__spec__"), attr="parent"):
+            return True
+        case ast.BoolOp(
+            op=ast.Or(),
+            values=[
+                ast.Attribute(value=ast.Name(id="__spec__"), attr="parent"),
+                ast.Constant(value=""),
+            ],
+        ):
+            return True
+        case _:
+            return False
 
 
 def relative_parent_level(node: ast.AST) -> int | None:
@@ -179,13 +210,7 @@ def relative_parent_level(node: ast.AST) -> int | None:
             return 1
         case ast.Subscript(
             value=ast.Call(
-                func=ast.Attribute(
-                    value=ast.Attribute(
-                        value=ast.Name(id="__spec__"),
-                        attr="parent",
-                    ),
-                    attr="rsplit",
-                ),
+                func=ast.Attribute(value=inner, attr="rsplit"),
                 args=[
                     ast.Constant(value="."),
                     ast.Constant(value=int() as level_minus_one),
@@ -193,13 +218,15 @@ def relative_parent_level(node: ast.AST) -> int | None:
                 keywords=[],
             ),
             slice=ast.Constant(value=0),
-        ):
+        ) if _is_spec_parent(inner):
             return level_minus_one + 1
         case _:
             return None
 
 
-def parse_relative_lazy_module(node: ast.JoinedStr) -> str | None:
+def parse_relative_lazy_module(
+    node: ast.JoinedStr, *, strict_typing: bool = False
+) -> str | None:
     match node:
         case ast.JoinedStr(
             values=[
@@ -219,7 +246,9 @@ def parse_relative_lazy_module(node: ast.JoinedStr) -> str | None:
             if not root_module:
                 return None
 
-            return relative_import_package_name(level=level, root_module=root_module)
+            return relative_import_package_name(
+                level=level, root_module=root_module, strict_typing=strict_typing
+            )
         case _:
             return None
 
@@ -247,7 +276,9 @@ def containing_package_prefixes(filename: str | Path | None) -> set[str]:
     }
 
 
-def package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | None:
+def package_for_import_from(
+    node: ast.ImportFrom, alias: ast.alias, *, strict_typing: bool = False
+) -> str | None:
     match alias:
         case ast.alias(name="*"):
             return None
@@ -261,7 +292,9 @@ def package_for_import_from(node: ast.ImportFrom, alias: ast.alias) -> str | Non
             return module
         case ast.ImportFrom(module=str() as module, level=level):
             root_module = module.split(".", maxsplit=1)[0]
-            return relative_import_package_name(level=level, root_module=root_module)
+            return relative_import_package_name(
+                level=level, root_module=root_module, strict_typing=strict_typing
+            )
         case _:
             return None
 
@@ -318,7 +351,9 @@ def lazy_module_container_elements(node: ast.AST) -> list[ast.expr] | None:
             return None
 
 
-def parse_lazy_module_list(node: ast.AST) -> list[str] | None:
+def parse_lazy_module_list(
+    node: ast.AST, *, strict_typing: bool = False
+) -> list[str] | None:
     elements = lazy_module_container_elements(node)
     if elements is None:
         return None
@@ -329,7 +364,9 @@ def parse_lazy_module_list(node: ast.AST) -> list[str] | None:
             case ast.Constant(value=str() as value):
                 modules.append(value)
             case ast.JoinedStr():
-                parsed_relative = parse_relative_lazy_module(element)
+                parsed_relative = parse_relative_lazy_module(
+                    element, strict_typing=strict_typing
+                )
                 if parsed_relative is None:
                     return None
                 modules.append(parsed_relative)
