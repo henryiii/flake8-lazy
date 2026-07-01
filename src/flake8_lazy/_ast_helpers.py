@@ -179,12 +179,12 @@ def format_module_literal(module: str, quote: str = '"') -> str:
 
 
 def relative_import_package_name(
-    *, level: int, root_module: str, strict_typing: bool = False
+    *, level: int, module: str, strict_typing: bool = False
 ) -> str:
     parent_expression = relative_parent_expression(
         level=level, strict_typing=strict_typing
     )
-    return f'f"{{{parent_expression}}}.{root_module}"'
+    return f'f"{{{parent_expression}}}.{module}"'
 
 
 def _is_spec_parent(node: ast.AST) -> bool:
@@ -242,12 +242,12 @@ def parse_relative_lazy_module(
             if level is None:
                 return None
 
-            root_module = suffix.removeprefix(".")
-            if not root_module:
+            module = suffix.removeprefix(".")
+            if not module:
                 return None
 
             return relative_import_package_name(
-                level=level, root_module=root_module, strict_typing=strict_typing
+                level=level, module=module, strict_typing=strict_typing
             )
         case _:
             return None
@@ -291,9 +291,11 @@ def package_for_import_from(
         case ast.ImportFrom(module=str() as module, level=0):
             return module
         case ast.ImportFrom(module=str() as module, level=level):
-            root_module = module.split(".", maxsplit=1)[0]
+            # Keep the full dotted path: PEP 810 ``__lazy_modules__`` matching is
+            # exact, so ``from .a.b import x`` must declare ``…parent.a.b`` (not
+            # just ``…parent.a``, which never lazifies the import).
             return relative_import_package_name(
-                level=level, root_module=root_module, strict_typing=strict_typing
+                level=level, module=module, strict_typing=strict_typing
             )
         case _:
             return None

@@ -484,6 +484,26 @@ def test_main_apply_multilevel_relative_uses_non_clashing_quotes(
     )
 
 
+def test_main_apply_multidotted_relative_keeps_full_path(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # ``from .builder.generator import parse`` must declare the full dotted path
+    # ``…parent.builder.generator``; a truncated ``…parent.builder`` entry never
+    # lazifies the import because PEP 810 matching is exact (GH-90).
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from .builder.generator import parse\n\n\ndef f():\n    return parse\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = [f"{__spec__.parent}.builder.generator"]\n'
+        "\nfrom .builder.generator import parse\n\n\ndef f():\n    return parse\n"
+    )
+
+
 def test_main_apply_multilevel_relative_strict_typing_adds_guard(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
