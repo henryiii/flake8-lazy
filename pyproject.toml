@@ -5,7 +5,7 @@ build-backend = "uv_build"
 
 [project]
 name = "flake8-lazy"
-version = "0.8.4"
+version = "0.8.5"
 authors = [
   { name = "Henry Schreiner", email = "henryschreineriii@gmail.com" },
 ]
