@@ -66,7 +66,8 @@ The block to add (match the indentation the file already uses — most configs p
   rev: v0.8.3 # replace with the tag from Step 1
   hooks:
     - id: flake8-lazy
-      args: [--apply=set]
+      files: ^src/
+      args: [--apply=set, --strict-typing]
 ```
 
 Handle the three cases:
@@ -79,6 +80,10 @@ Handle the three cases:
 - **flake8-lazy already present.** Update `rev` to the latest tag and make sure
   `args` includes `--apply=set` (or the user's chosen mode). Don't duplicate the
   repo block.
+
+This should target the package files only (src or the package module).
+`--strict-typing` is optional - it only matters if relative imports to outer
+packages are being used.
 
 ## Step 3 — Run it once to rewrite files
 
