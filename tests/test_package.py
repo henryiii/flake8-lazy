@@ -674,6 +674,33 @@ def test_checker_multilevel_relative_message_guards_under_strict_typing(
     )
 
 
+def test_checker_keeps_full_path_for_multidotted_relative_import() -> None:
+    tree = ast.parse("from .builder.generator import parse_generator\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2] == "LZY102 module 'f\"{__spec__.parent}.builder.generator\"'"
+        " should be listed in __lazy_modules__"
+    )
+
+
+def test_checker_keeps_full_path_for_multidotted_multilevel_relative_import() -> None:
+    tree = ast.parse("from ..ast.tokenizer import tokenize\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert (
+        errors[0][2]
+        == 'LZY102 module \'f"{__spec__.parent.rsplit(".", 1)[0]}.ast.tokenizer"\''
+        " should be listed in __lazy_modules__"
+    )
+
+
 def test_checker_ignores_relative_package_only_import() -> None:
     tree = ast.parse(
         """
