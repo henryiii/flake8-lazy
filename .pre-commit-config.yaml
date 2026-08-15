@@ -100,11 +100,11 @@ repos:
       - id: check-readthedocs
 
   - repo: https://github.com/henryiii/check-sdist
-    rev: 377c4f639d3c5fd025ee882a22ae243e12bef469 # frozen: v1.5.0
+    rev: 5230295f53448dcfc8cc4a9eb00cc776ca92f964 # frozen: v1.6.0
     hooks:
       - id: check-sdist
         args: [--inject-junk]
-        additional_dependencies: [uv_build<0.11]
+        additional_dependencies: [uv_build<0.13]
 
   - repo: https://github.com/scientific-python/cookie
     rev: 8f0581cc50b14023b14a9c77e9b358738ba637e7 # frozen: 2026.06.18
