@@ -903,8 +903,10 @@ __lazy_modules__ = ["numpy"]
         (
             3,
             0,
-            "LZY204 __lazy_modules__ should be assigned "
-            "before importing modules it names",
+            (
+                "LZY204 __lazy_modules__ should be assigned "
+                "before importing modules it names"
+            ),
             LazyImportChecker,
         ),
     ]
@@ -1008,8 +1010,10 @@ import concurrent.futures
         (
             2,
             20,
-            "LZY206 module 'concurrent.futures' is listed in"
-            " __lazy_modules__ but is broken under lazy imports",
+            (
+                "LZY206 module 'concurrent.futures' is listed in"
+                " __lazy_modules__ but is broken under lazy imports"
+            ),
             LazyImportChecker,
         ),
     ]
@@ -1030,8 +1034,10 @@ __lazy_modules__ = ["concurrent"]
         (
             2,
             20,
-            "LZY206 module 'concurrent' is listed in"
-            " __lazy_modules__ but is broken under lazy imports",
+            (
+                "LZY206 module 'concurrent' is listed in"
+                " __lazy_modules__ but is broken under lazy imports"
+            ),
             LazyImportChecker,
         ),
     ]
