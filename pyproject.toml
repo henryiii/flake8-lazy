@@ -182,7 +182,3 @@ git-only = [
   "skills/*",
   "zensical.toml",
 ]
-# uv_build 0.12 ships pyproject.toml.orig even though source-exclude covers it
-sdist-only = [
-  "pyproject.toml.orig",
-]
