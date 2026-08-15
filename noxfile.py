@@ -73,7 +73,7 @@ def cpython(session: nox.Session) -> None:
         if not tarball.exists():
             session.log("Downloading CPython 3.15.0b1 source...")
             url = "https://www.python.org/ftp/python/3.15.0/Python-3.15.0b1.tgz"
-            urllib.request.urlretrieve(url, tarball)  # noqa: S310
+            urllib.request.urlretrieve(url, tarball)
         session.log("Extracting CPython source...")
         with tarfile.open(tarball, "r:gz") as tf:
             tf.extractall(path=DIR / ".nox", filter="data")

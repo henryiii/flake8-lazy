@@ -125,6 +125,7 @@ typing-modules = ["flake8_lazy._compat.typing"]
 select = ["ALL"]
 ignore = [
   "COM812",  # Trailing commas teach the formatter
+  "CPY001",  # No copyright notices
   "D",       # Too many doc requests
   "PLR09",   # Too many <...>
   "PLR2004", # Magic value used in comparison
