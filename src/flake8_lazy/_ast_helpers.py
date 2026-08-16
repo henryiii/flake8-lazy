@@ -16,9 +16,11 @@ __all__ = [
     "is_import_error_name",
     "is_lazy_import_node",
     "is_lazy_modules_target",
+    "is_relative_module_template",
     "is_suppress_import_error_call",
     "is_type_checking_guard",
     "lazy_module_container_elements",
+    "lazy_module_sort_key",
     "lazy_modules_assignment_value",
     "package_for_import_from",
     "parse_lazy_module_list",
@@ -167,15 +169,30 @@ def format_module_literal(module: str, quote: str = '"') -> str:
     quotes must be re-quoted with the opposite character because Python < 3.12
     cannot reuse the outer f-string quote inside the expression (see GH-78).
     """
-    if (
-        module.startswith('f"{')
-        and module.endswith('"')
-        and "__spec__.parent" in module
-    ):
+    if is_relative_module_template(module):
         inner_quote = "'" if quote == '"' else '"'
         template = module[2:-1].replace('"', inner_quote)
         return f"f{quote}{template}{quote}"
     return f"{quote}{module}{quote}"
+
+
+def is_relative_module_template(module: str) -> bool:
+    """True for the ``f"{__spec__.parent...}.name"`` relative-entry template."""
+    return (
+        module.startswith('f"{')
+        and module.endswith('"')
+        and "__spec__.parent" in module
+    )
+
+
+def lazy_module_sort_key(module: str) -> tuple[bool, str]:
+    """Sort key for ``__lazy_modules__`` entries: relative templates last.
+
+    An editor's line sort places quoted entries before f-strings (a quote
+    character sorts before ``f``), so the canonical order does the same
+    instead of slotting f-string entries under the letter "f" (see GH-97).
+    """
+    return (is_relative_module_template(module), module)
 
 
 def relative_import_package_name(

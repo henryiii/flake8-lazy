@@ -2,10 +2,10 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "ast",
-    f"{__spec__.parent}._ast_helpers",
-    f"{__spec__.parent}._collect",
     "io",
     "tokenize",
+    f"{__spec__.parent}._ast_helpers",
+    f"{__spec__.parent}._collect",
 ]
 
 import ast

@@ -94,7 +94,9 @@ lazy imports" in any Python project.
 
 ### 2xx: `__lazy_modules__` validation
 
-- `LZY201`: `__lazy_modules__` list is not sorted
+- `LZY201`: `__lazy_modules__` list is not sorted (string entries first,
+  relative `f"{__spec__.parent}..."` entries last, as an editor line sort
+  produces)
 - `LZY202`: Module listed in `__lazy_modules__` is never imported
 - `LZY203`: Module listed in `__lazy_modules__` appears more than once
 - `LZY204`: `__lazy_modules__` is assigned after importing modules it names

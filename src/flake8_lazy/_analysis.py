@@ -9,10 +9,15 @@ checker to format.
 
 from __future__ import annotations
 
+__lazy_modules__ = [
+    f"{__spec__.parent}._ast_helpers",
+]
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ._always_imported import ALWAYS_IMPORTED_DEFAULT, BROKEN
+from ._ast_helpers import lazy_module_sort_key
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -72,7 +77,8 @@ def has_native_lazy_imports(info: ModuleInfo) -> bool:
 def collect_native_lazy_modules(info: ModuleInfo) -> list[str]:
     """Return sorted package names declared via native ``lazy import`` syntax."""
     return sorted(
-        {imp.package for imp in _lazy_imports(info) if imp.package is not None}
+        {imp.package for imp in _lazy_imports(info) if imp.package is not None},
+        key=lazy_module_sort_key,
     )
 
 
@@ -86,7 +92,7 @@ def collect_unsorted_lazy_modules(info: ModuleInfo) -> list[tuple[int, int]]:
     return [
         (assignment.lineno, assignment.col_offset)
         for assignment in info.static_lazy_assignments
-        if assignment.modules != sorted(assignment.modules)
+        if assignment.modules != sorted(assignment.modules, key=lazy_module_sort_key)
     ]
 
 
@@ -353,10 +359,13 @@ def collect_recommended_lazy_modules(
 ) -> list[str]:
     """Return a sorted ``__lazy_modules__`` recommendation for ``info``."""
     return sorted(
-        package
-        for package, _lineno, _col in _collect_recommended_lazy_entries(
-            info, always_imported=always_imported
-        )
+        (
+            package
+            for package, _lineno, _col in _collect_recommended_lazy_entries(
+                info, always_imported=always_imported
+            )
+        ),
+        key=lazy_module_sort_key,
     )
 
 

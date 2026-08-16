@@ -9,9 +9,9 @@ explicit command-line flags always win over the config file.
 from __future__ import annotations
 
 __lazy_modules__ = [
-    f"{__spec__.parent}._options",
     "tomli",
     "tomllib",
+    f"{__spec__.parent}._options",
 ]
 
 import sys
