@@ -114,7 +114,7 @@ def func() -> None:
     assert list(checker.run()) == []
 
 
-def test_collect_non_lazy_imports_ignores_annotation_and_class_usage() -> None:
+def test_collect_non_lazy_imports_ignores_annotation_but_not_class_usage() -> None:
     tree = ast.parse(
         """
 import os
@@ -129,7 +129,7 @@ class C:
 """,
     )
 
-    assert collect_non_lazy_imports(build_module_info(tree)) == ["os"]
+    assert collect_non_lazy_imports(build_module_info(tree)) == ["os", "sys"]
 
 
 def test_collect_non_lazy_imports_handles_aliases_and_from_imports() -> None:
@@ -1381,6 +1381,102 @@ def func() -> None:
 
     lzy103_errors = [e for e in errors if e[2].startswith("LZY401")]
     assert lzy103_errors == []
+
+
+def test_checker_emits_lzy401_for_lazy_module_used_in_parameter_default() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+def func(pattern=re.compile(".")) -> None:
+    pass
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert len(lzy401_errors) == 1
+
+
+def test_checker_emits_lzy401_for_lazy_module_used_in_method_default() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+class Builder:
+    def __init__(self, pattern=re.compile(".")) -> None:
+        self.pattern = pattern
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert len(lzy401_errors) == 1
+    assert (
+        lzy401_errors[0][2]
+        == "LZY401 module 're' is declared lazy but accessed at the top level"
+    )
+
+
+def test_checker_emits_lzy401_for_lazy_module_used_in_class_body() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+class Config:
+    PATTERN = re.compile(".")
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert len(lzy401_errors) == 1
+
+
+def test_checker_does_not_emit_lzy401_for_lazy_module_used_in_method_body() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+class Builder:
+    def build(self):
+        return re.compile(".")
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert lzy401_errors == []
+
+
+def test_checker_does_not_recommend_lazy_for_import_used_in_method_default() -> None:
+    tree = ast.parse(
+        """
+import re
+
+class Builder:
+    def __init__(self, pattern=re.compile(".")) -> None:
+        self.pattern = pattern
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy1xx_errors = [e for e in errors if e[2].startswith("LZY1")]
+    assert lzy1xx_errors == []
 
 
 def test_checker_emits_lzy401_for_aliased_lazy_import_accessed_at_top_level() -> None:
