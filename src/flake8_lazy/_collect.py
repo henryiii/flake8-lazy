@@ -13,8 +13,9 @@ state flags decide which buckets each node feeds:
 * ``_function_depth`` — function/lambda nesting only; gates the runtime/strict
   name buckets.  Class bodies (and parameter defaults, decorators, and base
   classes) execute at import time, so they still feed the runtime buckets.
-* ``_annotation_depth`` — inside an annotation; gates runtime/strict (not
-  ``all_loaded``).
+* ``_annotation_depth`` — inside an annotation or another lazily-evaluated
+  construct (``type`` statements, PEP 695 type parameters); gates
+  runtime/strict (not ``all_loaded``).
 * ``_conditional_depth`` — inside ``if``/``for``/``while``/``with``/``try``;
   gates the *strict* buckets only.
 * ``_try_depth`` — inside ``try``/``except``/``finally``; marks imports that can
@@ -263,6 +264,7 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
     def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         for decorator in node.decorator_list:
             self.visit(decorator)
+        self._visit_type_params(node)
         self._visit_arguments(node.args)
         self._visit_annotation(node.returns)
         self._function_depth += 1
@@ -274,6 +276,22 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
         self._scope_depth += 1
         self._function_depth += 1
         self.visit(node.body)
+        self._function_depth -= 1
+        self._scope_depth -= 1
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        # Only the first iterable is evaluated eagerly; the element and the
+        # remaining clauses run when the generator is iterated.
+        first, *rest = node.generators
+        self.visit(first.iter)
+        self._scope_depth += 1
+        self._function_depth += 1
+        self.visit(node.elt)
+        self.visit(first.target)
+        for condition in first.ifs:
+            self.visit(condition)
+        for comprehension in rest:
+            self.visit(comprehension)
         self._function_depth -= 1
         self._scope_depth -= 1
 
@@ -297,6 +315,7 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         for decorator in node.decorator_list:
             self.visit(decorator)
+        self._visit_type_params(node)
         for base in node.bases:
             self.visit(base)
         for keyword in node.keywords:
@@ -309,12 +328,22 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
             self.visit(stmt)
         self._scope_depth -= 1
 
-    def _visit_annotation(self, node: ast.expr | None) -> None:
+    def _visit_annotation(self, node: ast.AST | None) -> None:
         if node is None:
             return
         self._annotation_depth += 1
         self.visit(node)
         self._annotation_depth -= 1
+
+    def _visit_type_params(self, node: ast.AST) -> None:
+        # PEP 695 type-parameter bounds and defaults are evaluated lazily.
+        for type_param in getattr(node, "type_params", ()):
+            self._visit_annotation(type_param)
+
+    def visit_TypeAlias(self, node: ast.AST) -> None:  # Python 3.12+ type statement
+        # The alias value and type parameters are evaluated lazily.
+        for child in ast.iter_child_nodes(node):
+            self._visit_annotation(child)
 
     # -- conditionals --------------------------------------------------------
 
@@ -356,6 +385,9 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
         self._runtime_dead, self._guard_active = previous_dead, previous_guard
 
     def visit_For(self, node: ast.For) -> None:
+        self._visit_conditional(node)
+
+    def visit_Match(self, node: ast.Match) -> None:
         self._visit_conditional(node)
 
     def visit_While(self, node: ast.While) -> None:
