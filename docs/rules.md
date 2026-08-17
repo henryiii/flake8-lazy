@@ -21,6 +21,10 @@ icon: lucide/list-checks
 | `LZY204` | `__lazy_modules__` is assigned after importing modules it names |
 | `LZY205` | module listed in `__lazy_modules__` must be an absolute name    |
 
+For `LZY201`, plain string entries sort alphabetically and relative
+`f"{__spec__.parent}..."` entries go last, sorted among themselves. This matches
+what a plain "sort lines" command in an editor produces.
+
 ## 3xx: Native `lazy` keyword (Python 3.15+)
 
 | Code     | Meaning                                                            |

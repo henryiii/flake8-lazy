@@ -4,12 +4,12 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "ast",
+    "pathlib",
+    "tokenize",
     f"{__spec__.parent}._always_imported",
     f"{__spec__.parent}._analysis",
     f"{__spec__.parent}._collect",
     f"{__spec__.parent}.checker",
-    "pathlib",
-    "tokenize",
 ]
 
 import ast
