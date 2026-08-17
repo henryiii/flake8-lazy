@@ -155,7 +155,7 @@ messages_control.disable = [
 ]
 
 [tool.bumpversion]
-current_version = "0.8.4"
+current_version = "0.8.5"
 
 [[tool.bumpversion.files]]
 filename = "README.md"
