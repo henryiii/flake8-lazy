@@ -18,7 +18,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from flake8_lazy import __version__
-from flake8_lazy._ast_helpers import format_module_literal, lazy_module_sort_key
+from flake8_lazy._ast_helpers import format_module_literal
 from flake8_lazy._config import ConfigError, load_standalone_defaults
 from flake8_lazy._options import (
     APPLY_CHOICES,
@@ -251,9 +251,7 @@ def _run_sequential(
                 effective_modules = analysis.recommended_modules
                 if analysis.native_modules:
                     effective_modules = sorted(
-                        set(analysis.recommended_modules)
-                        | set(analysis.native_modules),
-                        key=lazy_module_sort_key,
+                        set(analysis.recommended_modules) | set(analysis.native_modules)
                     )
                 apply_lazy_modules(
                     path,
@@ -352,8 +350,7 @@ def _apply_rewrites(
             effective_modules = analysis.recommended_modules
             if analysis.native_modules:
                 effective_modules = sorted(
-                    set(analysis.recommended_modules) | set(analysis.native_modules),
-                    key=lazy_module_sort_key,
+                    set(analysis.recommended_modules) | set(analysis.native_modules)
                 )
             try:
                 apply_lazy_modules(

@@ -18,7 +18,7 @@ from flake8_lazy._analysis import (
     collect_recommended_lazy_modules,
     collect_unnecessary_lazy_imports,
 )
-from flake8_lazy._ast_helpers import format_module_literal
+from flake8_lazy._ast_helpers import FStringModule, format_module_literal
 from flake8_lazy._collect import build_module_info, collect_top_level_imports
 
 if TYPE_CHECKING:
@@ -30,17 +30,17 @@ if TYPE_CHECKING:
     [
         ("numpy", '"', '"numpy"'),
         ("numpy", "'", "'numpy'"),
-        ('f"{__spec__.parent}.sub"', '"', 'f"{__spec__.parent}.sub"'),
-        ('f"{__spec__.parent}.sub"', "'", "f'{__spec__.parent}.sub'"),
+        (FStringModule("{__spec__.parent}.sub"), '"', 'f"{__spec__.parent}.sub"'),
+        (FStringModule("{__spec__.parent}.sub"), "'", "f'{__spec__.parent}.sub'"),
         # Multi-level: the guarded rsplit's quotes must not reuse the outer quote
         # (GH-78), otherwise the f-string is a syntax error on Python < 3.12.
         (
-            'f"{(__spec__.parent or "").rsplit(".", 1)[0]}.sub"',
+            FStringModule('{(__spec__.parent or "").rsplit(".", 1)[0]}.sub'),
             '"',
             "f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.sub\"",
         ),
         (
-            'f"{(__spec__.parent or "").rsplit(".", 1)[0]}.sub"',
+            FStringModule('{(__spec__.parent or "").rsplit(".", 1)[0]}.sub'),
             "'",
             'f\'{(__spec__.parent or "").rsplit(".", 1)[0]}.sub\'',
         ),
@@ -639,7 +639,7 @@ from .local import helper
 
     assert len(errors) == 1
     assert (
-        errors[0][2] == "LZY102 module 'f\"{__spec__.parent}.local\"'"
+        errors[0][2] == 'LZY102 module f"{__spec__.parent}.local"'
         " should be listed in __lazy_modules__"
     )
 
@@ -652,7 +652,7 @@ def test_checker_multilevel_relative_message_defaults_to_plain_form() -> None:
 
     assert len(errors) == 1
     assert (
-        errors[0][2] == 'LZY102 module \'f"{__spec__.parent.rsplit(".", 1)[0]}.local"\''
+        errors[0][2] == "LZY102 module f\"{__spec__.parent.rsplit('.', 1)[0]}.local\""
         " should be listed in __lazy_modules__"
     )
 
@@ -669,7 +669,7 @@ def test_checker_multilevel_relative_message_guards_under_strict_typing(
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == 'LZY102 module \'f"{(__spec__.parent or "").rsplit(".", 1)[0]}.local"\''
+        == "LZY102 module f\"{(__spec__.parent or '').rsplit('.', 1)[0]}.local\""
         " should be listed in __lazy_modules__"
     )
 
@@ -682,7 +682,7 @@ def test_checker_keeps_full_path_for_multidotted_relative_import() -> None:
 
     assert len(errors) == 1
     assert (
-        errors[0][2] == "LZY102 module 'f\"{__spec__.parent}.builder.generator\"'"
+        errors[0][2] == 'LZY102 module f"{__spec__.parent}.builder.generator"'
         " should be listed in __lazy_modules__"
     )
 
@@ -696,7 +696,7 @@ def test_checker_keeps_full_path_for_multidotted_multilevel_relative_import() ->
     assert len(errors) == 1
     assert (
         errors[0][2]
-        == 'LZY102 module \'f"{__spec__.parent.rsplit(".", 1)[0]}.ast.tokenizer"\''
+        == "LZY102 module f\"{__spec__.parent.rsplit('.', 1)[0]}.ast.tokenizer\""
         " should be listed in __lazy_modules__"
     )
 

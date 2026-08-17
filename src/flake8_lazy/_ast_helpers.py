@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 __all__ = [
+    "FStringModule",
     "bound_name_for_import",
     "collect_loaded_names",
     "containing_package_prefixes",
@@ -16,11 +17,9 @@ __all__ = [
     "is_import_error_name",
     "is_lazy_import_node",
     "is_lazy_modules_target",
-    "is_relative_module_template",
     "is_suppress_import_error_call",
     "is_type_checking_guard",
     "lazy_module_container_elements",
-    "lazy_module_sort_key",
     "lazy_modules_assignment_value",
     "package_for_import_from",
     "parse_lazy_module_list",
@@ -160,39 +159,35 @@ def relative_parent_expression(*, level: int, strict_typing: bool = False) -> st
     return f'__spec__.parent.rsplit(".", {level - 1})[0]'
 
 
+class FStringModule(str):
+    """Content of a relative ``__lazy_modules__`` entry's f-string.
+
+    Holds ``{__spec__.parent...}.name`` without the ``f"..."`` wrapper, so a
+    plain ``sorted()`` puts these entries after every real module name (``{``
+    sorts after identifier characters), matching an editor's line sort where
+    quoted entries come before f-strings (see GH-97).
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return format_module_literal(self)
+
+
 def format_module_literal(module: str, quote: str = '"') -> str:
     """Render a ``__lazy_modules__`` entry as a source literal.
 
-    Plain modules become a simple quoted string.  Relative-import entries carry
-    an ``f"{__spec__.parent...}.name"`` template verbatim; for higher levels the
-    template embeds a ``(__spec__.parent or "").rsplit(".", n)`` call whose
+    Plain modules become a simple quoted string.  Relative-import entries are
+    :class:`FStringModule` contents rendered as f-strings; for higher levels
+    the content embeds a ``(__spec__.parent or "").rsplit(".", n)`` call whose
     quotes must be re-quoted with the opposite character because Python < 3.12
     cannot reuse the outer f-string quote inside the expression (see GH-78).
     """
-    if is_relative_module_template(module):
+    if isinstance(module, FStringModule):
         inner_quote = "'" if quote == '"' else '"'
-        template = module[2:-1].replace('"', inner_quote)
+        template = module.replace('"', inner_quote)
         return f"f{quote}{template}{quote}"
     return f"{quote}{module}{quote}"
-
-
-def is_relative_module_template(module: str) -> bool:
-    """True for the ``f"{__spec__.parent...}.name"`` relative-entry template."""
-    return (
-        module.startswith('f"{')
-        and module.endswith('"')
-        and "__spec__.parent" in module
-    )
-
-
-def lazy_module_sort_key(module: str) -> tuple[bool, str]:
-    """Sort key for ``__lazy_modules__`` entries: relative templates last.
-
-    An editor's line sort places quoted entries before f-strings (a quote
-    character sorts before ``f``), so the canonical order does the same
-    instead of slotting f-string entries under the letter "f" (see GH-97).
-    """
-    return (is_relative_module_template(module), module)
 
 
 def relative_import_package_name(
@@ -201,7 +196,7 @@ def relative_import_package_name(
     parent_expression = relative_parent_expression(
         level=level, strict_typing=strict_typing
     )
-    return f'f"{{{parent_expression}}}.{module}"'
+    return FStringModule(f"{{{parent_expression}}}.{module}")
 
 
 def _is_spec_parent(node: ast.AST) -> bool:

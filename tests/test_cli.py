@@ -283,7 +283,7 @@ __lazy_modules__ = [f"{__spec__.parent}.subpackage"]
     )
 
     assert build_module_info(tree).declared_lazy_modules == [
-        'f"{__spec__.parent}.subpackage"'
+        "{__spec__.parent}.subpackage"
     ]
 
 
