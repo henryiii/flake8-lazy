@@ -118,6 +118,28 @@ def _parse_line_length(value: str) -> int:
     return length
 
 
+def _expand_paths(paths: list[Path]) -> list[Path]:
+    """Expand directory arguments into their Python files, recursively.
+
+    Hidden directories and ``__pycache__`` are skipped during traversal.
+    """
+    result: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            for dirpath, dirnames, filenames in os.walk(path):
+                dirnames[:] = sorted(
+                    d for d in dirnames if not d.startswith(".") and d != "__pycache__"
+                )
+                result.extend(
+                    Path(dirpath) / name
+                    for name in sorted(filenames)
+                    if name.endswith(".py")
+                )
+        else:
+            result.append(path)
+    return result
+
+
 def main(argv: list[str] | None = None) -> None:
     """Run flake8-lazy checks directly from the command line."""
     help_epilog = "\n".join(
@@ -129,7 +151,13 @@ def main(argv: list[str] | None = None) -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=help_epilog,
     )
-    parser.add_argument("files", nargs="+", type=Path)
+    parser.add_argument(
+        "files",
+        nargs="+",
+        type=Path,
+        help="files or directories to check; directories are searched "
+        "recursively for Python files",
+    )
     parser.add_argument(
         "--version",
         action="version",
@@ -206,7 +234,7 @@ def main(argv: list[str] | None = None) -> None:
     namespace = parser.parse_args(list(argv) if argv is not None else None)
     exclude_modules = parse_exclude_modules(namespace.exclude_modules)
 
-    paths = _deduplicate_paths(namespace.files)
+    paths = _deduplicate_paths(_expand_paths(namespace.files))
     jobs = namespace.jobs
     if jobs == 0:
         jobs = os.cpu_count() or 1
