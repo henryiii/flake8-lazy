@@ -5,7 +5,7 @@ build-backend = "uv_build"
 
 [project]
 name = "flake8-lazy"
-version = "0.8.5"
+version = "0.9.0"
 authors = [
   { name = "Henry Schreiner", email = "henryschreineriii@gmail.com" },
 ]
@@ -155,7 +155,7 @@ messages_control.disable = [
 ]
 
 [tool.bumpversion]
-current_version = "0.8.5"
+current_version = "0.9.0"
 
 [[tool.bumpversion.files]]
 filename = "README.md"

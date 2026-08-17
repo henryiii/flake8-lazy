@@ -135,7 +135,7 @@ installs and runs it for you. Add it to your `.pre-commit-config.yaml`:
 
 ```yaml
 - repo: https://github.com/henryiii/flake8-lazy
-  rev: v0.8.5
+  rev: v0.9.0
   hooks:
     - id: flake8-lazy
 ```
@@ -146,7 +146,7 @@ the recommended `__lazy_modules__` declaration on commit:
 
 ```yaml
 - repo: https://github.com/henryiii/flake8-lazy
-  rev: v0.8.5
+  rev: v0.9.0
   hooks:
     - id: flake8-lazy
       args: [--apply=list]
