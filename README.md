@@ -193,6 +193,13 @@ flake8-lazy path/to/file.py another_file.py
 uvx flake8-lazy path/to/file.py another_file.py
 ```
 
+Arguments can be files or directories; directories are searched recursively for
+Python files, skipping hidden directories and `__pycache__`:
+
+```bash
+flake8-lazy src/
+```
+
 The default output format matches flake8-style diagnostics:
 
 ```console

@@ -108,6 +108,34 @@ def test_collect_errors_for_file_includes_path_in_decode_error(tmp_path: Path) -
         assert getattr(excinfo.value, "__notes__", None) is None
 
 
+def test_main_accepts_directory_recursively(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    top = tmp_path / "mod.py"
+    top.write_text("import numpy\n", encoding="utf-8")
+    nested = tmp_path / "pkg" / "sub" / "inner.py"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("import scipy\n", encoding="utf-8")
+    hidden = tmp_path / ".venv" / "skipped.py"
+    hidden.parent.mkdir()
+    hidden.write_text("import numpy\n", encoding="utf-8")
+    cache = tmp_path / "__pycache__" / "cached.py"
+    cache.parent.mkdir()
+    cache.write_text("import numpy\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main([str(tmp_path)])
+
+    assert excinfo.value.code == 1
+
+    output = capsys.readouterr().out
+    assert f"{top}:1:0: LZY102" in output
+    assert f"{nested}:1:0: LZY102" in output
+    assert str(hidden) not in output
+    assert str(cache) not in output
+
+
 def test_main_outputs_lzy102_and_exits_nonzero(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

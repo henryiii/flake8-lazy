@@ -12,6 +12,13 @@ flake8-lazy path/to/file.py
 uvx flake8-lazy path/to/file.py
 ```
 
+Arguments can be files or directories; directories are searched recursively for
+Python files, skipping hidden directories and `__pycache__`:
+
+```bash
+flake8-lazy src/
+```
+
 By default, output is flake8-like:
 
 ```text
