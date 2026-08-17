@@ -6,9 +6,6 @@ __lazy_modules__ = [
     f"{__spec__.parent}._always_imported",
     f"{__spec__.parent}._analysis",
     f"{__spec__.parent}._collect",
-    f"{__spec__.parent}._options",
-    "importlib",
-    "importlib.metadata",
 ]
 
 import importlib.metadata

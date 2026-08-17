@@ -8,8 +8,11 @@ The builder always descends into the whole tree (so ``all_loaded_names`` matches
 ``ast.walk`` semantics, which side-effect-only detection relies on), while a few
 state flags decide which buckets each node feeds:
 
-* ``_scope_depth`` — function/class/lambda nesting; gates the runtime/strict
-  name buckets and whether an import counts as module-scope.
+* ``_scope_depth`` — function/class/lambda nesting; gates whether an import
+  counts as module-scope.
+* ``_function_depth`` — function/lambda nesting only; gates the runtime/strict
+  name buckets.  Class bodies (and parameter defaults, decorators, and base
+  classes) execute at import time, so they still feed the runtime buckets.
 * ``_annotation_depth`` — inside an annotation; gates runtime/strict (not
   ``all_loaded``).
 * ``_conditional_depth`` — inside ``if``/``for``/``while``/``with``/``try``;
@@ -70,6 +73,7 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
     def __init__(self, *, strict_typing: bool = False) -> None:
         self._strict_typing = strict_typing
         self._scope_depth = 0
+        self._function_depth = 0
         self._annotation_depth = 0
         self._conditional_depth = 0
         self._try_depth = 0
@@ -102,7 +106,7 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
     @property
     def _records_runtime(self) -> bool:
         return (
-            self._scope_depth == 0
+            self._function_depth == 0
             and self._annotation_depth == 0
             and not self._runtime_dead
         )
@@ -261,12 +265,16 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
             self.visit(decorator)
         self._visit_arguments(node.args)
         self._visit_annotation(node.returns)
+        self._function_depth += 1
         self._visit_body(node.body)
+        self._function_depth -= 1
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         self._visit_arguments(node.args)
         self._scope_depth += 1
+        self._function_depth += 1
         self.visit(node.body)
+        self._function_depth -= 1
         self._scope_depth -= 1
 
     def _visit_arguments(self, args: ast.arguments) -> None:
@@ -311,7 +319,7 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
     # -- conditionals --------------------------------------------------------
 
     def visit_If(self, node: ast.If) -> None:
-        if self._scope_depth != 0:
+        if self._function_depth != 0:
             self._visit_conditional(node)
             return
 
