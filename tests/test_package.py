@@ -1479,6 +1479,122 @@ class Builder:
     assert lzy1xx_errors == []
 
 
+def test_checker_does_not_emit_lzy401_for_lazy_module_used_in_match_case() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+import sys
+
+match sys.argv[1]:
+    case "compile":
+        PATTERN = re.compile(".")
+    case _:
+        PATTERN = None
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert lzy401_errors == []
+
+
+def test_checker_does_not_emit_lzy401_for_lazy_module_used_in_genexp_body() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+PATTERNS = (re.compile(p) for p in ["a", "b"])
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert lzy401_errors == []
+
+
+def test_checker_emits_lzy401_for_lazy_module_used_in_genexp_iterable() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+MATCHES = (m for m in re.findall(".", "ab"))
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert len(lzy401_errors) == 1
+
+
+def test_checker_emits_lzy401_for_lazy_module_used_in_listcomp_body() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+PATTERNS = [re.compile(p) for p in ["a", "b"]]
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert len(lzy401_errors) == 1
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 12), reason="type statements require Python 3.12+"
+)
+def test_checker_does_not_emit_lzy401_for_lazy_module_used_in_type_alias() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["re"]
+import re
+
+type Pattern = re.Pattern
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy401_errors = [e for e in errors if e[2].startswith("LZY401")]
+    assert lzy401_errors == []
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 12), reason="type parameters require Python 3.12+"
+)
+def test_import_used_only_in_type_param_bound_is_not_side_effect_only() -> None:
+    tree = ast.parse(
+        """
+import importlib.metadata
+
+def f[T: importlib.metadata.PackageNotFoundError](x: T) -> T:
+    return x
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    lzy101_errors = [e for e in errors if e[2].startswith("LZY101")]
+    assert [e[2].split("'")[1] for e in lzy101_errors] == [
+        "importlib.metadata",
+        "importlib",
+    ]
+
+
 def test_checker_emits_lzy401_for_aliased_lazy_import_accessed_at_top_level() -> None:
     tree = ast.parse(
         """
