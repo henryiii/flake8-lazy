@@ -43,14 +43,14 @@ repos:
         args: [--prose-wrap=always]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "cb8c523fd4835aba42af70f4cad5568db4df0b6c" # frozen: v0.16.0
+    rev: "aab412d509121cb5f7533134b7e67f9fab59c682" # frozen: v0.16.4
     hooks:
       - id: ruff-check
         args: ["--fix"]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: "41e691678310dfd3833f7ab4e180ddb014310356" # frozen: v2.3.0
+    rev: "7ff8d35ae36a7d2b968f2f90b4c723e292e594ee" # frozen: v2.3.1
     hooks:
       - id: mypy
         files: src|tests|noxfile.py
@@ -60,7 +60,7 @@ repos:
           - pytest
 
   - repo: https://github.com/facebook/pyrefly-pre-commit
-    rev: "14025642291adc2db2f9d9fa398e98699ef3fafc" # frozen: 1.1.1
+    rev: "4c4bc90ba8bfd4e1609063a467d8e8146a913e44" # frozen: 1.2.0
     hooks:
       - id: pyrefly-check
         pass_filenames: false
@@ -87,13 +87,13 @@ repos:
         exclude: .pre-commit-config.yaml
 
   - repo: https://github.com/abravalheri/validate-pyproject
-    rev: "4b2e70d08cb2ccd26d1fba73588de41c7a5d50b7" # frozen: v0.25
+    rev: "17e12779811926f000bdfa1795f9e3735dd71ac3" # frozen: 0.26
     hooks:
       - id: validate-pyproject
         additional_dependencies: ["validate-pyproject-schema-store[all]"]
 
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "6b63472e72e1a91ed8a2f6d483790dfb644fa1d3" # frozen: 0.37.4
+    rev: "12e63946db2c5cfcc9030fac21c3883ba88c6ed8" # frozen: 0.38.0
     hooks:
       - id: check-dependabot
       - id: check-github-workflows
@@ -107,12 +107,12 @@ repos:
         additional_dependencies: [uv_build<0.13]
 
   - repo: https://github.com/scientific-python/cookie
-    rev: 8f0581cc50b14023b14a9c77e9b358738ba637e7 # frozen: 2026.06.18
+    rev: 1589a99867d6cac494ac7545fe6a83108580a3ee # frozen: 2026.08.14
     hooks:
       - id: sp-repo-review
 
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: 067260dc5fe6ea86b7551bfd6f8b3ba4e6c93129 # frozen: v1.28.0
+    rev: 451b56af716f9f0d0c2b816503a3fd0cf8b036fa # frozen: v1.29.0
     hooks:
       - id: zizmor
         files: "^\\.github"
