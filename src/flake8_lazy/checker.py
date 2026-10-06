@@ -203,7 +203,8 @@ class LazyImportChecker:
                 "Comma-separated list of module names to exclude from "
                 "lazy-import recommendations. These modules are treated as "
                 "always-imported and will not be flagged or recommended for "
-                "lazy declarations. [%(default)s]"
+                "lazy declarations. Use 'pkg.*' to also match all submodules. "
+                "[%(default)s]"
             ),
         )
         option_manager.add_option(

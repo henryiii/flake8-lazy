@@ -240,6 +240,7 @@ def _is_non_lazy_binding(
 class _RecommendationPolicy:
     excluded_packages: set[str]
     blocked_packages: set[str]
+    blocked_trees: frozenset[str]
 
     def should_skip(self, package: str, *, seen_packages: set[str]) -> bool:
         return (
@@ -247,6 +248,15 @@ class _RecommendationPolicy:
             or package in self.excluded_packages
             or package in self.blocked_packages
             or package in seen_packages
+            or self._in_blocked_tree(package)
+        )
+
+    def _in_blocked_tree(self, package: str) -> bool:
+        if not self.blocked_trees:
+            return False
+        parts = package.split(".")
+        return any(
+            ".".join(parts[:i]) in self.blocked_trees for i in range(1, len(parts) + 1)
         )
 
 
@@ -297,6 +307,10 @@ def _collect_recommended_lazy_entries(
     policy = _RecommendationPolicy(
         excluded_packages=set(info.enclosing_packages),
         blocked_packages=blocked_packages,
+        # ``pkg.*`` matches ``pkg`` and all of its submodules.
+        blocked_trees=frozenset(
+            name.removesuffix(".*") for name in always_imported if name.endswith(".*")
+        ),
     )
 
     recommended: list[tuple[str, int, int]] = []

@@ -2110,6 +2110,25 @@ def test_checker_run_exclude_modules_does_not_affect_other_modules() -> None:
     assert any("pandas" in m for m in modules)
 
 
+@pytest.mark.parametrize(
+    ("exclude", "expected"),
+    [
+        ("numpy", {"numpy.linalg", "numpyx"}),
+        ("numpy.*", {"numpyx"}),
+        ("numpy.linalg.*", {"numpy", "numpyx"}),
+    ],
+)
+def test_checker_run_exclude_modules_wildcard(exclude: str, expected: set[str]) -> None:
+    """A trailing ``.*`` excludes the package and all its submodules."""
+    tree = ast.parse("import numpy\nfrom numpy.linalg import norm\nimport numpyx\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = checker.run(exclude_modules=frozenset({exclude}))
+
+    flagged = {e[2].split("'")[1] for e in errors if e[2].startswith("LZY102")}
+    assert flagged == expected
+
+
 # ---------------------------------------------------------------------------
 # Regression tests pinning behaviour the single-pass collector must preserve.
 # These cover currently-untested edge cases where scope/conditional nesting
