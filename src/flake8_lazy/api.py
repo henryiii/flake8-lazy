@@ -9,6 +9,7 @@ __lazy_modules__ = [
     f"{__spec__.parent}._always_imported",
     f"{__spec__.parent}._analysis",
     f"{__spec__.parent}._collect",
+    f"{__spec__.parent}._config",
     f"{__spec__.parent}.checker",
 ]
 
@@ -26,6 +27,7 @@ from ._analysis import (
     has_native_lazy_imports,
 )
 from ._collect import build_module_info
+from ._config import ScriptSettings, load_script_settings
 from .checker import build_diagnostics
 
 __all__ = [
@@ -52,6 +54,7 @@ class _FileAnalysis:
     is_dynamic: bool
     has_native_lazy: bool
     errors: list[tuple[int, int, str]]
+    settings: ScriptSettings
 
 
 def _process_single_file(
@@ -65,6 +68,13 @@ def _process_single_file(
 ) -> tuple[Path, _FileAnalysis]:
     """Analyze a single file for parallel execution."""
     item, tree, source = _parse_file(path)
+    settings = load_script_settings(source)
+    import_preset, exclude_modules, strict_typing = _apply_settings(
+        settings,
+        import_preset=import_preset,
+        exclude_modules=exclude_modules,
+        strict_typing=strict_typing,
+    )
     info = build_module_info(tree, item, strict_typing=strict_typing)
     always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
 
@@ -109,6 +119,24 @@ def _process_single_file(
         is_dynamic=is_dynamic,
         has_native_lazy=has_native_lazy,
         errors=errors,
+        settings=settings,
+    )
+
+
+def _apply_settings(
+    settings: ScriptSettings,
+    *,
+    import_preset: str,
+    exclude_modules: frozenset[str],
+    strict_typing: bool,
+) -> tuple[str, frozenset[str], bool]:
+    """Return the options with per-file script settings applied."""
+    return (
+        import_preset if settings.import_preset is None else settings.import_preset,
+        exclude_modules
+        if settings.exclude_modules is None
+        else settings.exclude_modules,
+        strict_typing if settings.strict_typing is None else settings.strict_typing,
     )
 
 
@@ -159,6 +187,12 @@ def collect_errors_for_file(
         msg = f"invalid import_preset {import_preset!r}; choose from: {valid}"
         raise ValueError(msg)
     item, tree, source = _parse_file(path)
+    import_preset, exclude_modules, strict_typing = _apply_settings(
+        load_script_settings(source),
+        import_preset=import_preset,
+        exclude_modules=exclude_modules,
+        strict_typing=strict_typing,
+    )
     always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
     info = build_module_info(tree, item, strict_typing=strict_typing)
     errors = build_diagnostics(info, always_imported=always_imported)
@@ -189,8 +223,14 @@ def collect_recommended_lazy_modules_for_file(
         valid = ", ".join(sorted(IMPORT_PRESETS))
         msg = f"invalid import_preset {import_preset!r}; choose from: {valid}"
         raise ValueError(msg)
+    item, tree, source = _parse_file(path)
+    import_preset, exclude_modules, strict_typing = _apply_settings(
+        load_script_settings(source),
+        import_preset=import_preset,
+        exclude_modules=exclude_modules,
+        strict_typing=strict_typing,
+    )
     always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
-    item, tree, _source = _parse_file(path)
     info = build_module_info(tree, item, strict_typing=strict_typing)
     return collect_recommended_lazy_modules(info, always_imported=always_imported)
 

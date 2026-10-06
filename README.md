@@ -35,7 +35,9 @@ have the tool update your lazy modules automatically! For maximum laziness, try
 `--apply=dynamic`.
 
 The standalone runner also reads defaults from a `[tool.flake8-lazy.standalone]`
-table in your `pyproject.toml`; see the
+table in your `pyproject.toml`. A file can set its own options in a
+`[tool.flake8-lazy]` table inside a PEP 723 `# /// script` block; this also
+works under flake8. See the
 [CLI docs](https://flake8-lazy.readthedocs.io/en/latest/cli/) for details.
 
 ## Install

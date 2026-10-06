@@ -20,7 +20,11 @@ from pathlib import Path
 
 from flake8_lazy import __version__
 from flake8_lazy._ast_helpers import format_module_literal
-from flake8_lazy._config import ConfigError, load_standalone_defaults
+from flake8_lazy._config import (
+    ConfigError,
+    ScriptConfigError,
+    load_standalone_defaults,
+)
 from flake8_lazy._options import (
     APPLY_CHOICES,
     DEFAULT_EXCLUDE_MODULES,
@@ -91,6 +95,17 @@ def _should_apply(
     if apply_mode == "dynamic" and is_dynamic:
         return False
     return bool(recommended_modules) or declared_modules is not None or has_native_lazy
+
+
+def _rewrite_options(
+    analysis: _FileAnalysis, *, line_length: int, strict_typing: bool
+) -> tuple[int, bool]:
+    """Return ``(line_length, strict_typing)`` with script settings applied."""
+    settings = analysis.settings
+    return (
+        line_length if settings.line_length is None else settings.line_length,
+        strict_typing if settings.strict_typing is None else settings.strict_typing,
+    )
 
 
 def _parse_jobs(value: str) -> int:
@@ -283,12 +298,17 @@ def _run_sequential(
                     effective_modules = sorted(
                         set(analysis.recommended_modules) | set(analysis.native_modules)
                     )
+                line_length, strict_typing = _rewrite_options(
+                    analysis,
+                    line_length=namespace.line_length,
+                    strict_typing=namespace.strict_typing,
+                )
                 apply_lazy_modules(
                     path,
                     effective_modules,
                     mode=namespace.apply,
-                    line_length=namespace.line_length,
-                    strict_typing=namespace.strict_typing,
+                    line_length=line_length,
+                    strict_typing=strict_typing,
                 )
                 if namespace.apply == "native" and sys.version_info < (3, 15):
                     continue
@@ -303,7 +323,7 @@ def _run_sequential(
         except OSError as exc_:
             exc = exc_
             found_errors = True
-        except SyntaxError as exc_:
+        except (SyntaxError, ScriptConfigError) as exc_:
             exc = exc_
             found_errors = True
 
@@ -331,6 +351,8 @@ def _emit_output(
             sys.stderr.write(
                 f"{path}:{lineno}:{col_offset}: LZY000 failed to parse Python file\n",
             )
+        elif isinstance(exc, ScriptConfigError):
+            sys.stderr.write(f"{path}:{exc.lineno}:0: LZY000 {exc}\n")
         else:
             raise exc
         return True
@@ -382,13 +404,16 @@ def _apply_rewrites(
                 effective_modules = sorted(
                     set(analysis.recommended_modules) | set(analysis.native_modules)
                 )
+            file_line_length, file_strict_typing = _rewrite_options(
+                analysis, line_length=line_length, strict_typing=strict_typing
+            )
             try:
                 apply_lazy_modules(
                     path,
                     effective_modules,
                     mode=apply_mode,
-                    line_length=line_length,
-                    strict_typing=strict_typing,
+                    line_length=file_line_length,
+                    strict_typing=file_strict_typing,
                 )
             except OSError as exc:
                 errors_by_path[path] = exc
@@ -405,7 +430,7 @@ def _apply_rewrites(
                     include_errors=True,
                     strict_typing=strict_typing,
                 )
-            except (OSError, SyntaxError) as exc:
+            except (OSError, SyntaxError, ScriptConfigError) as exc:
                 errors_by_path[path] = exc
                 found_errors = True
     return results, errors_by_path, found_errors
@@ -447,7 +472,7 @@ def _run_parallel(
             path = futures[future]
             try:
                 result_path, analysis = future.result()
-            except (OSError, SyntaxError) as exc:
+            except (OSError, SyntaxError, ScriptConfigError) as exc:
                 errors_by_path[path] = exc
                 found_errors = True
                 continue

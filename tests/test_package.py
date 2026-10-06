@@ -2217,3 +2217,36 @@ def test_version_guard_boolop_and_chain(test: str, *, excluded: bool) -> None:
     errors = list(checker.run())
 
     assert (not errors) == excluded
+
+
+def test_checker_reads_script_settings() -> None:
+    source = (
+        "# /// script\n"
+        "# [tool.flake8-lazy]\n"
+        '# lazy-exclude-modules = ["numpy"]\n'
+        "# ///\n"
+        "import numpy\n"
+        "import pandas\n"
+    )
+    checker = LazyImportChecker(
+        tree=ast.parse(source),
+        filename="example.py",
+        lines=source.splitlines(keepends=True),
+    )
+
+    assert [message for _, _, message, _ in checker.run()] == [
+        "LZY102 module 'pandas' should be listed in __lazy_modules__"
+    ]
+
+
+def test_checker_reports_invalid_script_settings() -> None:
+    source = "# /// script\n# [tool.flake8-lazy]\n# bad = 1\n# ///\n"
+    checker = LazyImportChecker(
+        tree=ast.parse(source),
+        filename="example.py",
+        lines=source.splitlines(keepends=True),
+    )
+
+    [(lineno, col, message, _)] = checker.run()
+    assert (lineno, col) == (1, 0)
+    assert message.startswith("LZY000 invalid [tool.flake8-lazy] in script")

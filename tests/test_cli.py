@@ -12,7 +12,10 @@ from flake8_lazy._analysis import collect_recommended_lazy_modules
 from flake8_lazy._collect import build_module_info
 from flake8_lazy._config import (
     ConfigError,
+    ScriptConfigError,
+    ScriptSettings,
     find_config_file,
+    load_script_settings,
     load_standalone_defaults,
 )
 from flake8_lazy._rewriter import apply_lazy_modules
@@ -1868,3 +1871,139 @@ def test_main_invalid_config_exits_two(
 
     assert excinfo.value.code == 2
     assert "unknown key 'unknown'" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# PEP 723 script block ([tool.flake8-lazy]) tests
+# ---------------------------------------------------------------------------
+
+
+def _script(body: str, code: str = "import numpy\n") -> str:
+    lines = "".join(f"# {line}\n" if line else "#\n" for line in body.splitlines())
+    return f"# /// script\n# [tool.flake8-lazy]\n{lines}# ///\n{code}"
+
+
+def test_load_script_settings_empty_without_block() -> None:
+    assert load_script_settings("import numpy\n") == ScriptSettings()
+
+
+def test_load_script_settings_ignores_other_tables() -> None:
+    source = '# /// script\n# dependencies = ["numpy"]\n# ///\nimport numpy\n'
+    assert load_script_settings(source) == ScriptSettings()
+
+
+def test_load_script_settings_reads_keys() -> None:
+    source = _script(
+        'lazy-import-preset = "none"\n'
+        'lazy-exclude-modules = ["numpy", "pandas.*"]\n'
+        "strict-typing = true\n"
+        "line-length = 40\n"
+    )
+    assert load_script_settings(source) == ScriptSettings(
+        import_preset="none",
+        exclude_modules=frozenset({"numpy", "pandas.*"}),
+        strict_typing=True,
+        line_length=40,
+    )
+
+
+@pytest.mark.parametrize(
+    ("body", "match"),
+    [
+        ('format = "flake8"\n', "unknown key 'format'"),
+        ('lazy-exclude-modules = "numpy"\n', "must be a list of strings"),
+        ("not = valid = toml\n", "failed to parse"),
+    ],
+)
+def test_load_script_settings_rejects_invalid(body: str, match: str) -> None:
+    with pytest.raises(ScriptConfigError, match=match) as excinfo:
+        load_script_settings("\n" + _script(body))
+    assert excinfo.value.lineno == 2
+
+
+@pytest.mark.parametrize("value", ['"oops"', "[]", "1"])
+def test_load_script_settings_rejects_non_table_tool(value: str) -> None:
+    source = f"\n# /// script\n# tool = {value}\n# ///\nimport numpy\n"
+    with pytest.raises(ScriptConfigError, match=r"\[tool\] must be a table") as excinfo:
+        load_script_settings(source)
+    assert excinfo.value.lineno == 2
+
+
+def test_load_script_settings_rejects_multiple_blocks() -> None:
+    block = "# /// script\n# x = 1\n# ///\nimport os\n"
+    with pytest.raises(ScriptConfigError, match="multiple script blocks"):
+        load_script_settings(block + block)
+
+
+def test_main_reads_exclude_modules_from_script(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(_script('lazy-exclude-modules = ["numpy"]\n'), encoding="utf-8")
+
+    _run_main_and_assert_no_output([str(path)], capsys)
+
+
+def test_main_script_overrides_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_config(tmp_path, 'lazy-exclude-modules = ["numpy"]\n')
+    path = tmp_path / "mod.py"
+    path.write_text(
+        _script('lazy-exclude-modules = ["pandas"]\n', "import numpy\nimport pandas\n"),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit, match="1"):
+        main([str(path)])
+
+
+@pytest.mark.parametrize("jobs", ["1", "2"])
+def test_main_apply_uses_script_line_length(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    jobs: str,
+) -> None:
+    path = tmp_path / "mod.py"
+    other = tmp_path / "other.py"
+    code = "import numpy\nimport pandas\n"
+    path.write_text(_script("line-length = 10\n", code), encoding="utf-8")
+    other.write_text(code, encoding="utf-8")
+
+    _run_main_and_assert_no_output(
+        ["--apply=list", "-j", jobs, str(path), str(other)], capsys
+    )
+    assert '__lazy_modules__ = [\n    "numpy",\n    "pandas",\n]' in path.read_text(
+        encoding="utf-8"
+    )
+    assert '__lazy_modules__ = ["numpy", "pandas"]' in other.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("jobs", ["1", "2"])
+def test_main_reports_invalid_script_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    jobs: str,
+) -> None:
+    path = tmp_path / "mod.py"
+    other = tmp_path / "other.py"
+    path.write_text(_script('unknown = "x"\n'), encoding="utf-8")
+    other.write_text("", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="1"):
+        main(["-j", jobs, str(path), str(other)])
+
+    err = capsys.readouterr().err
+    assert err.startswith(f"{path}:1:0: LZY000 invalid [tool.flake8-lazy] in script")
+    assert "unknown key 'unknown'" in err
+
+
+def test_collect_errors_for_file_reads_script(tmp_path: Path) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(_script('lazy-exclude-modules = ["numpy"]\n'), encoding="utf-8")
+
+    assert collect_errors_for_file(path) == []
+    assert collect_recommended_lazy_modules_for_file(path) == []
