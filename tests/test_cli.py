@@ -200,6 +200,39 @@ def test_collect_recommended_lazy_modules_for_file_skips_enclosing_packages(
     assert collect_recommended_lazy_modules_for_file(path) == ["requests"]
 
 
+def test_collect_recommended_lazy_modules_for_file_keeps_enclosing_from_imports(
+    tmp_path: Path,
+) -> None:
+    # ``from a import X`` defers the attribute fetch, which can load a submodule.
+    package_dir = tmp_path / "a"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    path = package_dir / "__main__.py"
+    path.write_text(
+        "import a\nimport a.env\nfrom a import Builder\n\n"
+        "def f():\n    return a.__version__, Builder\n",
+        encoding="utf-8",
+    )
+
+    assert collect_recommended_lazy_modules_for_file(path) == ["a", "a.env"]
+
+
+def test_collect_errors_for_file_allows_enclosing_package_with_from_import(
+    tmp_path: Path,
+) -> None:
+    package_dir = tmp_path / "a"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    path = package_dir / "__main__.py"
+    path.write_text(
+        '__lazy_modules__ = ["a"]\nfrom a import Builder\n\n'
+        "def f():\n    return Builder\n",
+        encoding="utf-8",
+    )
+
+    assert collect_errors_for_file(path) == []
+
+
 def test_collect_recommended_lazy_modules_for_repo_review_rich_children() -> None:
     path = Path(__file__).parent / "examples" / "repo_review" / "__main__.py.txt"
 
@@ -593,6 +626,23 @@ def test_main_apply_multidotted_relative_keeps_full_path(
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = [f"{__spec__.parent}.builder.generator"]\n'
         "\nfrom .builder.generator import parse\n\n\ndef f():\n    return parse\n"
+    )
+
+
+def test_main_apply_relative_package_only_declares_parent(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from . import helper\n\n\ndef f():\n    return helper\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = [f"{__spec__.parent}"]\n'
+        "\nfrom . import helper\n\n\ndef f():\n    return helper\n"
     )
 
 

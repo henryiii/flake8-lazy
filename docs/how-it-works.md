@@ -40,7 +40,10 @@ It intentionally ignores:
 
 For files inside a package, enclosing package names are also treated as
 non-lazy. For example, in `a/b/c.py`, names `a` and `a.b` should not be declared
-lazy (either in `__lazy_modules__` or with `lazy import`).
+lazy (either in `__lazy_modules__` or with `lazy import`). The exception is
+`from a import name`: the package is already loaded, but a lazy import defers
+the attribute fetch, which can load a submodule (for example, through a lazy
+import or `__getattr__` in `a/__init__.py`). So `a` is recommended there.
 
 PEP 810 matches `__lazy_modules__` entries exactly against the imported module
 name. `import a.b.c` (with or without `as`) only needs `"a.b.c"`, and
@@ -53,8 +56,9 @@ reports these unneeded entries, and `--apply` removes them.
 
 A deferred relative import is rendered against `__spec__.parent` so the entry
 stays correct if the package is renamed or vendored, e.g.
-`f"{__spec__.parent}.helper"` for `from .helper import ...`. This is valid under
-a strict type checker in a normal module, where `__spec__` is always set.
+`f"{__spec__.parent}.helper"` for `from .helper import ...`, or
+`f"{__spec__.parent}"` for `from . import helper`. This is valid under a strict
+type checker in a normal module, where `__spec__` is always set.
 
 Imports more than one level up need `__spec__.parent.rsplit(".", n)[0]` to walk
 up the package tree. Because `__spec__.parent` is typed `str | None`, that

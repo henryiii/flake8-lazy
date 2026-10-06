@@ -305,7 +305,7 @@ def _collect_recommended_lazy_entries(
         | set(always_imported)
     )
     policy = _RecommendationPolicy(
-        excluded_packages=set(info.enclosing_packages),
+        excluded_packages=set(info.loaded_enclosing_packages),
         blocked_packages=blocked_packages,
         # ``pkg.*`` matches ``pkg`` and all of its submodules.
         blocked_trees=frozenset(
@@ -433,9 +433,10 @@ def collect_enclosing_lazy_modules(
     """Return lazily-declared enclosing package modules for the analysed file."""
     enclosing_lazy_modules: list[tuple[str, int, int]] = []
     seen_modules: set[str] = set()
+    enclosing_packages = info.loaded_enclosing_packages
 
     for module, lineno, col_offset in info.lazy_module_entries:
-        if module not in info.enclosing_packages or module in seen_modules:
+        if module not in enclosing_packages or module in seen_modules:
             continue
         enclosing_lazy_modules.append((module, lineno, col_offset))
         seen_modules.add(module)
@@ -444,7 +445,7 @@ def collect_enclosing_lazy_modules(
         package = binding.package
         if package is None:
             continue
-        if package not in info.enclosing_packages or package in seen_modules:
+        if package not in enclosing_packages or package in seen_modules:
             continue
         enclosing_lazy_modules.append((package, binding.lineno, binding.col_offset))
         seen_modules.add(package)

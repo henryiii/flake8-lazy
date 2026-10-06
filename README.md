@@ -185,7 +185,9 @@ flake8-lazy inspects module-scope imports and module runtime usage.
   needed: `import a.b.c` only needs `"a.b.c"`. Older versions recommended the
   parents; `LZY202` now reports them and `--apply` removes them.
 - Treats enclosing package names as non-lazy for a file. For example, in
-  `a/b/c.py`, `a` and `a.b` should not be listed as lazy.
+  `a/b/c.py`, `a` and `a.b` should not be listed as lazy. The exception is
+  `from a import name`: a lazy import defers the attribute fetch, which can load
+  a submodule, so `a` is recommended there.
 
 ## CLI
 

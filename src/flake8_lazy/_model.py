@@ -88,6 +88,16 @@ class ModuleInfo:
     enclosing_packages: frozenset[str] = field(default_factory=frozenset)
 
     @property
+    def loaded_enclosing_packages(self) -> frozenset[str]:
+        """Enclosing packages that gain nothing from lazy loading.
+
+        They are always loaded before this file, but ``from pkg import name``
+        still defers the attribute fetch, which can load a submodule.
+        """
+        from_imported = {imp.package for imp in self.imports if imp.is_from_import}
+        return self.enclosing_packages - from_imported
+
+    @property
     def lazy_packages(self) -> set[str]:
         """Statically-declared ``__lazy_modules__`` values (last assignment)."""
         return set(self.declared_lazy_modules or ())
