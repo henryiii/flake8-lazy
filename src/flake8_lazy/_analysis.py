@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ._always_imported import ALWAYS_IMPORTED_DEFAULT, BROKEN
+from ._always_imported import ALWAYS_IMPORTED_DEFAULT
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     from ._model import ImportInfo, ModuleInfo
 
 __all__ = [
-    "collect_broken_lazy_modules",
     "collect_duplicate_lazy_modules",
     "collect_enclosing_lazy_modules",
     "collect_invalid_lazy_module_names",
@@ -151,19 +150,6 @@ def collect_invalid_lazy_module_names(info: ModuleInfo) -> list[tuple[str, int, 
         (module, lineno, col_offset)
         for module, lineno, col_offset in info.lazy_module_entries
         if module.startswith(".")
-    ]
-
-
-def collect_broken_lazy_modules(
-    info: ModuleInfo,
-    *,
-    broken: frozenset[str] = BROKEN,
-) -> list[tuple[str, int, int]]:
-    """Return modules listed in ``__lazy_modules__`` that are known broken."""
-    return [
-        (module, lineno, col_offset)
-        for module, lineno, col_offset in info.lazy_module_entries
-        if module in broken
     ]
 
 

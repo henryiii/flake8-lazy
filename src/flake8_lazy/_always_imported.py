@@ -20,15 +20,6 @@ CPython 3.15 on Unix.  Platform-specific names (e.g. ``posix`` on POSIX,
 
 from __future__ import annotations
 
-# Known to be broken under lazy imports in 3.15.0b1
-# (due to using __getattr__ for laziness)
-BROKEN = frozenset(
-    {
-        "concurrent",
-        "concurrent.futures",
-    }
-)
-
 # Generated with: uv run --python 3.15 python scripts/list_always_imported.py -S
 # (CPython 3.15, Linux) — python -IS startup modules.
 ALWAYS_IMPORTED_MINIMAL = frozenset(
@@ -80,6 +71,6 @@ ALWAYS_IMPORTED_DEFAULT = frozenset(
 # Map of preset name → frozenset of always-imported module names.
 IMPORT_PRESETS: dict[str, frozenset[str]] = {
     "none": frozenset(),
-    "minimal": ALWAYS_IMPORTED_MINIMAL | BROKEN,
-    "default": ALWAYS_IMPORTED_DEFAULT | BROKEN,
+    "minimal": ALWAYS_IMPORTED_MINIMAL,
+    "default": ALWAYS_IMPORTED_DEFAULT,
 }

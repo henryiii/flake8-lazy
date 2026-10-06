@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -22,6 +23,17 @@ from flake8_lazy.api import (
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
+
+
+def test_main_help_lists_rules_in_order(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit, match="0"):
+        main(["--help"])
+    out = capsys.readouterr().out
+    codes = re.findall(r"^\s*(LZY\d{3})\b", out, flags=re.MULTILINE)
+    assert len(codes) > 10
+    assert codes == sorted(codes)
 
 
 def _assert_no_output(capsys: pytest.CaptureFixture[str]) -> None:
@@ -1438,6 +1450,22 @@ def test_collect_recommended_preset_default_excludes_always_imported(
     mods = collect_recommended_lazy_modules_for_file(path)
 
     assert "sys" not in mods
+
+
+@pytest.mark.parametrize("preset", ["none", "minimal", "default"])
+def test_collect_recommended_includes_concurrent_futures(
+    tmp_path: Path, preset: str
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from concurrent.futures import ThreadPoolExecutor\n", encoding="utf-8"
+    )
+
+    mods = collect_recommended_lazy_modules_for_file(path, import_preset=preset)
+    errors = collect_errors_for_file(path, import_preset=preset)
+
+    assert "concurrent.futures" in mods
+    assert any("'concurrent.futures'" in msg for _, _, msg in errors)
 
 
 def test_main_import_preset_none_flags_always_imported(tmp_path: Path) -> None:
