@@ -358,8 +358,10 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
             self.guard_names |= collect_loaded_names(test)
             self._visit_region([test], runtime_dead=True, guard=self._guard_active)
             self._visit_region(node.body, runtime_dead=True, guard=True)
-            self._visit_region(node.orelse, runtime_dead=self._runtime_dead, guard=True)
-        elif isinstance(test, ast.Compare) and version_guard_excludes_315_plus(test):
+            self._visit_region(
+                node.orelse, runtime_dead=self._runtime_dead, guard=self._guard_active
+            )
+        elif version_guard_excludes_315_plus(test):
             self._visit_region(
                 [test], runtime_dead=self._runtime_dead, guard=self._guard_active
             )

@@ -83,25 +83,61 @@ def _check_version_exclusion(
             return False
 
 
-def version_guard_excludes_315_plus(node: ast.Compare) -> bool:
+def _swap_op(op: ast.cmpop) -> ast.cmpop | None:
+    """Return the operator for ``b op' a`` equal to ``a op b``."""
+    match op:
+        case ast.Lt():
+            return ast.Gt()
+        case ast.LtE():
+            return ast.GtE()
+        case ast.Gt():
+            return ast.Lt()
+        case ast.GtE():
+            return ast.LtE()
+        case ast.Eq():
+            return op
+        case _:
+            return None
+
+
+def _is_sys_version_info(node: ast.expr) -> bool:
+    match node:
+        case ast.Attribute(value=ast.Name(id="sys"), attr="version_info"):
+            return True
+        case _:
+            return False
+
+
+def _pair_excludes_315_plus(left: ast.expr, op: ast.cmpop, right: ast.expr) -> bool:
+    if _is_sys_version_info(left):
+        comparator = right
+    elif _is_sys_version_info(right) and (swapped := _swap_op(op)) is not None:
+        comparator, op = left, swapped
+    else:
+        return False
+    comp_version = _extract_version_tuple(comparator)
+    if comp_version is None:
+        return False
+    return _check_version_exclusion(op, comp_version, (3, 15))
+
+
+def version_guard_excludes_315_plus(node: ast.expr) -> bool:
     """Check if a sys.version_info guard excludes Python 3.15+.
 
     Returns True if the guard condition would be False for Python 3.15
-    or later.
+    or later. Handles chained comparisons and ``and``/``or``.
     """
     match node:
-        case ast.Compare(
-            left=ast.Attribute(value=ast.Name(id="sys"), attr="version_info"),
-            ops=[op],
-            comparators=[comparator],
-        ):
-            comp_version = _extract_version_tuple(comparator)
-            if comp_version is None:
-                return False
-            try:
-                return _check_version_exclusion(op, comp_version, (3, 15))
-            except (AttributeError, ValueError):
-                return False
+        case ast.Compare(left=left, ops=ops, comparators=comparators):
+            lefts = [left, *comparators[:-1]]
+            return any(
+                _pair_excludes_315_plus(a, op, b)
+                for a, op, b in zip(lefts, ops, comparators, strict=True)
+            )
+        case ast.BoolOp(op=ast.Or(), values=values):
+            return all(version_guard_excludes_315_plus(v) for v in values)
+        case ast.BoolOp(op=ast.And(), values=values):
+            return any(version_guard_excludes_315_plus(v) for v in values)
         case _:
             return False
 

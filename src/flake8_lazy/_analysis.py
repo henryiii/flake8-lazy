@@ -306,10 +306,14 @@ def _collect_recommended_lazy_entries(
         if _is_non_lazy_binding(binding, non_lazy_names, info.runtime_attribute_paths)
     }
     side_effect_packages = set(info.side_effect_only_packages)
+    # A guarded import only blocks a package that is never imported unguarded.
+    unguarded_packages = {
+        binding.package for binding in bindings if not binding.is_guarded
+    }
     blocked_packages = (
         side_effect_packages
         | guard_packages
-        | set(info.guarded_packages)
+        | (info.guarded_packages - unguarded_packages)
         | non_lazy_packages
         | non_lazy_names
         | set(guard_names)
