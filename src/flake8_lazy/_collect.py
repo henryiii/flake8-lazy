@@ -95,7 +95,6 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
         self.strict_attrs: set[str] = set()
         self.all_loaded: set[str] = set()
         self.guard_names: set[str] = set()
-        self.guarded_packages: set[str] = set()
 
     # -- recording helpers ---------------------------------------------------
 
@@ -174,19 +173,6 @@ class _ModuleInfoBuilder(ast.NodeVisitor):
                     col_offset=node.col_offset,
                 )
             )
-
-        if not lazy and self._guard_active:
-            if isinstance(node, ast.ImportFrom):
-                for alias in node.names:
-                    if alias.name == "*":
-                        continue
-                    package = package_for_import_from(
-                        node, alias, strict_typing=self._strict_typing
-                    )
-                    if package is not None:
-                        self.guarded_packages.add(package)
-            else:
-                self.guarded_packages.update(alias.name for alias in node.names)
 
         self._accumulate_imported_before(node)
 
@@ -500,7 +486,6 @@ def build_module_info(
         strict_attribute_paths=frozenset(builder.strict_attrs),
         all_loaded_names=all_loaded,
         type_checking_guard_names=frozenset(builder.guard_names),
-        guarded_packages=frozenset(builder.guarded_packages),
         side_effect_only_packages=side_effect_only,
         enclosing_packages=frozenset(containing_package_prefixes(filename)),
     )

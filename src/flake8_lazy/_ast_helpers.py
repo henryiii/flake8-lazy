@@ -67,20 +67,15 @@ def _orderings_on_315(version: tuple[int, ...]) -> set[int]:
     ``sys.version_info`` has five fields, so it never equals a shorter tuple
     and compares greater than any prefix of it.
     """
-    if len(version) <= 2:
-        if (3, 15)[: len(version)] == version:
-            return {1}
-        return {1} if version < (3, 15) else {-1}
-    if version[:2] != (3, 15):
-        return {1} if version[:2] < (3, 15) else {-1}
+    if len(version) <= 2 or version[:2] != (3, 15):
+        return {1} if version[:2] <= (3, 15) else {-1}
     if len(version) == 3:
         return {1} if version[2] == 0 else {-1, 1}
     return {-1, 0, 1}
 
 
-def _check_version_exclusion(op: ast.cmpop, comp_version: tuple[int, ...]) -> bool:
-    """Check if ``sys.version_info <op> comp_version`` is False on all 3.15.x."""
-    signs = _orderings_on_315(comp_version)
+def _check_version_exclusion(op: ast.cmpop, signs: set[int]) -> bool:
+    """Check if ``left <op> right`` is False for all signs of ``left - right``."""
     match op:
         case ast.Lt():
             return all(sign >= 0 for sign in signs)
@@ -97,23 +92,6 @@ def _check_version_exclusion(op: ast.cmpop, comp_version: tuple[int, ...]) -> bo
             return False
 
 
-def _swap_op(op: ast.cmpop) -> ast.cmpop | None:
-    """Return the operator for ``b op' a`` equal to ``a op b``."""
-    match op:
-        case ast.Lt():
-            return ast.Gt()
-        case ast.LtE():
-            return ast.GtE()
-        case ast.Gt():
-            return ast.Lt()
-        case ast.GtE():
-            return ast.LtE()
-        case ast.Eq():
-            return op
-        case _:
-            return None
-
-
 def _is_sys_version_info(node: ast.expr) -> bool:
     match node:
         case ast.Attribute(value=ast.Name(id="sys"), attr="version_info"):
@@ -124,15 +102,16 @@ def _is_sys_version_info(node: ast.expr) -> bool:
 
 def _pair_excludes_315_plus(left: ast.expr, op: ast.cmpop, right: ast.expr) -> bool:
     if _is_sys_version_info(left):
-        comparator = right
-    elif _is_sys_version_info(right) and (swapped := _swap_op(op)) is not None:
-        comparator, op = left, swapped
+        comparator, flip = right, 1
+    elif _is_sys_version_info(right):
+        comparator, flip = left, -1
     else:
         return False
     comp_version = _extract_version_tuple(comparator)
     if comp_version is None:
         return False
-    return _check_version_exclusion(op, comp_version)
+    signs = {flip * sign for sign in _orderings_on_315(comp_version)}
+    return _check_version_exclusion(op, signs)
 
 
 def version_guard_excludes_315_plus(node: ast.expr) -> bool:
