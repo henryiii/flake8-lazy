@@ -184,7 +184,7 @@ def test_recommended_omits_parents_of_dotted_import(statement: str) -> None:
     ]
 
 
-def test_recommended_keeps_declared_parents_of_dotted_import() -> None:
+def test_recommended_drops_declared_parents_of_dotted_import() -> None:
     tree = ast.parse(
         """
 __lazy_modules__ = ["xml", "xml.etree", "xml.etree.ElementTree"]
@@ -196,13 +196,12 @@ def fn():
     )
     info = build_module_info(tree)
 
-    assert collect_recommended_lazy_modules(info) == [
-        "xml",
-        "xml.etree",
-        "xml.etree.ElementTree",
-    ]
+    assert collect_recommended_lazy_modules(info) == ["xml.etree.ElementTree"]
     checker = LazyImportChecker(tree=tree, filename="example.py")
-    assert list(checker.run()) == []
+    assert [e[2] for e in checker.run()] == [
+        "LZY202 module 'xml' is listed in __lazy_modules__ but never imported",
+        "LZY202 module 'xml.etree' is listed in __lazy_modules__ but never imported",
+    ]
 
 
 def test_recommended_excludes_dotted_import_used_at_top_level() -> None:
@@ -565,16 +564,14 @@ def process() -> None:
 """,
     )
 
-    # A child import satisfies the parent package entry in __lazy_modules__.
-    # Only the nested module still needs its own lazy declaration.
+    # A parent entry does not make the child import lazy and is not used by it.
     checker = LazyImportChecker(tree=tree, filename="example.py")
     errors = list(checker.run())
 
-    assert len(errors) == 1
-    assert (
-        errors[0][2]
-        == "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
-    )
+    assert [e[2] for e in errors] == [
+        "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__",
+        "LZY202 module 'email' is listed in __lazy_modules__ but never imported",
+    ]
 
 
 def test_checker_emits_lzy101_for_missing_stdlib_module() -> None:
@@ -862,19 +859,39 @@ import pandas
     assert list(checker.run()) == []
 
 
-def test_checker_does_not_emit_lzy202_when_child_module_is_imported() -> None:
+def test_checker_emits_lzy202_for_unneeded_parent() -> None:
     tree = ast.parse(
         """
-__lazy_modules__ = ["packaging"]
-import packaging.version
+__lazy_modules__ = ["a", "a.b"]
+import a.b
 """,
     )
 
     checker = LazyImportChecker(tree=tree, filename="example.py")
-    errors = list(checker.run())
+    lzy202 = [e[2] for e in checker.run() if e[2].startswith("LZY202")]
 
-    lzy202_errors = [e for e in errors if e[2].startswith("LZY202")]
-    assert lzy202_errors == []
+    assert lzy202 == [
+        "LZY202 module 'a' is listed in __lazy_modules__ but never imported"
+    ]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        '__lazy_modules__ = ["a", "a.b"]\nimport a\nimport a.b\n',
+        '__lazy_modules__ = ["a", "a.b"]\nfrom a import b\nimport a.b\n',
+        '__lazy_modules__ = ["a.b"]\nfrom a.b import c\n',
+        '__lazy_modules__ = [f"{__spec__.parent}.local"]\nfrom .local import x\n',
+        (
+            '__lazy_modules__ = ["a"]\nimport sys\n'
+            "if sys.version_info >= (3, 11):\n    import a\n"
+        ),
+    ],
+)
+def test_checker_does_not_emit_lzy202_for_exact_import(source: str) -> None:
+    checker = LazyImportChecker(tree=ast.parse(source), filename="example.py")
+
+    assert [e[2] for e in checker.run() if e[2].startswith("LZY202")] == []
 
 
 def test_checker_emits_lzy202_for_annotated_assignment() -> None:

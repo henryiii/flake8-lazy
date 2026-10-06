@@ -478,27 +478,33 @@ def test_main_apply_omits_parents_of_dotted_import(
 
 
 @pytest.mark.parametrize(
-    ("mode", "declaration"),
+    ("mode", "declaration", "expected"),
     [
-        ("list", '__lazy_modules__ = ["xml", "xml.etree", "xml.etree.ElementTree"]'),
-        ("set", '__lazy_modules__ = {"xml", "xml.etree", "xml.etree.ElementTree"}'),
+        (
+            "list",
+            '__lazy_modules__ = ["xml", "xml.etree", "xml.etree.ElementTree"]',
+            '__lazy_modules__ = ["xml.etree.ElementTree"]',
+        ),
+        (
+            "set",
+            '__lazy_modules__ = {"xml", "xml.etree", "xml.etree.ElementTree"}',
+            '__lazy_modules__ = {"xml.etree.ElementTree"}',
+        ),
     ],
 )
-def test_main_apply_keeps_declared_parents_of_dotted_import(
+def test_main_apply_removes_declared_parents_of_dotted_import(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     mode: str,
     declaration: str,
+    expected: str,
 ) -> None:
     path = tmp_path / "mod.py"
-    content = (
-        f"{declaration}\n"
-        "import xml.etree.ElementTree as ET\n\ndef fn():\n    return ET\n"
-    )
-    path.write_text(content, encoding="utf-8")
+    body = "import xml.etree.ElementTree as ET\n\ndef fn():\n    return ET\n"
+    path.write_text(f"{declaration}\n{body}", encoding="utf-8")
 
     _run_main_and_assert_no_output([f"--apply={mode}", str(path)], capsys)
-    assert path.read_text(encoding="utf-8") == content
+    assert path.read_text(encoding="utf-8") == f"{expected}\n{body}"
 
 
 def test_main_apply_leaves_try_block_imports_alone(

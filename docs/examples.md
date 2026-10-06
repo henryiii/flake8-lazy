@@ -52,6 +52,7 @@ Diagnostic:
 
 ```text
 LZY101 stdlib module 'email.header' should be listed in __lazy_modules__
+LZY202 module 'email' is listed in __lazy_modules__ but never imported
 ```
 
 ## Relative names are invalid in `__lazy_modules__`

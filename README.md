@@ -180,8 +180,8 @@ flake8-lazy inspects module-scope imports and module runtime usage.
 - Skips imports inside `try`/`except`/`finally` blocks, which can never be made
   lazy.
 - Requires exact module entries for nested imports. Parent packages are not
-  needed: `import a.b.c` only needs `"a.b.c"`. Parent entries that are already
-  listed are kept.
+  needed: `import a.b.c` only needs `"a.b.c"`. Older versions recommended the
+  parents; `LZY202` now reports them and `--apply` removes them.
 - Treats enclosing package names as non-lazy for a file. For example, in
   `a/b/c.py`, `a` and `a.b` should not be listed as lazy.
 
