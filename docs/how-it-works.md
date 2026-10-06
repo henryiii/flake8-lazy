@@ -40,7 +40,10 @@ It intentionally ignores:
 
 For files inside a package, enclosing package names are also treated as
 non-lazy. For example, in `a/b/c.py`, names `a` and `a.b` should not be declared
-lazy (either in `__lazy_modules__` or with `lazy import`).
+lazy (either in `__lazy_modules__` or with `lazy import`). The exception is
+`from a import name`: the package is already loaded, but a lazy import defers
+the attribute fetch, which can load a submodule (for example, through a lazy
+import or `__getattr__` in `a/__init__.py`). So `a` is recommended there.
 
 PEP 810 matches `__lazy_modules__` entries exactly against the imported module
 name. `import a.b.c` (with or without `as`) only needs `"a.b.c"`, and
