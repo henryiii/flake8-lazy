@@ -197,6 +197,14 @@ flake8-lazy --lazy-exclude-modules=numpy,pandas path/to/file.py
 Modules listed here are treated as always-imported and will not be flagged
 (LZY101/LZY102) or included in `--format lazy-modules` recommendations.
 
+A name matches only that exact module: `numpy` does not exclude
+`from numpy.linalg import norm`. Add a trailing `.*` to exclude a package and
+all of its submodules:
+
+```bash
+flake8-lazy --lazy-exclude-modules='numpy.*,pandas' path/to/file.py
+```
+
 When using flake8 directly, add the option to your `.flake8` or `setup.cfg`:
 
 ```ini

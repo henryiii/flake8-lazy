@@ -188,7 +188,8 @@ def main(argv: list[str] | None = None) -> None:
         metavar="MODULES",
         help=(
             "comma-separated list of modules to exclude from lazy-import "
-            "recommendations (treated as always-imported)"
+            "recommendations (treated as always-imported); use 'pkg.*' to "
+            "also match all submodules"
         ),
     )
     parser.add_argument(

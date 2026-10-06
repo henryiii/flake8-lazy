@@ -231,6 +231,18 @@ no-op once the module set is correct and does not fight a single-quote
 formatter; new assignments use double quotes. The command exits with status code
 `1` if any error is found.
 
+To skip modules in recommendations, use these options. They also work under
+flake8 and in `[tool.flake8-lazy.standalone]` in `pyproject.toml`:
+
+- `--lazy-import-preset=none|minimal|default`: the built-in set of modules that
+  Python always imports at startup (default: `default`).
+- `--lazy-exclude-modules=MODULES`: a comma-separated list of more modules to
+  skip. A name matches only that module. Use `numpy.*` to also match all
+  submodules of `numpy`.
+
+See the [CLI docs](https://flake8-lazy.readthedocs.io/en/latest/cli/) for all
+options.
+
 ## Local development
 
 See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for local development
