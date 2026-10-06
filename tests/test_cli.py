@@ -1921,6 +1921,14 @@ def test_load_script_settings_rejects_invalid(body: str, match: str) -> None:
     assert excinfo.value.lineno == 2
 
 
+@pytest.mark.parametrize("value", ['"oops"', "[]", "1"])
+def test_load_script_settings_rejects_non_table_tool(value: str) -> None:
+    source = f"\n# /// script\n# tool = {value}\n# ///\nimport numpy\n"
+    with pytest.raises(ScriptConfigError, match=r"\[tool\] must be a table") as excinfo:
+        load_script_settings(source)
+    assert excinfo.value.lineno == 2
+
+
 def test_load_script_settings_rejects_multiple_blocks() -> None:
     block = "# /// script\n# x = 1\n# ///\nimport os\n"
     with pytest.raises(ScriptConfigError, match="multiple script blocks"):

@@ -114,11 +114,15 @@ def load_script_settings(source: str) -> ScriptSettings:
         for line in matches[0]["content"].splitlines(keepends=True)
     )
     try:
-        data = tomllib.loads(content)
-        return _script_settings(data.get("tool", {}).get("flake8-lazy", {}))
+        tool = tomllib.loads(content).get("tool", {})
     except tomllib.TOMLDecodeError as exc:
         msg = f"invalid [tool.flake8-lazy] in script block: failed to parse: {exc}"
         raise ScriptConfigError(msg, lineno) from exc
+    if not isinstance(tool, dict):
+        msg = "invalid script block: [tool] must be a table"
+        raise ScriptConfigError(msg, lineno)
+    try:
+        return _script_settings(tool.get("flake8-lazy", {}))
     except ConfigError as exc:
         msg = f"invalid [tool.flake8-lazy] in script block: {exc}"
         raise ScriptConfigError(msg, lineno) from exc
