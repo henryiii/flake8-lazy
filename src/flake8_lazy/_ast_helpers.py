@@ -61,23 +61,37 @@ def _extract_version_tuple(comparator: ast.expr) -> tuple[int, ...] | None:
             return None
 
 
-def _check_version_exclusion(
-    op: ast.cmpop,
-    comp_version: tuple[int, ...],
-    target_version: tuple[int, ...],
-) -> bool:
-    """Check if a version comparison excludes the target version."""
+def _orderings_on_315(version: tuple[int, ...]) -> set[int]:
+    """Possible signs of ``sys.version_info - version`` on any Python 3.15.x.
+
+    ``sys.version_info`` has five fields, so it never equals a shorter tuple
+    and compares greater than any prefix of it.
+    """
+    if len(version) <= 2:
+        if (3, 15)[: len(version)] == version:
+            return {1}
+        return {1} if version < (3, 15) else {-1}
+    if version[:2] != (3, 15):
+        return {1} if version[:2] < (3, 15) else {-1}
+    if len(version) == 3:
+        return {1} if version[2] == 0 else {-1, 1}
+    return {-1, 0, 1}
+
+
+def _check_version_exclusion(op: ast.cmpop, comp_version: tuple[int, ...]) -> bool:
+    """Check if ``sys.version_info <op> comp_version`` is False on all 3.15.x."""
+    signs = _orderings_on_315(comp_version)
     match op:
         case ast.Lt():
-            return not target_version < comp_version
+            return all(sign >= 0 for sign in signs)
         case ast.LtE():
-            return not target_version <= comp_version
+            return all(sign > 0 for sign in signs)
         case ast.Gt():
-            return not target_version > comp_version
+            return all(sign <= 0 for sign in signs)
         case ast.GtE():
-            return not target_version >= comp_version
+            return all(sign < 0 for sign in signs)
         case ast.Eq():
-            return target_version != comp_version
+            return 0 not in signs
         case _:
             # NotEq always allows some versions
             return False
@@ -118,7 +132,7 @@ def _pair_excludes_315_plus(left: ast.expr, op: ast.cmpop, right: ast.expr) -> b
     comp_version = _extract_version_tuple(comparator)
     if comp_version is None:
         return False
-    return _check_version_exclusion(op, comp_version, (3, 15))
+    return _check_version_exclusion(op, comp_version)
 
 
 def version_guard_excludes_315_plus(node: ast.expr) -> bool:

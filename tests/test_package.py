@@ -2247,6 +2247,13 @@ if True:
         ("sys.version_info >= (3, 12) and sys.version_info < (3, 14)", True),
         ("(3, 14) > sys.version_info", True),
         ("(3, 14) <= sys.version_info", False),
+        ("(3, 15) < sys.version_info < (3, 16)", False),
+        ("sys.version_info > (3, 15)", False),
+        ("sys.version_info <= (3, 15)", True),
+        ("sys.version_info == (3, 15)", True),
+        ("sys.version_info < (3, 15, 0)", True),
+        ("sys.version_info < (3, 15, 1)", False),
+        ("sys.version_info >= (3, 15, 2)", False),
     ],
 )
 def test_version_guard_boolop_and_chain(test: str, *, excluded: bool) -> None:
