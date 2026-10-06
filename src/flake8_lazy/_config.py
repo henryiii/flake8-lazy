@@ -115,7 +115,9 @@ def _choice(key: str, value: object, choices: tuple[str, ...]) -> str:
 
 def _module_list(key: str, value: object) -> str:
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
-        return ",".join(value)
+        # Pyrefly needs this, mypy is smart enough without it
+        typed_list: list[str] = value
+        return ",".join(typed_list)
     msg = f"{key!r} must be a list of strings"
     raise ConfigError(msg)
 

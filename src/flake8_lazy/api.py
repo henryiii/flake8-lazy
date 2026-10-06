@@ -79,6 +79,7 @@ def _process_single_file(
     if has_native_lazy and apply_mode in {"list", "set"}:
         native_modules = collect_native_lazy_modules(info)
 
+    errors: list[tuple[int, int, str]]
     if include_errors:
         errors = build_diagnostics(info, always_imported=always_imported)
         if errors:
