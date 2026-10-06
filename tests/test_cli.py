@@ -857,6 +857,30 @@ def test_main_apply_set_mode_writes_set_literal(
     )
 
 
+def test_main_apply_set_mode_keeps_type_checking_else_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = """\
+__lazy_modules__ = {"tarfile"}
+
+import sys
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    import tarfile
+elif sys.version_info < (3, 10, 13) or (3, 11) <= sys.version_info < (3, 11, 5):
+    from backports import tarfile
+else:
+    import tarfile
+"""
+    path = tmp_path / "mod.py"
+    path.write_text(source, encoding="utf-8")
+
+    _run_main_and_assert_no_output(["--apply=set", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == source
+
+
 def test_main_apply_set_mode_overrides_existing_list(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

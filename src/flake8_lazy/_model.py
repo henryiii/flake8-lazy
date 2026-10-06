@@ -84,7 +84,6 @@ class ModuleInfo:
     strict_attribute_paths: frozenset[str]
     all_loaded_names: frozenset[str]
     type_checking_guard_names: frozenset[str]
-    guarded_packages: frozenset[str]
     side_effect_only_packages: frozenset[str]
     enclosing_packages: frozenset[str] = field(default_factory=frozenset)
 

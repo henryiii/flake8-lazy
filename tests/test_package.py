@@ -512,6 +512,25 @@ else:
     assert "pandas" in errors[0][2]
 
 
+def test_checker_includes_type_checking_else_import() -> None:
+    tree = ast.parse(
+        """
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy
+else:
+    import numpy
+""",
+    )
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert len(errors) == 1
+    assert errors[0][2] == "LZY102 module 'numpy' should be listed in __lazy_modules__"
+
+
 def test_checker_requires_explicit_nested_import_package() -> None:
     tree = ast.parse(
         """
@@ -2218,3 +2237,29 @@ if True:
     checker = LazyImportChecker(tree=tree, filename="example.py")
     lzy301 = [e for e in checker.run() if e[2].startswith("LZY301")]
     assert lzy301 == []
+
+
+@pytest.mark.parametrize(
+    ("test", "excluded"),
+    [
+        ("sys.version_info < (3, 10) or (3, 11) <= sys.version_info < (3, 12)", True),
+        ("sys.version_info < (3, 10) or sys.version_info >= (3, 12)", False),
+        ("sys.version_info >= (3, 12) and sys.version_info < (3, 14)", True),
+        ("(3, 14) > sys.version_info", True),
+        ("(3, 14) <= sys.version_info", False),
+        ("(3, 15) < sys.version_info < (3, 16)", False),
+        ("sys.version_info > (3, 15)", False),
+        ("sys.version_info <= (3, 15)", True),
+        ("sys.version_info == (3, 15)", True),
+        ("sys.version_info < (3, 15, 0)", True),
+        ("sys.version_info < (3, 15, 1)", False),
+        ("sys.version_info >= (3, 15, 2)", False),
+    ],
+)
+def test_version_guard_boolop_and_chain(test: str, *, excluded: bool) -> None:
+    tree = ast.parse(f"import sys\n\nif {test}:\n    import numpy\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert (not errors) == excluded
