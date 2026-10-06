@@ -56,8 +56,9 @@ reports these unneeded entries, and `--apply` removes them.
 
 A deferred relative import is rendered against `__spec__.parent` so the entry
 stays correct if the package is renamed or vendored, e.g.
-`f"{__spec__.parent}.helper"` for `from .helper import ...`. This is valid under
-a strict type checker in a normal module, where `__spec__` is always set.
+`f"{__spec__.parent}.helper"` for `from .helper import ...`, or
+`f"{__spec__.parent}"` for `from . import helper`. This is valid under a strict
+type checker in a normal module, where `__spec__` is always set.
 
 Imports more than one level up need `__spec__.parent.rsplit(".", n)[0]` to walk
 up the package tree. Because `__spec__.parent` is typed `str | None`, that

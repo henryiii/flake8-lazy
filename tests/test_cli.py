@@ -629,6 +629,23 @@ def test_main_apply_multidotted_relative_keeps_full_path(
     )
 
 
+def test_main_apply_relative_package_only_declares_parent(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "from . import helper\n\n\ndef f():\n    return helper\n",
+        encoding="utf-8",
+    )
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        '__lazy_modules__ = [f"{__spec__.parent}"]\n'
+        "\nfrom . import helper\n\n\ndef f():\n    return helper\n"
+    )
+
+
 def test_main_apply_multilevel_relative_strict_typing_adds_guard(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

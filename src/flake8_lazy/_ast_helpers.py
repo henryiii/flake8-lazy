@@ -220,11 +220,13 @@ def format_module_literal(module: str, quote: str = '"') -> str:
 
 
 def relative_import_package_name(
-    *, level: int, module: str, strict_typing: bool = False
+    *, level: int, module: str | None, strict_typing: bool = False
 ) -> str:
     parent_expression = relative_parent_expression(
         level=level, strict_typing=strict_typing
     )
+    if module is None:
+        return FStringModule(f"{{{parent_expression}}}")
     return FStringModule(f"{{{parent_expression}}}.{module}")
 
 
@@ -269,6 +271,17 @@ def parse_relative_lazy_module(
     node: ast.JoinedStr, *, strict_typing: bool = False
 ) -> str | None:
     match node:
+        case ast.JoinedStr(
+            values=[
+                ast.FormattedValue(value=expression, conversion=-1, format_spec=None)
+            ],
+        ):
+            level = relative_parent_level(expression)
+            if level is None:
+                return None
+            return relative_import_package_name(
+                level=level, module=None, strict_typing=strict_typing
+            )
         case ast.JoinedStr(
             values=[
                 ast.FormattedValue(
@@ -327,11 +340,9 @@ def package_for_import_from(
             pass
 
     match node:
-        case ast.ImportFrom(module=None):
-            return None
         case ast.ImportFrom(module=str() as module, level=0):
             return module
-        case ast.ImportFrom(module=str() as module, level=level):
+        case ast.ImportFrom(module=module, level=level) if level > 0:
             # Keep the full dotted path: PEP 810 ``__lazy_modules__`` matching is
             # exact, so ``from .a.b import x`` must declare ``…parent.a.b`` (not
             # just ``…parent.a``, which never lazifies the import).

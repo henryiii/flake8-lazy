@@ -740,11 +740,34 @@ def test_checker_keeps_full_path_for_multidotted_multilevel_relative_import() ->
     )
 
 
-def test_checker_ignores_relative_package_only_import() -> None:
+def test_checker_recommends_parent_for_relative_package_only_import() -> None:
+    tree = ast.parse("from . import helper\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert [e[2] for e in errors] == [
+        'LZY102 module f"{__spec__.parent}" should be listed in __lazy_modules__'
+    ]
+
+
+def test_checker_recommends_grandparent_for_multilevel_package_only_import() -> None:
+    tree = ast.parse("from .. import helper\n")
+
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    errors = list(checker.run())
+
+    assert [e[2] for e in errors] == [
+        (
+            "LZY102 module f\"{__spec__.parent.rsplit('.', 1)[0]}\""
+            " should be listed in __lazy_modules__"
+        )
+    ]
+
+
+def test_checker_accepts_relative_package_only_entry() -> None:
     tree = ast.parse(
-        """
-from . import helper
-""",
+        '__lazy_modules__ = [f"{__spec__.parent}"]\nfrom . import helper\n'
     )
 
     checker = LazyImportChecker(tree=tree, filename="example.py")
