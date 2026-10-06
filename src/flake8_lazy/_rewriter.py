@@ -271,32 +271,63 @@ def _rewrite_lazy_modules_source(
     return "".join(lines)
 
 
-def _collect_import_lines_to_lazify(
-    tree: ast.Module, modules_set: set[str], *, strict_typing: bool = False
-) -> set[int]:
-    """Return 1-based line numbers of top-level imports to get a ``lazy`` prefix.
+def _import_alias_packages(
+    node: ast.Import | ast.ImportFrom, *, strict_typing: bool
+) -> list[str]:
+    """Return the package of each alias; ``""`` marks one that cannot be lazy."""
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names]
+    packages = []
+    for alias in node.names:
+        if alias.name == "*":
+            return [""]
+        pkg = package_for_import_from(node, alias, strict_typing=strict_typing)
+        packages.append(pkg if pkg is not None else "")
+    return packages
 
-    An import statement gets the prefix only if *all* of its aliases map to
-    packages that are in ``modules_set``.
+
+def _code_before(node: ast.stmt, lines: list[str]) -> bool:
+    """Return True if other code comes before ``node`` on its first line."""
+    first = lines[node.lineno - 1].encode()
+    return bool(first[: node.col_offset].strip())
+
+
+def _format_aliases(aliases: list[ast.alias]) -> str:
+    return ", ".join(
+        f"{alias.name} as {alias.asname}" if alias.asname else alias.name
+        for alias in aliases
+    )
+
+
+def _split_mixed_import(
+    node: ast.Import, lazy_flags: list[bool], lines: list[str], newline: str
+) -> list[str] | None:
+    """Split ``node`` into an eager ``import`` line and a ``lazy import`` line.
+
+    Returns ``None`` if other code shares the statement's lines, so a split is
+    not safe. A trailing comment is kept on both lines (it can be a pragma).
     """
-    lazy_lines: set[int] = set()
-    for node in collect_top_level_imports(tree):
-        match node:
-            case ast.Import(names=aliases, lineno=lineno):
-                packages = {alias.name for alias in aliases}
-            case ast.ImportFrom(lineno=lineno):
-                packages = set()
-                for alias in node.names:
-                    if alias.name == "*":
-                        packages.add("")
-                        break
-                    pkg = package_for_import_from(
-                        node, alias, strict_typing=strict_typing
-                    )
-                    packages.add(pkg if pkg is not None else "")
-        if packages and packages.issubset(modules_set):
-            lazy_lines.add(lineno)
-    return lazy_lines
+    assert node.end_lineno is not None
+    assert node.end_col_offset is not None
+    if _code_before(node, lines):
+        return None
+    last = lines[node.end_lineno - 1]
+    body = last.rstrip("\r\n")
+    ending = last[len(body) :]
+    suffix = body.encode()[node.end_col_offset :].decode().strip()
+    suffix = suffix.removeprefix(";").lstrip()
+    if suffix and not suffix.startswith("#"):
+        return None
+    comment = f"  {suffix}" if suffix else ""
+
+    first = lines[node.lineno - 1]
+    indent = first[: len(first) - len(first.lstrip())]
+    eager = [a for a, lazy in zip(node.names, lazy_flags, strict=True) if not lazy]
+    lazy = [a for a, is_lazy in zip(node.names, lazy_flags, strict=True) if is_lazy]
+    return [
+        f"{indent}import {_format_aliases(eager)}{comment}{newline}",
+        f"{indent}lazy import {_format_aliases(lazy)}{comment}{ending}",
+    ]
 
 
 def _rewrite_native_lazy_source(
@@ -304,33 +335,47 @@ def _rewrite_native_lazy_source(
 ) -> str:
     """Rewrite ``source`` by adding ``lazy`` keyword to qualifying imports.
 
-    Any existing ``__lazy_modules__`` assignments are removed.  A
-    top-level import statement receives a ``lazy `` prefix only if
-    *all* of its aliases map to packages listed in ``modules``.
+    Any existing ``__lazy_modules__`` assignments are removed. A top-level
+    import statement gets a ``lazy `` prefix if all of its aliases map to
+    packages in ``modules``. A plain ``import a, b`` where only some aliases
+    qualify is split into an eager ``import`` line followed by a
+    ``lazy import`` line. Statements that share a line with other code are
+    skipped when the edit is not safe.
     """
     tree = ast.parse(source)
     assert isinstance(tree, ast.Module)
+    newline = "\r\n" if "\r\n" in source else "\n"
     lines = list(source.splitlines(keepends=True))
     modules_set = set(modules)
 
-    # Collect __lazy_modules__ assignment spans (1-based lineno, end_lineno).
-    assignments = [stmt for stmt in tree.body if _is_lazy_modules_assignment(stmt)]
+    # (start, end, replacement) with 1-based inclusive line numbers.
+    edits: list[tuple[int, int, list[str]]] = [
+        (stmt.lineno, stmt.end_lineno or stmt.lineno, [])
+        for stmt in tree.body
+        if _is_lazy_modules_assignment(stmt)
+    ]
 
-    # Collect import line numbers to prefix.
-    lazy_import_lines = _collect_import_lines_to_lazify(
-        tree, modules_set, strict_typing=strict_typing
-    )
+    for node in collect_top_level_imports(tree):
+        packages = _import_alias_packages(node, strict_typing=strict_typing)
+        lazy_flags = [pkg in modules_set for pkg in packages]
+        if not any(lazy_flags):
+            continue
+        if all(lazy_flags):
+            if _code_before(node, lines):
+                continue
+            line = lines[node.lineno - 1]
+            stripped = line.lstrip()
+            indent = line[: len(line) - len(stripped)]
+            edits.append((node.lineno, node.lineno, [f"{indent}lazy {stripped}"]))
+        elif isinstance(node, ast.Import):
+            replacement = _split_mixed_import(node, lazy_flags, lines, newline)
+            if replacement is not None:
+                assert node.end_lineno is not None
+                edits.append((node.lineno, node.end_lineno, replacement))
 
-    # Apply deletions and prefixes from highest line to lowest to keep indices stable.
-    for lineno in sorted(lazy_import_lines, reverse=True):
-        idx = lineno - 1
-        line = lines[idx]
-        stripped = line.lstrip()
-        indent = line[: len(line) - len(stripped)]
-        lines[idx] = f"{indent}lazy {stripped}"
-
-    for stmt in reversed(assignments):
-        del lines[stmt.lineno - 1 : stmt.end_lineno]
+    # Apply from the bottom up to keep earlier line indices stable.
+    for start, end, replacement in sorted(edits, key=lambda e: e[0], reverse=True):
+        lines[start - 1 : end] = replacement
 
     return "".join(lines)
 

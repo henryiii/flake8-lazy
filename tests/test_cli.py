@@ -1192,6 +1192,79 @@ def test_main_apply_native_removes_existing_lazy_modules_when_no_recommended(
     )
 
 
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(
+            "import json, os\nos.getcwd()\ndef f(): return json\n",
+            "import os\nlazy import json\nos.getcwd()\ndef f(): return json\n",
+            id="basic",
+        ),
+        pytest.param(
+            "import json as j, os, csv as c\nos.getcwd()\ndef f(): return j, c\n",
+            "import os\nlazy import json as j, csv as c\nos.getcwd()\n"
+            "def f(): return j, c\n",
+            id="aliases",
+        ),
+        pytest.param(
+            "if True:\n    import json, os\n    os.getcwd()\ndef f(): return json\n",
+            "if True:\n    import os\n    lazy import json\n    os.getcwd()\n"
+            "def f(): return json\n",
+            id="indent",
+        ),
+        pytest.param(
+            "import json, os  # comment\nos.getcwd()\ndef f(): return json\n",
+            "import os  # comment\nlazy import json  # comment\nos.getcwd()\n"
+            "def f(): return json\n",
+            id="comment",
+        ),
+        pytest.param(
+            "import json, os;\nos.getcwd()\ndef f(): return json\n",
+            "import os\nlazy import json\nos.getcwd()\ndef f(): return json\n",
+            id="semicolon",
+        ),
+        pytest.param(
+            "import json, \\\n    os\nos.getcwd()\ndef f(): return json\n",
+            "import os\nlazy import json\nos.getcwd()\ndef f(): return json\n",
+            id="continuation",
+        ),
+        pytest.param(
+            "import json, os\r\nos.getcwd()\r\ndef f(): return json\r\n",
+            "import os\r\nlazy import json\r\nos.getcwd()\r\ndef f(): return json\r\n",
+            id="crlf",
+        ),
+    ],
+)
+def test_main_apply_native_splits_mixed_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    source: str,
+    expected: str,
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_bytes(source.encode())
+
+    _run_main_and_assert_no_output(["--apply=native", str(path)], capsys)
+    assert path.read_bytes().decode() == expected
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param("import json, os; x = 1\n", id="trailing-stmt"),
+        pytest.param("x = 1; import json, os\n", id="leading-stmt"),
+        pytest.param("x = 1; import json\n", id="leading-all-lazy"),
+        pytest.param("if True: import json\n", id="compound"),
+    ],
+)
+def test_apply_native_skips_unsafe_import_line(tmp_path: Path, source: str) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text(source, encoding="utf-8")
+
+    apply_lazy_modules(path, ["json"], mode="native")
+    assert path.read_text(encoding="utf-8") == source
+
+
 def test_build_noqa_map_bare_noqa() -> None:
     noqa_map = _build_noqa_map("import numpy  # noqa\n")
     assert noqa_map == {1: None}
