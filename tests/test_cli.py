@@ -212,17 +212,14 @@ def test_collect_recommended_lazy_modules_for_repo_review_rich_children() -> Non
     assert "rich.traceback" not in recommended
 
 
-def test_collect_recommended_lazy_modules_includes_intermediate_parents() -> None:
+def test_collect_recommended_lazy_modules_omits_intermediate_parents() -> None:
     path = Path(__file__).parent / "examples" / "repo_review" / "_compat.py.txt"
 
     recommended = collect_recommended_lazy_modules_for_file(path)
 
     # importlib.abc is NOT recommended because it's guarded by
     # sys.version_info < (3, 11) which excludes Python 3.15+
-    assert "importlib" in recommended
-    assert "importlib.abc" not in recommended
-    assert "importlib.resources" in recommended
-    assert "importlib.resources.abc" in recommended
+    assert recommended == ["importlib.resources.abc"]
 
 
 def test_collect_errors_for_file_skips_enclosing_package_diagnostics(
@@ -464,6 +461,50 @@ def test_main_apply_replaces_existing_lazy_modules(
     assert path.read_text(encoding="utf-8") == (
         '__lazy_modules__ = ["numpy"]\nimport numpy\n'
     )
+
+
+def test_main_apply_omits_parents_of_dotted_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    body = "import xml.etree.ElementTree as ET\n\ndef fn():\n    return ET\n"
+    path.write_text(body, encoding="utf-8")
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == (
+        f'__lazy_modules__ = ["xml.etree.ElementTree"]\n\n{body}'
+    )
+
+
+@pytest.mark.parametrize(
+    ("mode", "declaration", "expected"),
+    [
+        (
+            "list",
+            '__lazy_modules__ = ["xml", "xml.etree", "xml.etree.ElementTree"]',
+            '__lazy_modules__ = ["xml.etree.ElementTree"]',
+        ),
+        (
+            "set",
+            '__lazy_modules__ = {"xml", "xml.etree", "xml.etree.ElementTree"}',
+            '__lazy_modules__ = {"xml.etree.ElementTree"}',
+        ),
+    ],
+)
+def test_main_apply_removes_declared_parents_of_dotted_import(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    declaration: str,
+    expected: str,
+) -> None:
+    path = tmp_path / "mod.py"
+    body = "import xml.etree.ElementTree as ET\n\ndef fn():\n    return ET\n"
+    path.write_text(f"{declaration}\n{body}", encoding="utf-8")
+
+    _run_main_and_assert_no_output([f"--apply={mode}", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == f"{expected}\n{body}"
 
 
 def test_main_apply_leaves_try_block_imports_alone(

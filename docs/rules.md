@@ -16,7 +16,7 @@ icon: lucide/list-checks
 | Code     | Meaning                                                         |
 | -------- | --------------------------------------------------------------- |
 | `LZY201` | `__lazy_modules__` is not sorted                                |
-| `LZY202` | module listed in `__lazy_modules__` is never imported           |
+| `LZY202` | module listed in `__lazy_modules__` is never imported by name   |
 | `LZY203` | module listed in `__lazy_modules__` is duplicated               |
 | `LZY204` | `__lazy_modules__` is assigned after importing modules it names |
 | `LZY205` | module listed in `__lazy_modules__` must be an absolute name    |

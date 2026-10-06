@@ -89,16 +89,9 @@ def collect_unsorted_lazy_modules(info: ModuleInfo) -> list[tuple[int, int]]:
     ]
 
 
-def _is_imported_package(module: str, imported_packages: set[str]) -> bool:
-    """Return True when ``module`` or one of its child modules is imported."""
-    return any(
-        package == module or package.startswith(f"{module}.")
-        for package in imported_packages
-    )
-
-
 def collect_unused_lazy_modules(info: ModuleInfo) -> list[tuple[str, int, int]]:
     """Return modules listed in ``__lazy_modules__`` that are never imported."""
+    # PEP 810 matching is exact: importing ``a.b`` does not use an ``a`` entry.
     imported_packages = {
         imp.package for imp in _eager_imports(info) if imp.package is not None
     }
@@ -107,7 +100,7 @@ def collect_unused_lazy_modules(info: ModuleInfo) -> list[tuple[str, int, int]]:
         unused.extend(
             (module, assignment.lineno, assignment.col_offset)
             for module in assignment.modules
-            if not _is_imported_package(module, imported_packages)
+            if module not in imported_packages
             if module not in info.enclosing_packages
         )
     return unused
@@ -247,9 +240,6 @@ def _is_non_lazy_binding(
 class _RecommendationPolicy:
     excluded_packages: set[str]
     blocked_packages: set[str]
-    side_effect_packages: set[str]
-    guard_packages: set[str]
-    non_lazy_packages: set[str]
 
     def should_skip(self, package: str, *, seen_packages: set[str]) -> bool:
         return (
@@ -257,16 +247,6 @@ class _RecommendationPolicy:
             or package in self.excluded_packages
             or package in self.blocked_packages
             or package in seen_packages
-        )
-
-    def should_add_root(self, root: str, *, seen_packages: set[str]) -> bool:
-        return (
-            root not in seen_packages
-            and root not in self.excluded_packages
-            and root not in self.blocked_packages
-            and root not in self.side_effect_packages
-            and root not in self.guard_packages
-            and root not in self.non_lazy_packages
         )
 
 
@@ -317,9 +297,6 @@ def _collect_recommended_lazy_entries(
     policy = _RecommendationPolicy(
         excluded_packages=set(info.enclosing_packages),
         blocked_packages=blocked_packages,
-        side_effect_packages=side_effect_packages,
-        guard_packages=guard_packages,
-        non_lazy_packages=non_lazy_packages,
     )
 
     recommended: list[tuple[str, int, int]] = []
@@ -332,15 +309,6 @@ def _collect_recommended_lazy_entries(
             continue
         recommended.append((package, binding.lineno, binding.col_offset))
         seen_packages.add(package)
-
-        if "." in package and "{" not in package:
-            # Add all parent packages from root to immediate parent.
-            parts = package.split(".")
-            for index in range(1, len(parts)):
-                parent = ".".join(parts[:index])
-                if policy.should_add_root(parent, seen_packages=seen_packages):
-                    recommended.append((parent, binding.lineno, binding.col_offset))
-                    seen_packages.add(parent)
 
     return recommended
 
