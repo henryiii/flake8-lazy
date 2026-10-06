@@ -32,7 +32,6 @@ if TYPE_CHECKING:
 
 from ._always_imported import IMPORT_PRESETS
 from ._analysis import (
-    collect_broken_lazy_modules,
     collect_duplicate_lazy_modules,
     collect_enclosing_lazy_modules,
     collect_invalid_lazy_module_names,
@@ -60,14 +59,10 @@ ERROR_MESSAGES = {
     "LZY101": "stdlib module {module!r} should be listed in __lazy_modules__",
     "LZY102": "module {module!r} should be listed in __lazy_modules__",
     "LZY201": "__lazy_modules__ should be sorted",
-    "LZY204": "__lazy_modules__ should be assigned before importing modules it names",
     "LZY202": "module {module!r} is listed in __lazy_modules__ but never imported",
     "LZY203": "module {module!r} is duplicated in __lazy_modules__",
+    "LZY204": "__lazy_modules__ should be assigned before importing modules it names",
     "LZY205": "module {module!r} in __lazy_modules__ must be absolute",
-    "LZY206": (
-        "module {module!r} is listed in __lazy_modules__"
-        " but is broken under lazy imports"
-    ),
     "LZY301": "lazy import {module!r} inside suppress(ImportError) is misleading",
     "LZY302": (
         "module {module!r} is declared lazy by both 'lazy' keyword and __lazy_modules__"
@@ -120,9 +115,6 @@ def _lazy_module_validation_diagnostics(
     for module, lineno, col_offset in collect_invalid_lazy_module_names(info):
         message = ERROR_MESSAGES["LZY205"].format(module=module)
         diagnostics.append((lineno, col_offset, f"LZY205 {message}"))
-    for module, lineno, col_offset in collect_broken_lazy_modules(info):
-        message = ERROR_MESSAGES["LZY206"].format(module=module)
-        diagnostics.append((lineno, col_offset, f"LZY206 {message}"))
     return diagnostics
 
 

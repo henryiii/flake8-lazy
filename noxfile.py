@@ -64,20 +64,20 @@ def docs(session: nox.Session) -> None:
         session.run("zensical", "build", "--clean", *session.posargs)
 
 
-@nox.session(python="3.15.0b1", default=False)
+@nox.session(python="3.15.0rc3", default=False)
 def cpython(session: nox.Session) -> None:
-    """Run flake8-lazy on the CPython 3.15.0b1 source tree."""
-    cpython_dir = DIR / ".nox" / "cpython-3.15.0b1"
+    """Run flake8-lazy on the CPython 3.15.0rc3 source tree."""
+    cpython_dir = DIR / ".nox" / "cpython-3.15.0rc3"
     if not cpython_dir.exists():
-        tarball = DIR / ".nox" / "cpython-3.15.0b1.tgz"
+        tarball = DIR / ".nox" / "cpython-3.15.0rc3.tgz"
         if not tarball.exists():
-            session.log("Downloading CPython 3.15.0b1 source...")
-            url = "https://www.python.org/ftp/python/3.15.0/Python-3.15.0b1.tgz"
+            session.log("Downloading CPython 3.15.0rc3 source...")
+            url = "https://www.python.org/ftp/python/3.15.0/Python-3.15.0rc3.tgz"
             urllib.request.urlretrieve(url, tarball)
         session.log("Extracting CPython source...")
         with tarfile.open(tarball, "r:gz") as tf:
             tf.extractall(path=DIR / ".nox", filter="data")
-        extracted = DIR / ".nox" / "Python-3.15.0b1"
+        extracted = DIR / ".nox" / "Python-3.15.0rc3"
         extracted.rename(cpython_dir)
 
     session.install("-e.")
