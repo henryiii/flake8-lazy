@@ -179,7 +179,9 @@ flake8-lazy inspects module-scope imports and module runtime usage.
 - Skips `from __future__ import ...`.
 - Skips imports inside `try`/`except`/`finally` blocks, which can never be made
   lazy.
-- Requires exact module entries for nested imports.
+- Requires exact module entries for nested imports. Parent packages are not
+  needed: `import a.b.c` only needs `"a.b.c"`. Parent entries that are already
+  listed are kept.
 - Treats enclosing package names as non-lazy for a file. For example, in
   `a/b/c.py`, `a` and `a.b` should not be listed as lazy.
 

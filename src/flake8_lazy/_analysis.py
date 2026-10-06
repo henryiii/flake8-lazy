@@ -322,6 +322,7 @@ def _collect_recommended_lazy_entries(
         non_lazy_packages=non_lazy_packages,
     )
 
+    declared = info.lazy_packages
     recommended: list[tuple[str, int, int]] = []
     seen_packages: set[str] = set()
     for binding in bindings:
@@ -334,11 +335,14 @@ def _collect_recommended_lazy_entries(
         seen_packages.add(package)
 
         if "." in package and "{" not in package:
-            # Add all parent packages from root to immediate parent.
+            # PEP 810 matching is exact, so parents are not needed. Keep the
+            # ones already declared (older versions recommended them).
             parts = package.split(".")
             for index in range(1, len(parts)):
                 parent = ".".join(parts[:index])
-                if policy.should_add_root(parent, seen_packages=seen_packages):
+                if parent in declared and policy.should_add_root(
+                    parent, seen_packages=seen_packages
+                ):
                     recommended.append((parent, binding.lineno, binding.col_offset))
                     seen_packages.add(parent)
 

@@ -169,6 +169,42 @@ def fn() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    "statement",
+    ["import xml.etree.ElementTree as ET", "import xml.etree.ElementTree"],
+)
+def test_recommended_omits_parents_of_dotted_import(statement: str) -> None:
+    # __lazy_modules__ matching is exact; parents are not needed (PEP 810).
+    tree = ast.parse(f"{statement}\n\ndef fn():\n    return ET, xml\n")
+    info = build_module_info(tree)
+
+    assert collect_recommended_lazy_modules(info) == ["xml.etree.ElementTree"]
+    assert [pkg for pkg, _, _ in collect_missing_lazy_modules(info)] == [
+        "xml.etree.ElementTree"
+    ]
+
+
+def test_recommended_keeps_declared_parents_of_dotted_import() -> None:
+    tree = ast.parse(
+        """
+__lazy_modules__ = ["xml", "xml.etree", "xml.etree.ElementTree"]
+import xml.etree.ElementTree as ET
+
+def fn():
+    return ET
+""",
+    )
+    info = build_module_info(tree)
+
+    assert collect_recommended_lazy_modules(info) == [
+        "xml",
+        "xml.etree",
+        "xml.etree.ElementTree",
+    ]
+    checker = LazyImportChecker(tree=tree, filename="example.py")
+    assert list(checker.run()) == []
+
+
 def test_recommended_excludes_dotted_import_used_at_top_level() -> None:
     tree = ast.parse(
         """
@@ -328,15 +364,9 @@ def process() -> None:
     errors = list(checker.run())
 
     lzy10x_errors = [e for e in errors if e[2].startswith(("LZY101", "LZY102"))]
-    assert len(lzy10x_errors) == 2
-    assert (
-        lzy10x_errors[0][2]
-        == "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
-    )
-    assert (
-        lzy10x_errors[1][2]
-        == "LZY101 stdlib module 'email' should be listed in __lazy_modules__"
-    )
+    assert [e[2] for e in lzy10x_errors] == [
+        "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
+    ]
 
 
 def test_checker_still_flags_aliased_dotted_import_when_unused() -> None:
@@ -351,15 +381,9 @@ import email.header as eh
     errors = list(checker.run())
 
     lzy10x_errors = [e for e in errors if e[2].startswith(("LZY101", "LZY102"))]
-    assert len(lzy10x_errors) == 2
-    assert (
-        lzy10x_errors[0][2]
-        == "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
-    )
-    assert (
-        lzy10x_errors[1][2]
-        == "LZY101 stdlib module 'email' should be listed in __lazy_modules__"
-    )
+    assert [e[2] for e in lzy10x_errors] == [
+        "LZY101 stdlib module 'email.header' should be listed in __lazy_modules__"
+    ]
 
 
 def test_checker_ignores_future_import() -> None:
@@ -1545,10 +1569,7 @@ def f[T: importlib.metadata.PackageNotFoundError](x: T) -> T:
     errors = list(checker.run())
 
     lzy101_errors = [e for e in errors if e[2].startswith("LZY101")]
-    assert [e[2].split("'")[1] for e in lzy101_errors] == [
-        "importlib.metadata",
-        "importlib",
-    ]
+    assert [e[2].split("'")[1] for e in lzy101_errors] == ["importlib.metadata"]
 
 
 def test_checker_emits_lzy401_for_aliased_lazy_import_accessed_at_top_level() -> None:
