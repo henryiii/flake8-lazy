@@ -65,6 +65,31 @@ values cause the runner to exit with status `2`.
 This table only configures the standalone runner. When running under flake8, use
 the flake8 options described below instead.
 
+## Per-file configuration in script blocks
+
+A file can set its own options in a `[tool.flake8-lazy]` table inside its
+[PEP 723](https://peps.python.org/pep-0723/) `# /// script` block. This works in
+the standalone runner and under flake8:
+
+```python
+# /// script
+# dependencies = ["numpy"]
+#
+# [tool.flake8-lazy]
+# lazy-import-preset = "minimal"
+# lazy-exclude-modules = ["numpy"]
+# line-length = 100
+# strict-typing = true
+# ///
+```
+
+The valid keys are `lazy-import-preset`, `lazy-exclude-modules`, `line-length`,
+and `strict-typing`, with the same types as in `pyproject.toml`. A value in the
+script block replaces the value from the command line, `pyproject.toml`, or the
+flake8 configuration for that file only. `lazy-exclude-modules` replaces the
+list; it does not add to it. An invalid table gives an `LZY000` error on the
+line of the `# /// script` marker.
+
 ## Auto-apply with `--apply`
 
 To rewrite files in place with the recommended declaration, use `--apply=list`:

@@ -6,6 +6,7 @@ __lazy_modules__ = [
     f"{__spec__.parent}._always_imported",
     f"{__spec__.parent}._analysis",
     f"{__spec__.parent}._collect",
+    f"{__spec__.parent}._config",
 ]
 
 import importlib.metadata
@@ -15,6 +16,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import argparse
     import ast
+    from collections.abc import Sequence
     from typing import Protocol
 
     from ._model import ModuleInfo
@@ -45,6 +47,7 @@ from ._analysis import (
     collect_unused_lazy_modules,
 )
 from ._collect import build_module_info
+from ._config import ScriptConfigError, load_script_settings
 from ._options import (
     DEFAULT_EXCLUDE_MODULES,
     DEFAULT_IMPORT_PRESET,
@@ -161,16 +164,19 @@ class LazyImportChecker:
 
     name = "flake8-lazy"
     version = importlib.metadata.version("flake8-lazy")
-    __slots__ = ("filename", "tree")
+    __slots__ = ("filename", "lines", "tree")
 
     # Class-level options, set by parse_options when running under flake8.
     import_preset: str = DEFAULT_IMPORT_PRESET
     exclude_modules: frozenset[str] = frozenset()
     strict_typing: bool = DEFAULT_STRICT_TYPING
 
-    def __init__(self, tree: ast.AST, filename: str) -> None:
+    def __init__(
+        self, tree: ast.AST, filename: str, lines: Sequence[str] | None = None
+    ) -> None:
         self.tree = tree
         self.filename = filename
+        self.lines = lines
 
     @classmethod
     def add_options(cls, option_manager: _OptionManager) -> None:
@@ -243,15 +249,28 @@ class LazyImportChecker:
         always_imported: frozenset[str] | None = None,
         exclude_modules: frozenset[str] | None = None,
     ) -> list[tuple[int, int, str, type[LazyImportChecker]]]:
-        if always_imported is None:
-            always_imported = IMPORT_PRESETS[type(self).import_preset]
-        if exclude_modules is None:
-            exclude_modules = type(self).exclude_modules
-        always_imported = always_imported | exclude_modules
-        info = build_module_info(
-            self.tree, self.filename, strict_typing=type(self).strict_typing
-        )
         checker = type(self)
+        try:
+            settings = load_script_settings("".join(self.lines or ()))
+        except ScriptConfigError as exc:
+            return [(exc.lineno, 0, f"LZY000 {exc}", checker)]
+        if always_imported is None:
+            always_imported = IMPORT_PRESETS[
+                settings.import_preset or checker.import_preset
+            ]
+        if exclude_modules is None:
+            exclude_modules = (
+                checker.exclude_modules
+                if settings.exclude_modules is None
+                else settings.exclude_modules
+            )
+        always_imported = always_imported | exclude_modules
+        strict_typing = (
+            checker.strict_typing
+            if settings.strict_typing is None
+            else settings.strict_typing
+        )
+        info = build_module_info(self.tree, self.filename, strict_typing=strict_typing)
         return [
             (lineno, col_offset, message, checker)
             for lineno, col_offset, message in build_diagnostics(
