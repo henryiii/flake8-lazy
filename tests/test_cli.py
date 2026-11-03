@@ -118,10 +118,10 @@ def test_collect_errors_for_file_includes_path_in_decode_error(tmp_path: Path) -
     path = tmp_path / "mod.py"
     path.write_bytes(b"# coding: utf-8\n\xff\n")
 
-    with pytest.raises(UnicodeDecodeError) as excinfo:
+    with pytest.raises(
+        UnicodeDecodeError, match=f"while reading {re.escape(str(path))}$"
+    ):
         collect_errors_for_file(path)
-
-    assert excinfo.value.__notes__ == [f"while reading {path}"]
 
 
 def test_main_accepts_directory_recursively(
