@@ -52,6 +52,60 @@ def test_format_module_literal_quotes(module: str, quote: str, expected: str) ->
     ast.parse(rendered)
 
 
+def test_checker_preserves_diagnostic_messages_locations_and_order() -> None:
+    tree = ast.parse(
+        "import zeta\n"
+        "import json\n"
+        "import re\n"
+        '__lazy_modules__ = ["unused", "re", "re"]\n'
+        'result = re.compile(".")\n'
+    )
+    checker = LazyImportChecker(tree, "test.py")
+
+    assert checker.run(always_imported=frozenset()) == [
+        (
+            1,
+            0,
+            "LZY102 module 'zeta' should be listed in __lazy_modules__",
+            LazyImportChecker,
+        ),
+        (
+            2,
+            0,
+            "LZY101 stdlib module 'json' should be listed in __lazy_modules__",
+            LazyImportChecker,
+        ),
+        (4, 0, "LZY201 __lazy_modules__ should be sorted", LazyImportChecker),
+        (
+            4,
+            0,
+            "LZY202 module 'unused' is listed in __lazy_modules__ but never imported",
+            LazyImportChecker,
+        ),
+        (
+            4,
+            0,
+            "LZY203 module 're' is duplicated in __lazy_modules__",
+            LazyImportChecker,
+        ),
+        (
+            4,
+            0,
+            (
+                "LZY204 __lazy_modules__ should be assigned "
+                "before importing modules it names"
+            ),
+            LazyImportChecker,
+        ),
+        (
+            3,
+            0,
+            "LZY401 module 're' is declared lazy but accessed at the top level",
+            LazyImportChecker,
+        ),
+    ]
+
+
 def test_collect_top_level_imports() -> None:
     tree = ast.parse(
         """

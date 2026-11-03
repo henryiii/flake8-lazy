@@ -87,6 +87,13 @@ def lazy_module_error_code(module: str) -> str:
     return "LZY102"
 
 
+def _format_diagnostic(
+    code: str, lineno: int, col_offset: int, *, module: str | None = None
+) -> tuple[int, int, str]:
+    message = ERROR_MESSAGES[code].format(module=module)
+    return lineno, col_offset, f"{code} {message}"
+
+
 def _missing_lazy_module_diagnostics(
     info: ModuleInfo, *, always_imported: frozenset[str]
 ) -> list[tuple[int, int, str]]:
@@ -95,8 +102,7 @@ def _missing_lazy_module_diagnostics(
         info, always_imported=always_imported
     ):
         code = lazy_module_error_code(module)
-        message = ERROR_MESSAGES[code].format(module=module)
-        diagnostics.append((lineno, col_offset, f"{code} {message}"))
+        diagnostics.append(_format_diagnostic(code, lineno, col_offset, module=module))
     return diagnostics
 
 
@@ -107,43 +113,51 @@ def _lazy_module_validation_diagnostics(
         return []
     diagnostics: list[tuple[int, int, str]] = []
     for lineno, col_offset in collect_unsorted_lazy_modules(info):
-        diagnostics.append((lineno, col_offset, f"LZY201 {ERROR_MESSAGES['LZY201']}"))
+        diagnostics.append(_format_diagnostic("LZY201", lineno, col_offset))
     for module, lineno, col_offset in collect_unused_lazy_modules(info):
-        message = ERROR_MESSAGES["LZY202"].format(module=module)
-        diagnostics.append((lineno, col_offset, f"LZY202 {message}"))
+        diagnostics.append(
+            _format_diagnostic("LZY202", lineno, col_offset, module=module)
+        )
     for module, lineno, col_offset in collect_duplicate_lazy_modules(info):
-        message = ERROR_MESSAGES["LZY203"].format(module=module)
-        diagnostics.append((lineno, col_offset, f"LZY203 {message}"))
+        diagnostics.append(
+            _format_diagnostic("LZY203", lineno, col_offset, module=module)
+        )
     for lineno, col_offset in collect_late_lazy_module_assignments(info):
-        diagnostics.append((lineno, col_offset, f"LZY204 {ERROR_MESSAGES['LZY204']}"))
+        diagnostics.append(_format_diagnostic("LZY204", lineno, col_offset))
     for module, lineno, col_offset in collect_invalid_lazy_module_names(info):
-        message = ERROR_MESSAGES["LZY205"].format(module=module)
-        diagnostics.append((lineno, col_offset, f"LZY205 {message}"))
+        diagnostics.append(
+            _format_diagnostic("LZY205", lineno, col_offset, module=module)
+        )
     return diagnostics
 
 
 def _lazy_keyword_diagnostics(info: ModuleInfo) -> list[tuple[int, int, str]]:
     diagnostics: list[tuple[int, int, str]] = []
     for module, lineno, col_offset in collect_lazy_imports_in_suppress_blocks(info):
-        message = ERROR_MESSAGES["LZY301"].format(module=module)
-        diagnostics.append((lineno, col_offset, f"LZY301 {message}"))
+        diagnostics.append(
+            _format_diagnostic("LZY301", lineno, col_offset, module=module)
+        )
     for module, lineno, col_offset in collect_redundant_lazy_declarations(info):
-        message = ERROR_MESSAGES["LZY302"].format(module=module)
-        diagnostics.append((lineno, col_offset, f"LZY302 {message}"))
+        diagnostics.append(
+            _format_diagnostic("LZY302", lineno, col_offset, module=module)
+        )
     for module, lineno, col_offset in collect_mixed_lazy_eager_imports(info):
-        message = ERROR_MESSAGES["LZY303"].format(module=module)
-        diagnostics.append((lineno, col_offset, f"LZY303 {message}"))
+        diagnostics.append(
+            _format_diagnostic("LZY303", lineno, col_offset, module=module)
+        )
     return diagnostics
 
 
 def _semantic_lazy_diagnostics(info: ModuleInfo) -> list[tuple[int, int, str]]:
     diagnostics: list[tuple[int, int, str]] = []
     for module, lineno, col_offset in collect_unnecessary_lazy_imports(info):
-        message = ERROR_MESSAGES["LZY401"].format(module=module)
-        diagnostics.append((lineno, col_offset, f"LZY401 {message}"))
+        diagnostics.append(
+            _format_diagnostic("LZY401", lineno, col_offset, module=module)
+        )
     for module, lineno, col_offset in collect_enclosing_lazy_modules(info):
-        message = ERROR_MESSAGES["LZY402"].format(module=module)
-        diagnostics.append((lineno, col_offset, f"LZY402 {message}"))
+        diagnostics.append(
+            _format_diagnostic("LZY402", lineno, col_offset, module=module)
+        )
     return diagnostics
 
 
