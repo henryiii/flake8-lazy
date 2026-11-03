@@ -19,6 +19,17 @@ Python files, skipping hidden directories and `__pycache__`:
 flake8-lazy src/
 ```
 
+To skip more files or directories, use `--exclude` with a comma-separated list
+of glob patterns. A pattern matches the base name of a file or directory. A
+pattern with a path separator matches the full path, relative to the current
+directory (or to the directory of `pyproject.toml` when set there). Excluded
+directories are not searched, and files given explicitly on the command line are
+also skipped if they match:
+
+```bash
+flake8-lazy --exclude='tests,*_pb2.py,src/pkg/_vendor' src/
+```
+
 By default, output is flake8-like:
 
 ```text
@@ -54,13 +65,14 @@ apply = "list"
 line-length = 100
 jobs = 4
 strict-typing = true
+exclude = ["tests", "*_pb2.py"]
 ```
 
 The keys must match the command-line flag names exactly (e.g.
-`lazy-import-preset`, not `lazy_import_preset`). `lazy-exclude-modules` must be
-a list of strings, `jobs` must be a positive integer (omit it for automatic
-parallelism), and `strict-typing` must be a boolean. Unknown keys or invalid
-values cause the runner to exit with status `2`.
+`lazy-import-preset`, not `lazy_import_preset`). `lazy-exclude-modules` and
+`exclude` must be lists of strings, `jobs` must be a positive integer (omit it
+for automatic parallelism), and `strict-typing` must be a boolean. Unknown keys
+or invalid values cause the runner to exit with status `2`.
 
 This table only configures the standalone runner. When running under flake8, use
 the flake8 options described below instead.

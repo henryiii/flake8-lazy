@@ -17,6 +17,7 @@ __lazy_modules__ = [
     f"{__spec__.parent}._options",
 ]
 
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -59,6 +60,7 @@ _STANDALONE_KEYS = (
     "line-length",
     "jobs",
     "strict-typing",
+    "exclude",
 )
 _SCRIPT_KEYS = (
     "lazy-import-preset",
@@ -138,7 +140,7 @@ def _script_settings(table: object) -> ScriptSettings:
             case "lazy-import-preset":
                 import_preset = _choice(key, value, IMPORT_PRESET_CHOICES)
             case "lazy-exclude-modules":
-                exclude_modules = parse_exclude_modules(_module_list(key, value))
+                exclude_modules = parse_exclude_modules(_string_list(key, value))
             case "strict-typing":
                 strict_typing = _bool(key, value)
             case "line-length":
@@ -190,13 +192,13 @@ def load_standalone_defaults(start: Path) -> dict[str, object]:
         raise ConfigError(msg)
 
     try:
-        return _normalize(table)
+        return _normalize(table, path.parent)
     except ConfigError as exc:
         msg = f"{path}: {exc}"
         raise ConfigError(msg) from exc
 
 
-def _normalize(table: dict[str, object]) -> dict[str, object]:
+def _normalize(table: dict[str, object], base: Path) -> dict[str, object]:
     defaults: dict[str, object] = {}
     for key, value in table.items():
         match key:
@@ -205,7 +207,7 @@ def _normalize(table: dict[str, object]) -> dict[str, object]:
             case "lazy-import-preset":
                 defaults["import_preset"] = _choice(key, value, IMPORT_PRESET_CHOICES)
             case "lazy-exclude-modules":
-                defaults["exclude_modules"] = _module_list(key, value)
+                defaults["exclude_modules"] = _string_list(key, value)
             case "apply":
                 defaults["apply"] = _choice(key, value, APPLY_CHOICES)
             case "line-length":
@@ -214,6 +216,8 @@ def _normalize(table: dict[str, object]) -> dict[str, object]:
                 defaults["jobs"] = _jobs(key, value)
             case "strict-typing":
                 defaults["strict_typing"] = _bool(key, value)
+            case "exclude":
+                defaults["exclude"] = _exclude_list(key, value, base)
             case _:
                 _unknown_key(key, _STANDALONE_KEYS, "[tool.flake8-lazy.standalone]")
     return defaults
@@ -232,13 +236,22 @@ def _choice(key: str, value: object, choices: tuple[str, ...]) -> str:
     return value
 
 
-def _module_list(key: str, value: object) -> str:
+def _string_list(key: str, value: object) -> str:
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         # Pyrefly needs this, mypy is smart enough without it
         typed_list: list[str] = value
         return ",".join(typed_list)
     msg = f"{key!r} must be a list of strings"
     raise ConfigError(msg)
+
+
+def _exclude_list(key: str, value: object, base: Path) -> str:
+    """Anchor patterns that contain a path separator to ``base``."""
+    patterns = _string_list(key, value).split(",")
+    return ",".join(
+        str(base / pattern) if "/" in pattern or os.sep in pattern else pattern
+        for pattern in patterns
+    )
 
 
 def _bool(key: str, value: object) -> bool:

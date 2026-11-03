@@ -10,6 +10,7 @@ __lazy_modules__ = [
     "flake8_lazy._rewriter",
     "flake8_lazy.api",
     "flake8_lazy.checker",
+    "fnmatch",
     "pathlib",
 ]
 
@@ -17,6 +18,7 @@ import argparse
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from fnmatch import fnmatch
 from pathlib import Path
 
 from flake8_lazy import __version__
@@ -135,22 +137,59 @@ def _parse_line_length(value: str) -> int:
     return length
 
 
-def _expand_paths(paths: list[Path]) -> list[Path]:
+def _parse_exclude(value: str) -> list[str]:
+    """Split ``value`` into patterns; patterns with a separator become absolute."""
+    patterns = [item.strip() for item in value.split(",") if item.strip()]
+    return [
+        _normalize_path(Path(pattern))
+        if "/" in pattern or os.sep in pattern
+        else pattern
+        for pattern in patterns
+    ]
+
+
+def _normalize_path(path: Path) -> str:
+    # absolute() keeps ".." segments, so equal paths could compare different.
+    return os.path.normpath(path.absolute())
+
+
+def _is_excluded(path: Path, patterns: list[str]) -> bool:
+    """Match base names, or full paths for patterns with a separator."""
+    if not patterns:
+        return False
+    absolute = _normalize_path(path)
+    name = Path(absolute).name
+    return any(
+        fnmatch(absolute if os.sep in pattern else name, pattern)
+        for pattern in patterns
+    )
+
+
+def _expand_paths(paths: list[Path], exclude: list[str] | None = None) -> list[Path]:
     """Expand directory arguments into their Python files, recursively.
 
-    Hidden directories and ``__pycache__`` are skipped during traversal.
+    Hidden directories and ``__pycache__`` are skipped during traversal. Paths
+    that match an ``exclude`` pattern are skipped, including explicit arguments.
     """
+    patterns = exclude or []
     result: list[Path] = []
     for path in paths:
+        if _is_excluded(path, patterns):
+            continue
         if path.is_dir():
             for dirpath, dirnames, filenames in os.walk(path):
                 dirnames[:] = sorted(
-                    d for d in dirnames if not d.startswith(".") and d != "__pycache__"
+                    d
+                    for d in dirnames
+                    if not d.startswith(".")
+                    and d != "__pycache__"
+                    and not _is_excluded(Path(dirpath) / d, patterns)
                 )
                 result.extend(
                     Path(dirpath) / name
                     for name in sorted(filenames)
                     if name.endswith(".py")
+                    and not _is_excluded(Path(dirpath) / name, patterns)
                 )
         else:
             result.append(path)
@@ -179,6 +218,14 @@ def main(argv: list[str] | None = None) -> None:
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
+    )
+    parser.add_argument(
+        "--exclude",
+        default="",
+        metavar="PATTERNS",
+        help="comma-separated list of glob patterns for files or directories "
+        "to skip; a pattern matches the base name, or the full path if it "
+        "contains a path separator",
     )
     parser.add_argument(
         "--format",
@@ -252,7 +299,9 @@ def main(argv: list[str] | None = None) -> None:
     namespace = parser.parse_args(list(argv) if argv is not None else None)
     exclude_modules = parse_exclude_modules(namespace.exclude_modules)
 
-    paths = _deduplicate_paths(_expand_paths(namespace.files))
+    paths = _deduplicate_paths(
+        _expand_paths(namespace.files, _parse_exclude(namespace.exclude))
+    )
     jobs = namespace.jobs
     if jobs == 0:
         jobs = os.cpu_count() or 1

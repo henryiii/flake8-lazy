@@ -155,6 +155,104 @@ def test_main_accepts_directory_recursively(
     assert str(cache) not in output
 
 
+def test_main_exclude_skips_matching_paths(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    kept = tmp_path / "pkg" / "mod.py"
+    kept.parent.mkdir()
+    kept.write_text("import numpy\n", encoding="utf-8")
+    tests_dir = tmp_path / "pkg" / "tests" / "test_mod.py"
+    tests_dir.parent.mkdir()
+    tests_dir.write_text("import numpy\n", encoding="utf-8")
+    by_glob = tmp_path / "pkg" / "conftest_gen.py"
+    by_glob.write_text("import numpy\n", encoding="utf-8")
+    by_path = tmp_path / "pkg" / "vendor" / "lib.py"
+    by_path.parent.mkdir()
+    by_path.write_text("import numpy\n", encoding="utf-8")
+    explicit = tmp_path / "other_gen.py"
+    explicit.write_text("import numpy\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--exclude=tests,*_gen.py,pkg/vendor", "pkg", str(explicit)])
+
+    assert excinfo.value.code == 1
+
+    output = capsys.readouterr().out
+    assert "mod.py:1:0: LZY102" in output
+    assert "test_mod.py" not in output
+    assert "conftest_gen.py" not in output
+    assert "lib.py" not in output
+    assert "other_gen.py" not in output
+
+
+def test_main_exclude_from_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path, 'exclude = ["tests"]\n')
+    tests_dir = tmp_path / "tests" / "test_mod.py"
+    tests_dir.parent.mkdir()
+    tests_dir.write_text("import numpy\n", encoding="utf-8")
+
+    main(["."])
+
+    assert capsys.readouterr().out == ""
+
+
+def test_main_exclude_path_from_config_is_relative_to_config_dir(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_config(tmp_path, 'exclude = ["pkg/vendor"]\n')
+    vendored = tmp_path / "pkg" / "vendor" / "lib.py"
+    vendored.parent.mkdir(parents=True)
+    vendored.write_text("import numpy\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path / "pkg")
+
+    main(["."])
+
+    assert capsys.readouterr().out == ""
+
+
+def test_main_exclude_name_pattern_ignores_parent_dirs(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "test-project"
+    kept = project / "pkg" / "mod.py"
+    kept.parent.mkdir(parents=True)
+    kept.write_text("import numpy\n", encoding="utf-8")
+    monkeypatch.chdir(project)
+
+    with pytest.raises(SystemExit):
+        main(["--exclude=*test*", "pkg"])
+
+    assert "mod.py:1:0: LZY102" in capsys.readouterr().out
+
+
+def test_main_exclude_normalizes_parent_segments(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    excluded = project / "pkg" / "mod.py"
+    excluded.parent.mkdir(parents=True)
+    excluded.write_text("import numpy\n", encoding="utf-8")
+    monkeypatch.chdir(project)
+
+    main(["--exclude=pkg/mod.py", "../project/pkg/mod.py", "../project/pkg"])
+
+    assert capsys.readouterr().out == ""
+
+
 def test_main_outputs_lzy102_and_exits_nonzero(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -1858,7 +1956,8 @@ def test_load_standalone_defaults_normalizes_keys(tmp_path: Path) -> None:
         'apply = "list"\n'
         "line-length = 100\n"
         "jobs = 4\n"
-        "strict-typing = true\n",
+        "strict-typing = true\n"
+        'exclude = ["tests", "*_gen.py"]\n',
     )
 
     assert load_standalone_defaults(tmp_path) == {
@@ -1869,6 +1968,7 @@ def test_load_standalone_defaults_normalizes_keys(tmp_path: Path) -> None:
         "line_length": 100,
         "jobs": 4,
         "strict_typing": True,
+        "exclude": "tests,*_gen.py",
     }
 
 
