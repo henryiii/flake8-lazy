@@ -1167,6 +1167,53 @@ except Exception:
     assert "d" not in names
 
 
+@pytest.mark.parametrize(
+    ("statement", "access", "accesses_binding"),
+    [
+        ("import pkg", "pkg.VALUE", True),
+        ("import pkg.sub", "pkg.sub.VALUE", True),
+        ("import pkg.sub", "pkg.other.VALUE", False),
+        ("import pkg.sub as sub", "sub.VALUE", True),
+        ("import pkg.sub as pkg", "pkg.VALUE", True),
+        ("from pkg.sub import value", "value", True),
+    ],
+)
+@pytest.mark.parametrize("conditional", [False, True])
+def test_binding_access_in_recommendations_and_unnecessary_imports(
+    statement: str, access: str, *, accesses_binding: bool, conditional: bool
+) -> None:
+    use = f"if enabled:\n    result = {access}" if conditional else f"result = {access}"
+    info = build_module_info(ast.parse(f"{statement}\n{use}\n"))
+    package = info.imports[0].package
+    assert package is not None
+
+    assert collect_recommended_lazy_modules(info, always_imported=frozenset()) == (
+        [] if accesses_binding else [package]
+    )
+
+    lazy_info = build_module_info(
+        ast.parse(f"__lazy_modules__ = [{package!r}]\n{statement}\n{use}\n")
+    )
+    assert collect_unnecessary_lazy_imports(lazy_info) == (
+        [(package, 2, 0)] if accesses_binding and not conditional else []
+    )
+
+
+def test_unnecessary_imports_preserve_first_accessed_binding_order() -> None:
+    info = build_module_info(
+        ast.parse(
+            '__lazy_modules__ = ["z.sub", "a"]\n'
+            "import z.sub\n"
+            "import a\n"
+            "import z.sub as sub\n"
+            "import a as other\n"
+            "result = (a.VALUE, sub.VALUE, other.VALUE)\n"
+        )
+    )
+
+    assert collect_unnecessary_lazy_imports(info) == [("a", 3, 0), ("z.sub", 4, 0)]
+
+
 def test_collect_unnecessary_lazy_imports_basic() -> None:
     tree = ast.parse(
         """
