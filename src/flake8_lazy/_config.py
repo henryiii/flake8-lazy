@@ -59,6 +59,7 @@ _STANDALONE_KEYS = (
     "line-length",
     "jobs",
     "strict-typing",
+    "exclude",
 )
 _SCRIPT_KEYS = (
     "lazy-import-preset",
@@ -138,7 +139,7 @@ def _script_settings(table: object) -> ScriptSettings:
             case "lazy-import-preset":
                 import_preset = _choice(key, value, IMPORT_PRESET_CHOICES)
             case "lazy-exclude-modules":
-                exclude_modules = parse_exclude_modules(_module_list(key, value))
+                exclude_modules = parse_exclude_modules(_string_list(key, value))
             case "strict-typing":
                 strict_typing = _bool(key, value)
             case "line-length":
@@ -205,7 +206,7 @@ def _normalize(table: dict[str, object]) -> dict[str, object]:
             case "lazy-import-preset":
                 defaults["import_preset"] = _choice(key, value, IMPORT_PRESET_CHOICES)
             case "lazy-exclude-modules":
-                defaults["exclude_modules"] = _module_list(key, value)
+                defaults["exclude_modules"] = _string_list(key, value)
             case "apply":
                 defaults["apply"] = _choice(key, value, APPLY_CHOICES)
             case "line-length":
@@ -214,6 +215,8 @@ def _normalize(table: dict[str, object]) -> dict[str, object]:
                 defaults["jobs"] = _jobs(key, value)
             case "strict-typing":
                 defaults["strict_typing"] = _bool(key, value)
+            case "exclude":
+                defaults["exclude"] = _string_list(key, value)
             case _:
                 _unknown_key(key, _STANDALONE_KEYS, "[tool.flake8-lazy.standalone]")
     return defaults
@@ -232,7 +235,7 @@ def _choice(key: str, value: object, choices: tuple[str, ...]) -> str:
     return value
 
 
-def _module_list(key: str, value: object) -> str:
+def _string_list(key: str, value: object) -> str:
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         # Pyrefly needs this, mypy is smart enough without it
         typed_list: list[str] = value
