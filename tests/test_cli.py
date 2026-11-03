@@ -204,6 +204,22 @@ def test_main_exclude_from_config(
     assert capsys.readouterr().out == ""
 
 
+def test_main_exclude_path_from_config_is_relative_to_config_dir(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_config(tmp_path, 'exclude = ["pkg/vendor"]\n')
+    vendored = tmp_path / "pkg" / "vendor" / "lib.py"
+    vendored.parent.mkdir(parents=True)
+    vendored.write_text("import numpy\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path / "pkg")
+
+    main(["."])
+
+    assert capsys.readouterr().out == ""
+
+
 def test_main_outputs_lzy102_and_exits_nonzero(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

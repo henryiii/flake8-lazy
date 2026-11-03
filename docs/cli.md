@@ -22,8 +22,9 @@ flake8-lazy src/
 To skip more files or directories, use `--exclude` with a comma-separated list
 of glob patterns. A pattern matches the base name of a file or directory. A
 pattern with a path separator matches the full path, relative to the current
-directory. Excluded directories are not searched, and files given explicitly on
-the command line are also skipped if they match:
+directory (or to the directory of `pyproject.toml` when set there). Excluded
+directories are not searched, and files given explicitly on the command line are
+also skipped if they match:
 
 ```bash
 flake8-lazy --exclude='tests,*_pb2.py,src/pkg/_vendor' src/

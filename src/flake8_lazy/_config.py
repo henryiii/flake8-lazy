@@ -17,6 +17,7 @@ __lazy_modules__ = [
     f"{__spec__.parent}._options",
 ]
 
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -191,13 +192,13 @@ def load_standalone_defaults(start: Path) -> dict[str, object]:
         raise ConfigError(msg)
 
     try:
-        return _normalize(table)
+        return _normalize(table, path.parent)
     except ConfigError as exc:
         msg = f"{path}: {exc}"
         raise ConfigError(msg) from exc
 
 
-def _normalize(table: dict[str, object]) -> dict[str, object]:
+def _normalize(table: dict[str, object], base: Path) -> dict[str, object]:
     defaults: dict[str, object] = {}
     for key, value in table.items():
         match key:
@@ -216,7 +217,7 @@ def _normalize(table: dict[str, object]) -> dict[str, object]:
             case "strict-typing":
                 defaults["strict_typing"] = _bool(key, value)
             case "exclude":
-                defaults["exclude"] = _string_list(key, value)
+                defaults["exclude"] = _exclude_list(key, value, base)
             case _:
                 _unknown_key(key, _STANDALONE_KEYS, "[tool.flake8-lazy.standalone]")
     return defaults
@@ -242,6 +243,15 @@ def _string_list(key: str, value: object) -> str:
         return ",".join(typed_list)
     msg = f"{key!r} must be a list of strings"
     raise ConfigError(msg)
+
+
+def _exclude_list(key: str, value: object, base: Path) -> str:
+    """Anchor patterns that contain a path separator to ``base``."""
+    patterns = _string_list(key, value).split(",")
+    return ",".join(
+        str(base / pattern) if "/" in pattern or os.sep in pattern else pattern
+        for pattern in patterns
+    )
 
 
 def _bool(key: str, value: object) -> bool:
