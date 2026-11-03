@@ -287,38 +287,14 @@ def _run_sequential(
                 include_errors=namespace.apply is None,
                 strict_typing=namespace.strict_typing,
             )
-            if namespace.apply is not None and _should_apply(
-                namespace.apply,
-                analysis.declared_modules,
-                analysis.recommended_modules,
-                is_dynamic=analysis.is_dynamic,
-                has_native_lazy=analysis.has_native_lazy,
-            ):
-                effective_modules = analysis.recommended_modules
-                if analysis.native_modules:
-                    effective_modules = sorted(
-                        set(analysis.recommended_modules) | set(analysis.native_modules)
-                    )
-                line_length, strict_typing = _rewrite_options(
+            if namespace.apply is not None:
+                analysis = _rewrite_file(
+                    path,
                     analysis,
-                    line_length=namespace.line_length,
-                    strict_typing=namespace.strict_typing,
-                )
-                apply_lazy_modules(
-                    path,
-                    effective_modules,
-                    mode=namespace.apply,
-                    line_length=line_length,
-                    strict_typing=strict_typing,
-                )
-                if namespace.apply == "native" and sys.version_info < (3, 15):
-                    continue
-                analysis = _analyze_file(
-                    path,
+                    apply_mode=namespace.apply,
                     import_preset=namespace.import_preset,
                     exclude_modules=exclude_modules,
-                    apply_mode=namespace.apply,
-                    include_errors=True,
+                    line_length=namespace.line_length,
                     strict_typing=namespace.strict_typing,
                 )
         except OSError as exc_:
@@ -376,6 +352,53 @@ def _emit_output(
     return found_errors
 
 
+def _rewrite_file(
+    path: Path,
+    analysis: _FileAnalysis,
+    *,
+    apply_mode: str,
+    import_preset: str,
+    exclude_modules: frozenset[str],
+    line_length: int,
+    strict_typing: bool,
+) -> _FileAnalysis | None:
+    """Rewrite and reanalyze one file; return None for native output before 3.15."""
+    if not _should_apply(
+        apply_mode,
+        analysis.declared_modules,
+        analysis.recommended_modules,
+        is_dynamic=analysis.is_dynamic,
+        has_native_lazy=analysis.has_native_lazy,
+    ):
+        return analysis
+
+    effective_modules = analysis.recommended_modules
+    if analysis.native_modules:
+        effective_modules = sorted(
+            set(analysis.recommended_modules) | set(analysis.native_modules)
+        )
+    file_line_length, file_strict_typing = _rewrite_options(
+        analysis, line_length=line_length, strict_typing=strict_typing
+    )
+    apply_lazy_modules(
+        path,
+        effective_modules,
+        mode=apply_mode,
+        line_length=file_line_length,
+        strict_typing=file_strict_typing,
+    )
+    if apply_mode == "native" and sys.version_info < (3, 15):
+        return None
+    return _analyze_file(
+        path,
+        import_preset=import_preset,
+        exclude_modules=exclude_modules,
+        apply_mode=apply_mode,
+        include_errors=True,
+        strict_typing=strict_typing,
+    )
+
+
 def _apply_rewrites(
     paths: list[Path],
     results: dict[Path, _FileAnalysis],
@@ -393,47 +416,22 @@ def _apply_rewrites(
         analysis = results.get(path)
         if analysis is None:
             continue
-        if _should_apply(
-            apply_mode,
-            analysis.declared_modules,
-            analysis.recommended_modules,
-            is_dynamic=analysis.is_dynamic,
-            has_native_lazy=analysis.has_native_lazy,
-        ):
-            effective_modules = analysis.recommended_modules
-            if analysis.native_modules:
-                effective_modules = sorted(
-                    set(analysis.recommended_modules) | set(analysis.native_modules)
-                )
-            file_line_length, file_strict_typing = _rewrite_options(
-                analysis, line_length=line_length, strict_typing=strict_typing
+        try:
+            rewritten = _rewrite_file(
+                path,
+                analysis,
+                apply_mode=apply_mode,
+                import_preset=import_preset,
+                exclude_modules=exclude_modules,
+                line_length=line_length,
+                strict_typing=strict_typing,
             )
-            try:
-                apply_lazy_modules(
-                    path,
-                    effective_modules,
-                    mode=apply_mode,
-                    line_length=file_line_length,
-                    strict_typing=file_strict_typing,
-                )
-            except OSError as exc:
-                errors_by_path[path] = exc
-                found_errors = True
-                continue
-            if apply_mode == "native" and sys.version_info < (3, 15):
-                continue
-            try:
-                results[path] = _analyze_file(
-                    path,
-                    import_preset=import_preset,
-                    exclude_modules=exclude_modules,
-                    apply_mode=apply_mode,
-                    include_errors=True,
-                    strict_typing=strict_typing,
-                )
-            except (OSError, SyntaxError, ScriptConfigError) as exc:
-                errors_by_path[path] = exc
-                found_errors = True
+        except (OSError, SyntaxError, ScriptConfigError) as exc:
+            errors_by_path[path] = exc
+            found_errors = True
+            continue
+        if rewritten is not None:
+            results[path] = rewritten
     return results, errors_by_path, found_errors
 
 

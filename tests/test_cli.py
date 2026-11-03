@@ -2120,6 +2120,33 @@ def test_main_script_overrides_config(
         main([str(path)])
 
 
+@pytest.mark.skipif(sys.version_info >= (3, 15), reason="Requires Python before 3.15")
+@pytest.mark.parametrize("jobs", ["1", "2"])
+def test_main_apply_native_output_before_python315(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    jobs: str,
+) -> None:
+    monkeypatch.setattr("os.cpu_count", lambda: 2)
+    paths = [tmp_path / "first.py", tmp_path / "second.py"]
+    for path in paths:
+        path.write_text("import numpy\n", encoding="utf-8")
+
+    main(["--apply=native", "--format=lazy-modules", "-j", jobs, *map(str, paths)])
+
+    captured = capsys.readouterr()
+    expected = (
+        ""
+        if jobs == "1"
+        else "".join(f'{path}: __lazy_modules__ = ["numpy"]\n' for path in paths)
+    )
+    assert captured.out == expected
+    assert captured.err == ""
+    for path in paths:
+        assert path.read_text(encoding="utf-8") == "lazy import numpy\n"
+
+
 @pytest.mark.parametrize("jobs", ["1", "2"])
 def test_main_apply_uses_script_line_length(
     tmp_path: Path,
