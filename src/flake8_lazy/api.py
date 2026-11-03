@@ -4,6 +4,7 @@ from __future__ import annotations
 
 __lazy_modules__ = [
     "ast",
+    "io",
     "pathlib",
     "tokenize",
     f"{__spec__.parent}._always_imported",
@@ -14,6 +15,7 @@ __lazy_modules__ = [
 ]
 
 import ast
+import io
 import re
 import sys
 import tokenize
@@ -164,8 +166,17 @@ def _build_noqa_map(source: str) -> dict[int, set[str] | None]:
     if "noqa" not in source.lower():
         return {}
     noqa_map: dict[int, set[str] | None] = {}
-    for lineno, line in enumerate(source.splitlines(), start=1):
-        m = _NOQA_RE.search(line)
+    # Only real comments count, not "# noqa" text inside string literals.
+    try:
+        comments = [
+            (tok.start[0], tok.string)
+            for tok in tokenize.generate_tokens(io.StringIO(source).readline)
+            if tok.type == tokenize.COMMENT
+        ]
+    except (tokenize.TokenError, SyntaxError):
+        return {}
+    for lineno, comment in comments:
+        m = _NOQA_RE.match(comment)
         if m:
             codes_str = m.group(1)
             if not codes_str or not codes_str.strip():

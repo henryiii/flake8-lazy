@@ -1541,6 +1541,35 @@ def test_main_lazy_modules_format_respects_noqa(
     assert capsys.readouterr().out == f'{path}: __lazy_modules__ = ["pandas"]\n'
 
 
+def test_build_noqa_map_ignores_noqa_in_string() -> None:
+    source = 'import numpy; marker = "# noqa"\ndoc = """\n# noqa\n"""\n'
+    assert _build_noqa_map(source) == {}
+
+
+def test_main_apply_ignores_noqa_in_string(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    body = 'import numpy; marker = "# noqa"\n'
+    path.write_text(body, encoding="utf-8")
+
+    _run_main_and_assert_no_output(["--apply=list", str(path)], capsys)
+    assert path.read_text(encoding="utf-8") == f'__lazy_modules__ = ["numpy"]\n\n{body}'
+
+
+def test_main_lazy_modules_format_ignores_noqa_in_string(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text('import numpy; marker = "# noqa"\n', encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="1"):
+        main(["--format=lazy-modules", str(path)])
+    assert capsys.readouterr().out == f'{path}: __lazy_modules__ = ["numpy"]\n'
+
+
 def test_main_apply_dynamic_inserts_alllazy_class(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
