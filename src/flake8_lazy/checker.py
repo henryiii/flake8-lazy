@@ -55,7 +55,7 @@ from ._options import (
     parse_exclude_modules,
 )
 
-__all__ = ["ERROR_MESSAGES", "LazyImportChecker"]
+__all__ = ["ERROR_MESSAGES", "LazyImportChecker", "lazy_module_error_code"]
 
 
 ERROR_MESSAGES = {
@@ -79,7 +79,8 @@ ERROR_MESSAGES = {
 }
 
 
-def _lazy_module_error_code(module: str) -> str:
+def lazy_module_error_code(module: str) -> str:
+    """Return ``LZY101`` for stdlib modules and ``LZY102`` for the rest."""
     root_module = module.split(".", maxsplit=1)[0]
     if root_module in sys.stdlib_module_names:
         return "LZY101"
@@ -93,7 +94,7 @@ def _missing_lazy_module_diagnostics(
     for module, lineno, col_offset in collect_missing_lazy_modules(
         info, always_imported=always_imported
     ):
-        code = _lazy_module_error_code(module)
+        code = lazy_module_error_code(module)
         message = ERROR_MESSAGES[code].format(module=module)
         diagnostics.append((lineno, col_offset, f"{code} {message}"))
     return diagnostics

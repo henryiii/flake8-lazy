@@ -22,13 +22,14 @@ from pathlib import Path
 
 from ._always_imported import IMPORT_PRESETS
 from ._analysis import (
+    collect_missing_lazy_modules,
     collect_native_lazy_modules,
     collect_recommended_lazy_modules,
     has_native_lazy_imports,
 )
 from ._collect import build_module_info
 from ._config import ScriptSettings, load_script_settings
-from .checker import build_diagnostics
+from .checker import build_diagnostics, lazy_module_error_code
 
 __all__ = [
     "_FileAnalysis",
@@ -89,28 +90,30 @@ def _process_single_file(
     if has_native_lazy and apply_mode in {"list", "set"}:
         native_modules = collect_native_lazy_modules(info)
 
-    errors: list[tuple[int, int, str]]
+    noqa_map = _build_noqa_map(source)
+    errors: list[tuple[int, int, str]] = []
     if include_errors:
-        errors = build_diagnostics(info, always_imported=always_imported)
-        if errors:
-            noqa_map = _build_noqa_map(source)
-            if noqa_map:
-                filtered: list[tuple[int, int, str]] = []
-                for line, col, message in errors:
-                    codes = noqa_map.get(line)
-                    if codes is None and line in noqa_map:
-                        continue
-                    if codes is not None and message.split()[0] in codes:
-                        continue
-                    filtered.append((line, col, message))
-                errors = filtered
-    else:
-        errors = []
+        errors = _filter_noqa_errors(
+            build_diagnostics(info, always_imported=always_imported), noqa_map
+        )
 
     recommended_modules = collect_recommended_lazy_modules(
         info,
         always_imported=always_imported,
     )
+    if noqa_map:
+        # A module whose LZY101/LZY102 is silenced by a noqa comment must not be
+        # added back by ``--apply`` or ``--format=lazy-modules``.
+        suppressed = {
+            module
+            for module, lineno, _col in collect_missing_lazy_modules(
+                info, always_imported=always_imported
+            )
+            if _is_noqa_suppressed(noqa_map, lineno, lazy_module_error_code(module))
+        }
+        recommended_modules = [
+            module for module in recommended_modules if module not in suppressed
+        ]
 
     return path, _FileAnalysis(
         recommended_modules=recommended_modules,
@@ -174,6 +177,29 @@ def _build_noqa_map(source: str) -> dict[int, set[str] | None]:
     return noqa_map
 
 
+def _is_noqa_suppressed(
+    noqa_map: dict[int, set[str] | None], lineno: int, code: str
+) -> bool:
+    """Return True if ``code`` is silenced by a ``# noqa`` comment on ``lineno``."""
+    if lineno not in noqa_map:
+        return False
+    codes = noqa_map[lineno]
+    return codes is None or code in codes
+
+
+def _filter_noqa_errors(
+    errors: list[tuple[int, int, str]], noqa_map: dict[int, set[str] | None]
+) -> list[tuple[int, int, str]]:
+    """Drop errors silenced by ``# noqa`` comments."""
+    if not noqa_map:
+        return errors
+    return [
+        (line, col, message)
+        for line, col, message in errors
+        if not _is_noqa_suppressed(noqa_map, line, message.split()[0])
+    ]
+
+
 def collect_errors_for_file(
     path: str | Path,
     *,
@@ -198,17 +224,7 @@ def collect_errors_for_file(
     errors = build_diagnostics(info, always_imported=always_imported)
     if not errors:
         return []
-    noqa_map = _build_noqa_map(source)
-    if not noqa_map:
-        return errors
-    result = []
-    for line, col, message in errors:
-        if line in noqa_map:
-            codes = noqa_map[line]
-            if codes is None or message.split()[0] in codes:
-                continue
-        result.append((line, col, message))
-    return result
+    return _filter_noqa_errors(errors, _build_noqa_map(source))
 
 
 def collect_recommended_lazy_modules_for_file(

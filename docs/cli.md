@@ -103,6 +103,10 @@ present. If there is no assignment yet, one is inserted near the top of the file
 after leading comments/docstrings (and after `from __future__ import ...` lines,
 to keep valid Python syntax).
 
+An import whose `LZY101`/`LZY102` diagnostic is silenced with `# noqa` is left
+eager: `--apply` (and `--format=lazy-modules`) will not add it to the
+declaration.
+
 The available modes are:
 
 | Mode      | Output                                                                |
