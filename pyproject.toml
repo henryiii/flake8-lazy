@@ -13,7 +13,7 @@ description = "Detect imports that can be lazy"
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
   "Development Status :: 1 - Planning",
   "Intended Audience :: Science/Research",
@@ -22,7 +22,6 @@ classifiers = [
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -31,10 +30,7 @@ classifiers = [
   "Topic :: Scientific/Engineering",
   "Typing :: Typed",
 ]
-dependencies = [
-    "tomli>=2; python_version<'3.11'",
-    "typing-extensions>=4.15.0; python_version<'3.11'",
-]
+dependencies = []
 
 [project.scripts]
 flake8-lazy = "flake8_lazy.__main__:main"
@@ -97,7 +93,7 @@ report.exclude_also = [
 
 [tool.mypy]
 files = ["src", "tests"]
-python_version = "3.10"
+python_version = "3.11"
 warn_unused_configs = true
 strict = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
@@ -110,18 +106,11 @@ module = "flake8_lazy.*"
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
-[[tool.mypy.overrides]]
-# tomli is only installed on Python < 3.11; on newer versions stdlib tomllib is
-# used instead, so its stubs are unavailable to the type checker.
-module = "tomli"
-ignore_missing_imports = true
-
 
 [tool.ruff]
 show-fixes = true
 
 [tool.ruff.lint]
-typing-modules = ["flake8_lazy._compat.typing"]
 select = ["ALL"]
 ignore = [
   "COM812",  # Trailing commas teach the formatter
@@ -139,7 +128,7 @@ ignore = [
 
 
 [tool.pylint]
-py-version = "3.10"
+py-version = "3.11"
 ignore-paths = [".*/_version.py"]
 reports.output-format = "colorized"
 similarities.ignore-imports = "yes"

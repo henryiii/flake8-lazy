@@ -40,7 +40,7 @@ that can be moved to `__lazy_modules__` or declared with the `lazy` soft keyword
 
 ## Code conventions
 
-- Python 3.10+; modern features (pattern matching, etc.) are fine
+- Python 3.11+; modern features (pattern matching, etc.) are fine
 - Update `README.md` and `docs/index.md` if rules or CLI options change
 - PR titles follow Conventional Commits (`feat: ...`)
 - Always make sure `prek -a` runs and passes.

@@ -48,13 +48,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.15"]
+        python-version: ["3.11", "3.15"]
         runs-on: [ubuntu-latest, windows-latest, macos-latest]
 
         include:
           - python-version: "pypy-3.11"
-            runs-on: ubuntu-latest
-          - python-version: "3.11" # Exception notes are 3.11+
             runs-on: ubuntu-latest
         exclude:
           - python-version: "3.15" # Slow to setup Python

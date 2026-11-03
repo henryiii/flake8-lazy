@@ -4,4 +4,4 @@ rules:
       - copilot-setup-steps.yml
   secrets-outside-env:
     ignore:
-      - ci.yml:86
+      - ci.yml:84
