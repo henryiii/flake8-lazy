@@ -17,7 +17,6 @@ __lazy_modules__ = [
 import ast
 import io
 import re
-import sys
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
@@ -310,7 +309,6 @@ def _parse_file(path: str | Path) -> tuple[Path, ast.AST, str]:
         with tokenize.open(item) as f:
             source = f.read()
     except UnicodeDecodeError as exc:
-        if sys.version_info >= (3, 11):
-            exc.add_note(f"while reading {item}")
+        exc.add_note(f"while reading {item}")
         raise
     return item, ast.parse(source, filename=str(item)), source

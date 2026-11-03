@@ -121,10 +121,7 @@ def test_collect_errors_for_file_includes_path_in_decode_error(tmp_path: Path) -
     with pytest.raises(UnicodeDecodeError) as excinfo:
         collect_errors_for_file(path)
 
-    if sys.version_info >= (3, 11):
-        assert excinfo.value.__notes__ == [f"while reading {path}"]
-    else:
-        assert getattr(excinfo.value, "__notes__", None) is None
+    assert excinfo.value.__notes__ == [f"while reading {path}"]
 
 
 def test_main_accepts_directory_recursively(

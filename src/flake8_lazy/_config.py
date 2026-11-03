@@ -12,14 +12,13 @@ its PEP 723 ``# /// script`` block. These override all other settings.
 from __future__ import annotations
 
 __lazy_modules__ = [
-    "tomli",
     "tomllib",
     f"{__spec__.parent}._options",
 ]
 
 import os
 import re
-import sys
+import tomllib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NoReturn, TypeGuard
 
@@ -29,11 +28,6 @@ from ._options import (
     IMPORT_PRESET_CHOICES,
     parse_exclude_modules,
 )
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 if TYPE_CHECKING:
     from pathlib import Path
