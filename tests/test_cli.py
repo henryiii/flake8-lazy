@@ -4,6 +4,7 @@ import ast
 import re
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -26,6 +27,9 @@ from flake8_lazy.api import (
     collect_errors_for_file,
     collect_recommended_lazy_modules_for_file,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def test_main_help_lists_rules_in_order(
@@ -2162,3 +2166,26 @@ def test_collect_errors_for_file_reads_script(tmp_path: Path) -> None:
 
     assert collect_errors_for_file(path) == []
     assert collect_recommended_lazy_modules_for_file(path) == []
+
+
+@pytest.mark.parametrize(
+    "collect", [collect_errors_for_file, collect_recommended_lazy_modules_for_file]
+)
+def test_file_api_validates_preset_before_reading(
+    tmp_path: Path, collect: Callable[..., object]
+) -> None:
+    with pytest.raises(ValueError, match="invalid import_preset"):
+        collect(tmp_path / "missing.py", import_preset="invalid")
+
+
+def test_collect_recommended_keeps_noqa_imports(tmp_path: Path) -> None:
+    path = tmp_path / "mod.py"
+    path.write_text("import numpy  # noqa\n", encoding="utf-8")
+
+    assert collect_recommended_lazy_modules_for_file(path) == ["numpy"]
+    assert collect_errors_for_file(path) == []
+    _, analysis = _process_single_file(
+        path, "default", frozenset(), apply_mode="list", include_errors=True
+    )
+    assert analysis.recommended_modules == []
+    assert analysis.errors == []
