@@ -21,6 +21,7 @@ import sys
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ._always_imported import IMPORT_PRESETS
 from ._analysis import (
@@ -32,6 +33,9 @@ from ._analysis import (
 from ._collect import build_module_info
 from ._config import ScriptSettings, load_script_settings
 from .checker import build_diagnostics, lazy_module_error_code
+
+if TYPE_CHECKING:
+    from ._model import ModuleInfo
 
 __all__ = [
     "_FileAnalysis",
@@ -70,16 +74,12 @@ def _process_single_file(
     strict_typing: bool = False,
 ) -> tuple[Path, _FileAnalysis]:
     """Analyze a single file for parallel execution."""
-    item, tree, source = _parse_file(path)
-    settings = load_script_settings(source)
-    import_preset, exclude_modules, strict_typing = _apply_settings(
-        settings,
+    source, settings, info, always_imported = _prepare_file_analysis(
+        path,
         import_preset=import_preset,
         exclude_modules=exclude_modules,
         strict_typing=strict_typing,
     )
-    info = build_module_info(tree, item, strict_typing=strict_typing)
-    always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
 
     declared_modules = info.declared_lazy_modules
     is_dynamic = apply_mode == "dynamic" and info.has_dynamic_lazy_modules
@@ -126,6 +126,27 @@ def _process_single_file(
         errors=errors,
         settings=settings,
     )
+
+
+def _prepare_file_analysis(
+    path: str | Path,
+    *,
+    import_preset: str,
+    exclude_modules: frozenset[str],
+    strict_typing: bool,
+) -> tuple[str, ScriptSettings, ModuleInfo, frozenset[str]]:
+    """Parse a file and apply its script settings for analysis."""
+    item, tree, source = _parse_file(path)
+    settings = load_script_settings(source)
+    import_preset, exclude_modules, strict_typing = _apply_settings(
+        settings,
+        import_preset=import_preset,
+        exclude_modules=exclude_modules,
+        strict_typing=strict_typing,
+    )
+    info = build_module_info(tree, item, strict_typing=strict_typing)
+    always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
+    return source, settings, info, always_imported
 
 
 def _apply_settings(
@@ -223,15 +244,12 @@ def collect_errors_for_file(
         valid = ", ".join(sorted(IMPORT_PRESETS))
         msg = f"invalid import_preset {import_preset!r}; choose from: {valid}"
         raise ValueError(msg)
-    item, tree, source = _parse_file(path)
-    import_preset, exclude_modules, strict_typing = _apply_settings(
-        load_script_settings(source),
+    source, _settings, info, always_imported = _prepare_file_analysis(
+        path,
         import_preset=import_preset,
         exclude_modules=exclude_modules,
         strict_typing=strict_typing,
     )
-    always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
-    info = build_module_info(tree, item, strict_typing=strict_typing)
     errors = build_diagnostics(info, always_imported=always_imported)
     if not errors:
         return []
@@ -250,15 +268,12 @@ def collect_recommended_lazy_modules_for_file(
         valid = ", ".join(sorted(IMPORT_PRESETS))
         msg = f"invalid import_preset {import_preset!r}; choose from: {valid}"
         raise ValueError(msg)
-    item, tree, source = _parse_file(path)
-    import_preset, exclude_modules, strict_typing = _apply_settings(
-        load_script_settings(source),
+    _source, _settings, info, always_imported = _prepare_file_analysis(
+        path,
         import_preset=import_preset,
         exclude_modules=exclude_modules,
         strict_typing=strict_typing,
     )
-    always_imported = IMPORT_PRESETS[import_preset] | exclude_modules
-    info = build_module_info(tree, item, strict_typing=strict_typing)
     return collect_recommended_lazy_modules(info, always_imported=always_imported)
 
 
