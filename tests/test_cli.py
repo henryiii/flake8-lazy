@@ -220,6 +220,39 @@ def test_main_exclude_path_from_config_is_relative_to_config_dir(
     assert capsys.readouterr().out == ""
 
 
+def test_main_exclude_name_pattern_ignores_parent_dirs(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "test-project"
+    kept = project / "pkg" / "mod.py"
+    kept.parent.mkdir(parents=True)
+    kept.write_text("import numpy\n", encoding="utf-8")
+    monkeypatch.chdir(project)
+
+    with pytest.raises(SystemExit):
+        main(["--exclude=*test*", "pkg"])
+
+    assert "mod.py:1:0: LZY102" in capsys.readouterr().out
+
+
+def test_main_exclude_normalizes_parent_segments(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    excluded = project / "pkg" / "mod.py"
+    excluded.parent.mkdir(parents=True)
+    excluded.write_text("import numpy\n", encoding="utf-8")
+    monkeypatch.chdir(project)
+
+    main(["--exclude=pkg/mod.py", "../project/pkg/mod.py", "../project/pkg"])
+
+    assert capsys.readouterr().out == ""
+
+
 def test_main_outputs_lzy102_and_exits_nonzero(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

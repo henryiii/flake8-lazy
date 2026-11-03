@@ -141,19 +141,26 @@ def _parse_exclude(value: str) -> list[str]:
     """Split ``value`` into patterns; patterns with a separator become absolute."""
     patterns = [item.strip() for item in value.split(",") if item.strip()]
     return [
-        str(Path(pattern).absolute())
+        _normalize_path(Path(pattern))
         if "/" in pattern or os.sep in pattern
         else pattern
         for pattern in patterns
     ]
 
 
+def _normalize_path(path: Path) -> str:
+    # absolute() keeps ".." segments, so equal paths could compare different.
+    return os.path.normpath(path.absolute())
+
+
 def _is_excluded(path: Path, patterns: list[str]) -> bool:
+    """Match base names, or full paths for patterns with a separator."""
     if not patterns:
         return False
-    absolute = str(path.absolute())
+    absolute = _normalize_path(path)
+    name = Path(absolute).name
     return any(
-        fnmatch(path.name, pattern) or fnmatch(absolute, pattern)
+        fnmatch(absolute if os.sep in pattern else name, pattern)
         for pattern in patterns
     )
 
