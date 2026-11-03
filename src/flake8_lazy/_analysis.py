@@ -219,14 +219,15 @@ def collect_non_lazy_imports(info: ModuleInfo) -> list[str]:
     return _compute_non_lazy_names(_eager_imports(info), info.runtime_names)
 
 
-def _is_non_lazy_binding(
+def _is_binding_accessed(
     binding: ImportInfo,
-    non_lazy_names: set[str],
-    runtime_attribute_paths: frozenset[str],
+    names: set[str] | frozenset[str],
+    attribute_paths: frozenset[str],
 ) -> bool:
-    if binding.package is None or binding.bound_name not in non_lazy_names:
+    """Return whether a use accesses this import binding."""
+    if binding.package is None or binding.bound_name not in names:
         return False
-    if binding.package in runtime_attribute_paths:
+    if binding.package in attribute_paths:
         return True
     root = binding.package.split(".", maxsplit=1)[0]
     if binding.package == binding.bound_name:
@@ -279,7 +280,7 @@ def _collect_recommended_lazy_entries(
         package
         for binding in bindings
         if (package := binding.package) is not None
-        if _is_non_lazy_binding(binding, non_lazy_names, info.runtime_attribute_paths)
+        if _is_binding_accessed(binding, non_lazy_names, info.runtime_attribute_paths)
     }
     side_effect_packages = set(info.side_effect_only_packages)
     guarded_packages = {
@@ -381,17 +382,7 @@ def _check_binding_unnecessary(
         return False
     if require_lazy_package and package not in lazy_packages:
         return False
-    if binding.bound_name not in strict_names:
-        return False
-    if package in strict_attribute_paths:
-        return package not in seen_packages
-
-    root = package.split(".", maxsplit=1)[0]
-    if (
-        package != binding.bound_name
-        and not binding.is_aliased
-        and binding.bound_name == root
-    ):
+    if not _is_binding_accessed(binding, strict_names, strict_attribute_paths):
         return False
     return package not in seen_packages
 
